@@ -3,14 +3,14 @@ import logging
 from natcap.invest.seasonal_water_yield import seasonal_water_yield
 
 LOGGER = logging.getLogger(__name__)
-logging.basicConfig(level='WARN')
+logging.basicConfig(level='INFO')
 
 args = {
         "workspace_dir": '/Users/emily/Documents/seasonal_water_yield_workspace',
-        "results_suffix": '',
+        "results_suffix": 'a',
         "n_workers": -1,
         "threshold_flow_accumulation": 1000,
-        "kc_dir": '/Users/emily/Documents/seasonal_water_yield_workspace/cache_dir/Kc_monthly',
+        "kc_dir": '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly',
         "et0_dir": '/Users/emily/Downloads/Seasonal_Water_Yield/ET0_monthly',
         "precip_dir": '/Users/emily/Downloads/Seasonal_Water_Yield/Precipitation_monthly',
         "dem_raster_path": '/Users/emily/Downloads/Seasonal_Water_Yield/DEM_gura.tif',

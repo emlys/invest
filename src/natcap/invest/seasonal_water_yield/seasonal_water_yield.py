@@ -526,7 +526,6 @@ def _execute(args):
             file_registry['cz_aligned_raster_path'])
     interpolate_list = ['near'] * len(input_align_list)
 
-    print(input_align_list[align_index])
     align_task = task_graph.add_task(
         func=pygeoprocessing.align_and_resize_raster_stack,
         args=(
@@ -686,39 +685,6 @@ def _execute(args):
             task_name='calculate QFi')
 
         LOGGER.info('calculate local recharge')
-        # kc_task_list = []
-        # for month_index in range(N_MONTHS):
-        #     kc_lookup = dict([
-        #         (lucode, biophysical_table[lucode]['kc_%d' % (month_index+1)])
-        #         for lucode in biophysical_table])
-        #     kc_nodata = -1  # a reasonable nodata value
-        #     kc_task = task_graph.add_task(
-        #         func=pygeoprocessing.reclassify_raster,
-        #         args=(
-        #             (file_registry['lulc_aligned_path'], 1), kc_lookup,
-        #             file_registry['kc_path_list'][month_index],
-        #             gdal.GDT_Float32, kc_nodata),
-        #         target_path_list=[file_registry['kc_path_list'][month_index]],
-        #         dependent_task_list=[align_task],
-        #         hash_algorithm='md5',
-        #         copy_duplicate_artifact=True,
-        #         task_name='classify kc month %d' % month_index)
-        #     kc_task_list.append(kc_task)
-
-        print(kc_path_list)
-        # kc_path_list = [
-        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_0.tif',
-        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_1.tif',
-        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_2.tif',
-        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_3.tif',
-        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_4.tif',
-        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_5.tif',
-        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_6.tif',
-        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_7.tif',
-        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_8.tif',
-        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_9.tif',
-        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_10.tif',
-        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_11.tif']
         # call through to a cython function that does the necessary routing
         # between AET and L.sum.avail in equation [7], [4], and [3]
         calculate_local_recharge_task = task_graph.add_task(
@@ -728,7 +694,7 @@ def _execute(args):
                 file_registry['et0_path_aligned_list'],
                 file_registry['qfm_path_list'],
                 file_registry['flow_dir_mfd_path'],
-                kc_path_list,
+                file_registry['kc_path_aligned_list'],
                 alpha_month_map,
                 beta_i, gamma, file_registry['stream_path'],
                 file_registry['l_path'],
