@@ -272,6 +272,7 @@ _INTERMEDIATE_BASE_FILES = {
     'flow_dir_mfd_path': 'flow_dir_mfd.tif',
     'qfm_path_list': ['qf_%d.tif' % (x+1) for x in range(N_MONTHS)],
     'stream_path': 'stream.tif',
+    'kc_path_aligned_list': ['kc_a%d.tif' % x for x in range(N_MONTHS)],
 }
 
 _TMP_BASE_FILES = {
@@ -289,7 +290,6 @@ _TMP_BASE_FILES = {
     'precip_path_aligned_list': ['prcp_a%d.tif' % x for x in range(N_MONTHS)],
     'n_events_path_list': ['n_events%d.tif' % x for x in range(N_MONTHS)],
     'et0_path_aligned_list': ['et0_a%d.tif' % x for x in range(N_MONTHS)],
-    'kc_path_list': ['kc_%d.tif' % x for x in range(N_MONTHS)],
     'l_aligned_path': 'l_aligned.tif',
     'cz_aligned_raster_path': 'cz_aligned.tif',
     'l_sum_pre_clamp': 'l_sum_pre_clamp.tif'
@@ -470,13 +470,34 @@ def _execute(args):
             file_registry['aggregate_vector_path'])
 
     LOGGER.info('Aligning and clipping dataset list')
-    input_align_list = [args['lulc_raster_path'], args['dem_raster_path']]
-    output_align_list = [
-        file_registry['lulc_aligned_path'], file_registry['dem_aligned_path']]
-    if not args['user_defined_local_recharge']:
-        precip_path_list = []
-        et0_path_list = []
 
+    def monthly_path_list(dir_list, data_type):
+        path_list = []
+        for month_index in range(1, N_MONTHS + 1):
+            month_file_match = re.compile(r'.*[^\d]%d\.[^.]+$' % month_index)
+
+            file_list = [
+                month_file_path for month_file_path in dir_list
+                if month_file_match.match(month_file_path)]
+            if len(file_list) == 0:
+                raise ValueError(
+                    "No %s found for month %d" % (data_type, month_index))
+            if len(file_list) > 1:
+                raise ValueError(
+                    "Ambiguous set of files found for month %d: %s" %
+                    (month_index, file_list))
+            path_list.append(file_list[0])
+        return path_list
+
+    kc_dir_list = [
+        os.path.join(args['kc_dir'], f) for f in os.listdir(
+            args['kc_dir'])]
+    kc_path_list = monthly_path_list(kc_dir_list, 'kc')
+
+    input_align_list = kc_path_list + [args['lulc_raster_path'], args['dem_raster_path']]
+    output_align_list = file_registry['kc_path_aligned_list'] + [file_registry['lulc_aligned_path'], file_registry['dem_aligned_path']]
+    if not args['user_defined_local_recharge']:
+        
         et0_dir_list = [
             os.path.join(args['et0_dir'], f) for f in os.listdir(
                 args['et0_dir'])]
@@ -484,23 +505,8 @@ def _execute(args):
             os.path.join(args['precip_dir'], f) for f in os.listdir(
                 args['precip_dir'])]
 
-        for month_index in range(1, N_MONTHS + 1):
-            month_file_match = re.compile(r'.*[^\d]%d\.[^.]+$' % month_index)
-
-            for data_type, dir_list, path_list in [
-                    ('et0', et0_dir_list, et0_path_list),
-                    ('Precip', precip_dir_list, precip_path_list)]:
-                file_list = [
-                    month_file_path for month_file_path in dir_list
-                    if month_file_match.match(month_file_path)]
-                if len(file_list) == 0:
-                    raise ValueError(
-                        "No %s found for month %d" % (data_type, month_index))
-                if len(file_list) > 1:
-                    raise ValueError(
-                        "Ambiguous set of files found for month %d: %s" %
-                        (month_index, file_list))
-                path_list.append(file_list[0])
+        precip_path_list = monthly_path_list(precip_dir_list, 'precip')
+        et0_path_list = monthly_path_list(et0_dir_list, 'et0')
 
         input_align_list = (
             precip_path_list + [args['soil_group_path']] + et0_path_list +
@@ -520,6 +526,7 @@ def _execute(args):
             file_registry['cz_aligned_raster_path'])
     interpolate_list = ['near'] * len(input_align_list)
 
+    print(input_align_list[align_index])
     align_task = task_graph.add_task(
         func=pygeoprocessing.align_and_resize_raster_stack,
         args=(
@@ -679,26 +686,39 @@ def _execute(args):
             task_name='calculate QFi')
 
         LOGGER.info('calculate local recharge')
-        kc_task_list = []
-        for month_index in range(N_MONTHS):
-            kc_lookup = dict([
-                (lucode, biophysical_table[lucode]['kc_%d' % (month_index+1)])
-                for lucode in biophysical_table])
-            kc_nodata = -1  # a reasonable nodata value
-            kc_task = task_graph.add_task(
-                func=pygeoprocessing.reclassify_raster,
-                args=(
-                    (file_registry['lulc_aligned_path'], 1), kc_lookup,
-                    file_registry['kc_path_list'][month_index],
-                    gdal.GDT_Float32, kc_nodata),
-                target_path_list=[file_registry['kc_path_list'][month_index]],
-                dependent_task_list=[align_task],
-                hash_algorithm='md5',
-                copy_duplicate_artifact=True,
-                task_name='classify kc month %d' % month_index)
-            kc_task_list.append(kc_task)
+        # kc_task_list = []
+        # for month_index in range(N_MONTHS):
+        #     kc_lookup = dict([
+        #         (lucode, biophysical_table[lucode]['kc_%d' % (month_index+1)])
+        #         for lucode in biophysical_table])
+        #     kc_nodata = -1  # a reasonable nodata value
+        #     kc_task = task_graph.add_task(
+        #         func=pygeoprocessing.reclassify_raster,
+        #         args=(
+        #             (file_registry['lulc_aligned_path'], 1), kc_lookup,
+        #             file_registry['kc_path_list'][month_index],
+        #             gdal.GDT_Float32, kc_nodata),
+        #         target_path_list=[file_registry['kc_path_list'][month_index]],
+        #         dependent_task_list=[align_task],
+        #         hash_algorithm='md5',
+        #         copy_duplicate_artifact=True,
+        #         task_name='classify kc month %d' % month_index)
+        #     kc_task_list.append(kc_task)
 
-        print(file_registry['kc_path_list'])
+        print(kc_path_list)
+        # kc_path_list = [
+        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_0.tif',
+        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_1.tif',
+        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_2.tif',
+        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_3.tif',
+        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_4.tif',
+        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_5.tif',
+        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_6.tif',
+        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_7.tif',
+        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_8.tif',
+        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_9.tif',
+        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_10.tif',
+        #     '/Users/emily/Downloads/Seasonal_Water_Yield/Kc_monthly/kc_11.tif']
         # call through to a cython function that does the necessary routing
         # between AET and L.sum.avail in equation [7], [4], and [3]
         calculate_local_recharge_task = task_graph.add_task(
@@ -708,7 +728,7 @@ def _execute(args):
                 file_registry['et0_path_aligned_list'],
                 file_registry['qfm_path_list'],
                 file_registry['flow_dir_mfd_path'],
-                file_registry['kc_path_list'],
+                kc_path_list,
                 alpha_month_map,
                 beta_i, gamma, file_registry['stream_path'],
                 file_registry['l_path'],
