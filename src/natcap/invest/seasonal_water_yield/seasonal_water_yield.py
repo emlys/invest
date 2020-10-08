@@ -698,6 +698,7 @@ def _execute(args):
                 task_name='classify kc month %d' % month_index)
             kc_task_list.append(kc_task)
 
+        print(file_registry['kc_path_list'])
         # call through to a cython function that does the necessary routing
         # between AET and L.sum.avail in equation [7], [4], and [3]
         calculate_local_recharge_task = task_graph.add_task(
