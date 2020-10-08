@@ -1,3 +1,12 @@
+**This branch modifies Seasonal Water Yield to accept monthly Kc raster inputs.**
+Rather than having Kc values linked to the LULC map, you can input a path to a 
+directory containing 12 Kc rasters, just like you do for ET0 and precipitation.
+
+This was made in response to a forum question. For now it's just a one-off 
+modification, but it could be worth developing into a feature of the SWY model 
+(possibly for ET0 too).
+
+
 InVEST: Integrated Valuation of Ecosystem Services and Tradeoffs
 ================================================================
 
