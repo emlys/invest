@@ -1,11 +1,21 @@
 **This branch modifies Seasonal Water Yield to accept monthly Kc raster inputs.**
+=================================================================================
 Rather than having Kc values linked to the LULC map, you can input a path to a 
 directory containing 12 Kc rasters, just like you do for ET0 and precipitation.
 
 This was made in response to a forum question. For now it's just a one-off 
-modification, but it could be worth developing into a feature of the SWY model 
-(possibly for ET0 too).
+modification, but it could be worth developing into a feature of the SWY model.
 
+(Possible other features for the future: 
+   * allow ET0 to be input in biophysical table?
+   * allow CN to be input as a raster?)
+
+I have included a script ``swy_script.py`` as an example of how to run the 
+modified model. Instead of having `Kc` fields in the biophysical table,
+you will need a Kc directory. This is a folder containing 12 rasters of 
+monthly Kc values. Raster file names must end with the month number 
+(e.g. kc_1.tif for January.) Only .tif files should be in this folder 
+(no .tfw, .xml, etc files).
 
 InVEST: Integrated Valuation of Ecosystem Services and Tradeoffs
 ================================================================
