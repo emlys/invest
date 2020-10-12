@@ -2708,6 +2708,7 @@ class Form(QtWidgets.QWidget):
         # PyQt4 won't recognize self.submitted.emit as a bound slot, so
         # creating a bound method of Form to handle this.  Useful for MESH
         # demo.
+        print('emitting submitted signal')
         self.submitted.emit()
 
     def run(self, target, args=(), kwargs=None, window_title='',

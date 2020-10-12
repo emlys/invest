@@ -1597,6 +1597,7 @@ class InVESTModel(QtWidgets.QMainWindow):
         Returns:
             ``None``
         """
+        print('in execute_model')
         args = self.assemble_args()
 
         # If we have validation warnings, show them and return to inputs.
