@@ -1597,7 +1597,7 @@ class InVESTModel(QtWidgets.QMainWindow):
         Returns:
             ``None``
         """
-        print('in execute_model')
+        LOGGER.addHandler(logging.FileHandler('~/Documents/out.log'))
         args = self.assemble_args()
 
         # If we have validation warnings, show them and return to inputs.
@@ -1607,12 +1607,17 @@ class InVESTModel(QtWidgets.QMainWindow):
             return
 
         # If the workspace exists and contains files, confirm the overwrite.
+        LOGGER.info('before os.path.exists')
+        LOGGER.info(os.path.exists(args['workspace_dir']))
         if os.path.exists(args['workspace_dir']):
+            LOGGER.info('before os.listdir')
             if len(os.listdir(args['workspace_dir'])) > 0:
                 button_pressed = (
                     self.workspace_overwrite_confirm_dialog.exec_())
                 if button_pressed != QtWidgets.QMessageBox.Yes:
                     return
+            LOGGER.info('after os.listdir')
+        LOGGER.info('after os.path.exists')
 
         # This is the thread that the UI is executing within.
         ui_thread_name = threading.current_thread().name
