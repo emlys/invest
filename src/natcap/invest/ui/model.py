@@ -1613,12 +1613,13 @@ class InVESTModel(QtWidgets.QMainWindow):
         LOGGER.info(os.path.exists(args['workspace_dir']))
         if os.path.exists(args['workspace_dir']):
             LOGGER.info('before os.listdir')
+            LOGGER.info(os.listdir(args['workspace_dir']))
+            LOGGER.info('after os.listdir')
             if len(os.listdir(args['workspace_dir'])) > 0:
                 button_pressed = (
                     self.workspace_overwrite_confirm_dialog.exec_())
                 if button_pressed != QtWidgets.QMessageBox.Yes:
                     return
-            LOGGER.info('after os.listdir')
         LOGGER.info('after os.path.exists')
 
         # This is the thread that the UI is executing within.
