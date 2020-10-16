@@ -1165,6 +1165,8 @@ class InVESTModel(QtWidgets.QMainWindow):
             localdoc (string): The filename of the user's guide chapter for
                 this model.
         """
+        LOGGER.addHandler(logging.FileHandler('/Users/emily/Documents/model.log'))
+
         QtWidgets.QMainWindow.__init__(self)
         self.label = label
         self.target = target
@@ -1597,7 +1599,7 @@ class InVESTModel(QtWidgets.QMainWindow):
         Returns:
             ``None``
         """
-        LOGGER.addHandler(logging.FileHandler('~/Documents/out.log'))
+        LOGGER.info('in execute_model')
         args = self.assemble_args()
 
         # If we have validation warnings, show them and return to inputs.

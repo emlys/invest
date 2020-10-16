@@ -48,6 +48,8 @@ class ModelLaunchButton(QtWidgets.QPushButton):
 
 
 def main():
+    LOGGER.addHandler(logging.FileHandler('/Users/emily/Documents/out.log'))
+    LOGGER.info('in launcher main()')
     launcher_window = QtWidgets.QMainWindow()
     launcher_window.setWindowTitle('InVEST Launcher')
     scroll_area = QtWidgets.QScrollArea()

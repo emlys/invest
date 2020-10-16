@@ -2659,6 +2659,7 @@ class Form(QtWidgets.QWidget):
         Returns:
             ``None``
         """
+        LOGGER.addHandler(logging.FileHandler('/Users/emily/Documents/inputs.log'))
         QtWidgets.QWidget.__init__(self, parent=parent)
 
         # self._thread is redefined as an Executor when we run the target
@@ -2708,7 +2709,7 @@ class Form(QtWidgets.QWidget):
         # PyQt4 won't recognize self.submitted.emit as a bound slot, so
         # creating a bound method of Form to handle this.  Useful for MESH
         # demo.
-        print('emitting submitted signal')
+        LOGGER.info('emitting form submitted signal')
         self.submitted.emit()
 
     def run(self, target, args=(), kwargs=None, window_title='',
