@@ -229,6 +229,7 @@ env:
 # REQUIRED: Need to remove natcap.invest.egg-info directory so recent versions
 # of pip don't think CWD is a valid package.
 install: $(DIST_DIR)/natcap.invest%.whl
+	echo "make install"
 	-$(RMDIR) natcap.invest.egg-info
 	$(PIP) install --isolated --upgrade --only-binary natcap.invest --find-links=dist natcap.invest
 
@@ -236,6 +237,7 @@ install: $(DIST_DIR)/natcap.invest%.whl
 # Bulid python packages and put them in dist/
 python_packages: $(DIST_DIR)/natcap.invest%.whl $(DIST_DIR)/natcap.invest%.zip
 $(DIST_DIR)/natcap.invest%.whl: | $(DIST_DIR)
+	echo "make python_packages"
 	$(PYTHON) setup.py bdist_wheel
 
 $(DIST_DIR)/natcap.invest%.zip: | $(DIST_DIR)
@@ -248,6 +250,7 @@ $(DIST_DIR)/natcap.invest%.zip: | $(DIST_DIR)
 # on Windows as the .exe extension is assumed.
 binaries: $(INVEST_BINARIES_DIR)
 $(INVEST_BINARIES_DIR): | $(DIST_DIR) $(BUILD_DIR)
+	echo "make binaries"
 	-$(RMDIR) $(BUILD_DIR)/pyi-build
 	-$(RMDIR) $(INVEST_BINARIES_DIR)
 	$(PYTHON) -m PyInstaller --workpath $(BUILD_DIR)/pyi-build --clean --distpath $(DIST_DIR) exe/invest.spec
@@ -331,14 +334,17 @@ $(WINDOWS_INSTALLER_FILE): $(INVEST_BINARIES_DIR) $(USERGUIDE_HTML_DIR) build/vc
 
 mac_app: $(MAC_APPLICATION_BUNDLE)
 $(MAC_APPLICATION_BUNDLE): $(BUILD_DIR) $(INVEST_BINARIES_DIR)
+	echo "make mac_app"
 	./installer/darwin/build_app_bundle.sh "$(VERSION)" "$(INVEST_BINARIES_DIR)" "$(MAC_APPLICATION_BUNDLE)"
 
 mac_installer: $(MAC_DISK_IMAGE_FILE)
 $(MAC_DISK_IMAGE_FILE): $(DIST_DIR) $(MAC_APPLICATION_BUNDLE) $(USERGUIDE_HTML_DIR)
+	echo "make mac_installer"
 	./installer/darwin/build_dmg.sh "$(VERSION)" "$(MAC_APPLICATION_BUNDLE)" "$(USERGUIDE_HTML_DIR)"
 
 mac_zipfile: $(MAC_BINARIES_ZIP_FILE)
 $(MAC_BINARIES_ZIP_FILE): $(DIST_DIR) $(MAC_APPLICATION_BUNDLE) $(USERGUIDE_HTML_DIR)
+	echo "make mac_zipfile"
 	./installer/darwin/build_zip.sh "$(VERSION)" "$(MAC_APPLICATION_BUNDLE)" "$(USERGUIDE_HTML_DIR)"
 
 build/vcredist_x86.exe: | build

@@ -15,7 +15,7 @@ from setuptools import setup
 import Cython.Build
 import numpy
 
-
+print('in setup.py')
 # Read in requirements.txt and populate the python readme with the
 # non-comment, non-environment-specifier contents.
 _REQUIREMENTS = [req.split(';')[0].split('#')[0].strip() for req in
