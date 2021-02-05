@@ -80,7 +80,7 @@ def main():
     scroll_area.setMinimumWidth(layout.sizeHint().width() + 25)
     scroll_area.setMinimumHeight(400)
     launcher_window.show()
-    APP.exec_()
+    # APP.exec_()
 
 
 if __name__ == '__main__':
