@@ -62,8 +62,6 @@ $(DIST_DIR)/natcap.invest%.zip: | $(DIST_DIR)
 binaries: $(INVEST_BINARIES_DIR)
 $(INVEST_BINARIES_DIR): | $(DIST_DIR) $(BUILD_DIR)
 	$(info make binaries...)
-	rm -r $(BUILD_DIR)/pyi-build
-	rm -r $(INVEST_BINARIES_DIR)
 	python3 -m PyInstaller --workpath $(BUILD_DIR)/pyi-build --clean --distpath $(DIST_DIR) exe/invest.spec
 	conda list --export > $(INVEST_BINARIES_DIR)/package_versions.txt
 
