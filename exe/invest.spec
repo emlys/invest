@@ -10,26 +10,19 @@ from PyInstaller.compat import is_win, is_darwin
 current_dir = os.getcwd()  # assume we're building from the project root
 block_cipher = None
 exename = 'invest'
-conda_env = os.environ['CONDA_PREFIX']
-
-if is_win:
-    proj_datas = ((os.path.join(conda_env, 'Library/share/proj'), 'proj'))
-else:
-    proj_datas = ((os.path.join(conda_env, 'share/proj'), 'proj'))
 
 kwargs = {
     'excludes': None,
     'pathex': sys.path,
     'hiddenimports': [
-        'natcap.invest.ui.launcher',
         'distutils',
         'distutils.dist',
     ],
-    'datas': [('qt.conf', '.'), proj_datas],
+    'datas': [('qt.conf', '.')],
     'cipher': block_cipher,
 }
 
-cli_file = os.path.join(current_dir, 'src', 'natcap', 'invest', 'ui', 'launcher.py')
+cli_file = os.path.join(current_dir, 'src', 'launcher.py')
 a = Analysis([cli_file], **kwargs)
 
 # Compress pyc and pyo Files into ZlibArchive Objects
