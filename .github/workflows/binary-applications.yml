@@ -240,42 +240,42 @@ jobs:
                   name: InVEST-dmg
                   path: dist/InVEST*.dmg
 
-    build-sampledata:
-        name: Build sampledata archives
-        needs: check-syntax-errors
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v2
-              with:
-                  fetch-depth: 0  # Fetch complete history
-            - run: git fetch origin +refs/tags/*:refs/tags/*
+    # build-sampledata:
+    #     name: Build sampledata archives
+    #     needs: check-syntax-errors
+    #     runs-on: ubuntu-latest
+    #     steps:
+    #         - uses: actions/checkout@v2
+    #           with:
+    #               fetch-depth: 0  # Fetch complete history
+    #         - run: git fetch origin +refs/tags/*:refs/tags/*
 
-            - uses: actions/setup-python@v1
-              with:
-                  python-version: 3.8
+    #         - uses: actions/setup-python@v1
+    #           with:
+    #               python-version: 3.8
 
-            - run: |
-                pip install toml
-                pip install $(python -c "import toml;print(' '.join(toml.load('pyproject.toml')['build-system']['requires']))")
+    #         - run: |
+    #             pip install toml
+    #             pip install $(python -c "import toml;print(' '.join(toml.load('pyproject.toml')['build-system']['requires']))")
 
-            - run: make sampledata sampledata_single
+    #         - run: make sampledata sampledata_single
 
-            - name: Set up GCP
-              # Secrets not available in PR so don't use GCP.
-              if: github.event_name != 'pull_request'
-              uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
-              with:
-                  version: '281.0.0'
-                  service_account_key: ${{ secrets.GOOGLE_SERVICE_ACC_KEY }}
+    #         - name: Set up GCP
+    #           # Secrets not available in PR so don't use GCP.
+    #           if: github.event_name != 'pull_request'
+    #           uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+    #           with:
+    #               version: '281.0.0'
+    #               service_account_key: ${{ secrets.GOOGLE_SERVICE_ACC_KEY }}
 
-            - name: Deploy artifacts to GCS
-              # Secrets not available in PR so don't use GCP.
-              # We only want to upload artifacts to a release object in a release.
-              if: github.event_name != 'pull_request'
-              run: make deploy
+    #         - name: Deploy artifacts to GCS
+    #           # Secrets not available in PR so don't use GCP.
+    #           # We only want to upload artifacts to a release object in a release.
+    #           if: github.event_name != 'pull_request'
+    #           run: make deploy
 
-            - name: Upload sample data artifact
-              uses: actions/upload-artifact@v2-preview
-              with:
-                  name: InVEST-sample-data
-                  path: dist/*.zip
+    #         - name: Upload sample data artifact
+    #           uses: actions/upload-artifact@v2-preview
+    #           with:
+    #               name: InVEST-sample-data
+    #               path: dist/*.zip

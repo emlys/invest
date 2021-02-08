@@ -235,6 +235,7 @@ env:
 # REQUIRED: Need to remove natcap.invest.egg-info directory so recent versions
 # of pip don't think CWD is a valid package.
 install: $(DIST_DIR)/natcap.invest%.whl
+	$(info make install...)
 	-$(RMDIR) natcap.invest.egg-info
 	$(PIP) install --isolated --upgrade --no-index --only-binary natcap.invest --find-links=dist natcap.invest
 
@@ -242,6 +243,7 @@ install: $(DIST_DIR)/natcap.invest%.whl
 # Bulid python packages and put them in dist/
 python_packages: $(DIST_DIR)/natcap.invest%.whl $(DIST_DIR)/natcap.invest%.zip
 $(DIST_DIR)/natcap.invest%.whl: | $(DIST_DIR)
+	$(info make python_packages...)
 	$(PYTHON) setup.py bdist_wheel
 
 $(DIST_DIR)/natcap.invest%.zip: | $(DIST_DIR)
@@ -254,6 +256,7 @@ $(DIST_DIR)/natcap.invest%.zip: | $(DIST_DIR)
 # on Windows as the .exe extension is assumed.
 binaries: $(INVEST_BINARIES_DIR)
 $(INVEST_BINARIES_DIR): | $(DIST_DIR) $(BUILD_DIR)
+	$(info make binaries...)
 	-$(RMDIR) $(BUILD_DIR)/pyi-build
 	-$(RMDIR) $(INVEST_BINARIES_DIR)
 	$(PYTHON) -m PyInstaller --workpath $(BUILD_DIR)/pyi-build --clean --distpath $(DIST_DIR) exe/invest.spec
@@ -326,30 +329,23 @@ $(SAMPLEDATA_SINGLE_ARCHIVE): $(GIT_SAMPLE_DATA_REPO_PATH) dist
 	$(BASHLIKE_SHELL_COMMAND) "cd $(GIT_SAMPLE_DATA_REPO_PATH) && $(ZIP) -r ../../$(SAMPLEDATA_SINGLE_ARCHIVE) ./* -x .svn -x .git -x *.json"
 
 
-# Installers for each platform.
-# Windows (NSIS) installer is written to dist/InVEST_<version>_x86_Setup.exe
-# Mac (DMG) disk image is written to dist/InVEST <version>.dmg
-WINDOWS_INSTALLER_FILE := $(DIST_DIR)/InVEST_$(INSTALLER_NAME_FORKUSER)$(VERSION)_$(PYTHON_ARCH)_Setup.exe
-windows_installer: $(WINDOWS_INSTALLER_FILE)
-$(WINDOWS_INSTALLER_FILE): $(INVEST_BINARIES_DIR) $(USERGUIDE_ZIP_FILE) build/vcredist_x86.exe | $(GIT_SAMPLE_DATA_REPO_PATH)
-	-$(RM) $(WINDOWS_INSTALLER_FILE)
-	makensis /DVERSION=$(VERSION) /DBINDIR=$(INVEST_BINARIES_DIR) /DARCHITECTURE=$(PYTHON_ARCH) /DFORKNAME=$(INSTALLER_NAME_FORKUSER) /DDATA_LOCATION=$(DATA_BASE_URL) installer\windows\invest_installer.nsi
 
 DMG_CONFIG_FILE := installer/darwin/dmgconf.py
 mac_dmg: $(MAC_DISK_IMAGE_FILE)
 $(MAC_DISK_IMAGE_FILE): $(DIST_DIR) $(MAC_APPLICATION_BUNDLE) $(USERGUIDE_TARGET_DIR)
+	$(info make mac_dmg...)
 	dmgbuild -Dinvestdir=$(MAC_APPLICATION_BUNDLE) -s $(DMG_CONFIG_FILE) "InVEST $(VERSION)" $(MAC_DISK_IMAGE_FILE)
 
 mac_app: $(MAC_APPLICATION_BUNDLE)
 $(MAC_APPLICATION_BUNDLE): $(BUILD_DIR) $(INVEST_BINARIES_DIR) $(USERGUIDE_TARGET_DIR)
+	$(info make mac_app...)
 	./installer/darwin/build_app_bundle.sh $(VERSION) $(INVEST_BINARIES_DIR) $(USERGUIDE_TARGET_DIR) $(MAC_APPLICATION_BUNDLE)
 
 mac_zipfile: $(MAC_BINARIES_ZIP_FILE)
 $(MAC_BINARIES_ZIP_FILE): $(DIST_DIR) $(MAC_APPLICATION_BUNDLE) $(USERGUIDE_TARGET_DIR)
+	$(info make mac_zipfile...)
 	./installer/darwin/build_zip.sh $(VERSION) $(MAC_APPLICATION_BUNDLE) $(USERGUIDE_TARGET_DIR)
 
-build/vcredist_x86.exe: | build
-	powershell.exe -Command "Start-BitsTransfer -Source https://download.microsoft.com/download/5/D/8/5D8C65CB-C849-4025-8E95-C3966CAFD8AE/vcredist_x86.exe -Destination build\vcredist_x86.exe"
 
 CERT_FILE := codesigning-2021.crt
 KEY_FILE := Stanford-natcap-code-signing-cert-expires-2024-01-26.key.pem
@@ -374,23 +370,6 @@ codesign_mac:
 	codesign --timestamp --verbose --sign 'Stanford University' $(MAC_DISK_IMAGE_FILE)
 	# relock the keychain (not sure if this is important?)
 	security lock-keychain '$(KEYCHAIN_NAME)'
-
-signcode:
-	$(GSUTIL) cp gs://stanford_cert/$(CERT_FILE) $(BUILD_DIR)/$(CERT_FILE)
-	$(GSUTIL) cp gs://stanford_cert/$(KEY_FILE) $(BUILD_DIR)/$(KEY_FILE)
-	# On some OS (including our build container), osslsigncode fails with Bus error if we overwrite the binary when signing.
-	osslsigncode -certs $(BUILD_DIR)/$(CERT_FILE) -key $(BUILD_DIR)/$(KEY_FILE) -pass $(CERT_KEY_PASS) -in $(BIN_TO_SIGN) -out "signed.exe"
-	mv "signed.exe" $(BIN_TO_SIGN)
-	$(RM) $(BUILD_DIR)/$(CERT_FILE)
-	$(RM) $(BUILD_DIR)/$(KEY_FILE)
-	@echo "Installer was signed with osslsigncode"
-
-signcode_windows:
-	$(GSUTIL) cp 'gs://stanford_cert/$(P12_FILE)' '$(BUILD_DIR)/$(P12_FILE)'
-	powershell.exe "& '$(SIGNTOOL)' sign /f '$(BUILD_DIR)\$(P12_FILE)' /p '$(CERT_KEY_PASS)' '$(BIN_TO_SIGN)'"
-	powershell.exe "& '$(SIGNTOOL)' timestamp -t http://timestamp.sectigo.com '$(BIN_TO_SIGN)'"
-	-$(RM) $(BUILD_DIR)/$(P12_FILE)
-	@echo "Installer was signed with signtool"
 
 deploy:
 	-$(GSUTIL) -m rsync $(DIST_DIR) $(DIST_URL_BASE)

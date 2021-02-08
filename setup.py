@@ -48,18 +48,7 @@ setup(
     packages=[
         'natcap',
         'natcap.invest',
-        'natcap.invest.coastal_blue_carbon',
-        'natcap.invest.delineateit',
-        'natcap.invest.finfish_aquaculture',
-        'natcap.invest.fisheries',
-        'natcap.invest.hydropower',
         'natcap.invest.ui',
-        'natcap.invest.ndr',
-        'natcap.invest.sdr',
-        'natcap.invest.recreation',
-        'natcap.invest.reporting',
-        'natcap.invest.scenic_quality',
-        'natcap.invest.seasonal_water_yield',
     ],
     package_dir={
         'natcap': 'src/natcap'
@@ -88,56 +77,6 @@ setup(
         'License :: OSI Approved :: BSD License',
         'Topic :: Scientific/Engineering :: GIS'
     ],
-    ext_modules=[
-        Extension(
-            name="natcap.invest.delineateit.delineateit_core",
-            sources=['src/natcap/invest/delineateit/delineateit_core.pyx'],
-            include_dirs=[numpy.get_include()],
-            extra_compile_args=compiler_and_linker_args,
-            extra_link_args=compiler_and_linker_args,
-            language="c++"),
-        Extension(
-            name="natcap.invest.recreation.out_of_core_quadtree",
-            sources=[
-                'src/natcap/invest/recreation/out_of_core_quadtree.pyx'],
-            include_dirs=[numpy.get_include()],
-            extra_compile_args=compiler_and_linker_args,
-            extra_link_args=compiler_and_linker_args,
-            language="c++"),
-        Extension(
-            name="natcap.invest.scenic_quality.viewshed",
-            sources=[
-                'src/natcap/invest/scenic_quality/viewshed.pyx'],
-            include_dirs=[numpy.get_include(),
-                          'src/natcap/invest/scenic_quality'],
-            extra_compile_args=compiler_and_linker_args,
-            extra_link_args=compiler_and_linker_args,
-            language="c++"),
-        Extension(
-            name="natcap.invest.ndr.ndr_core",
-            sources=['src/natcap/invest/ndr/ndr_core.pyx'],
-            include_dirs=[numpy.get_include()],
-            extra_compile_args=compiler_and_linker_args,
-            extra_link_args=compiler_and_linker_args,
-            language="c++"),
-        Extension(
-            name="natcap.invest.sdr.sdr_core",
-            sources=['src/natcap/invest/sdr/sdr_core.pyx'],
-            include_dirs=[numpy.get_include()],
-            extra_compile_args=compiler_and_linker_args,
-            extra_link_args=compiler_and_linker_args,
-            language="c++"),
-        Extension(
-            name=("natcap.invest.seasonal_water_yield."
-                  "seasonal_water_yield_core"),
-            sources=[
-                ("src/natcap/invest/seasonal_water_yield/"
-                 "seasonal_water_yield_core.pyx")],
-            include_dirs=[numpy.get_include()],
-            extra_compile_args=compiler_and_linker_args,
-            extra_link_args=compiler_and_linker_args,
-            language="c++"),
-    ],
     cmdclass={'build_ext': Cython.Build.build_ext},
     command_options={
         'build_sphinx': {
@@ -152,11 +91,5 @@ setup(
     },
     extras_require={
         'ui': _GUI_REQUIREMENTS,
-    },
-    package_data={
-        'natcap.invest.reporting': [
-            'reporting_data/*.js',
-            'reporting_data/*.css',
-        ],
-    },
+    }
 )
