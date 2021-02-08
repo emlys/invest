@@ -28,7 +28,11 @@ _RESOURCEDIR="$_APPDIR/Contents/Resources"
 _INVEST_DIST_DIR="$_MACOSDIR/invest_dist"
 _USERGUIDE_HTML_DIR="$_INVEST_DIST_DIR/documentation"
 CONFIG_DIR="installer/darwin"
-mkdir -p "${_MACOSDIR}"
+echo "APPDIR:"
+echo $4
+echo "$_APPDIR/Contents/MacOS"
+
+mkdir -p "${4}/Contents/MacOS"
 mkdir -p "${_RESOURCEDIR}"
 
 cp -r "$2" "$_INVEST_DIST_DIR"
