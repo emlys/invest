@@ -10,6 +10,8 @@
 
 # remove temp files that can get in the way
 tempdir=`basename $3`
+echo "tempdir:"
+echo "$tempdir"
 if [ -d "$tempdir" ]
 then
     rm -rfd "$tempdir"
@@ -26,7 +28,6 @@ _APPDIR="$4"
 _MACOSDIR="$_APPDIR/Contents/MacOS"
 _RESOURCEDIR="$_APPDIR/Contents/Resources"
 _INVEST_DIST_DIR="$_MACOSDIR/invest_dist"
-_USERGUIDE_HTML_DIR="$_INVEST_DIST_DIR/documentation"
 CONFIG_DIR="installer/darwin"
 echo "APPDIR:"
 echo $4
@@ -37,8 +38,6 @@ mkdir -p "${_RESOURCEDIR}"
 
 cp -r "$2" "$_INVEST_DIST_DIR"
 
-mkdir -p "${_USERGUIDE_HTML_DIR}"
-cp -r "$3" "$_USERGUIDE_HTML_DIR"
 new_command_file="$_MACOSDIR/$new_basename"
 cp $CONFIG_DIR/invest.icns "$_RESOURCEDIR/invest.icns"
 
