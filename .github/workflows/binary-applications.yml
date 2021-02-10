@@ -5,30 +5,8 @@ on:
     pull_request:
 
 jobs:
-    check-syntax-errors:
-        name: "Check for syntax errors"
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v2
-
-            - name: Set up python 3.8
-              uses: actions/setup-python@v1
-              with:
-                  python-version: 3.8
-
-            - name: Set up environment
-              run: python -m pip install --upgrade flake8
-
-            - name: Lint with flake8
-              run: |
-                # stop the build if there are Python syntax errors or undefined names
-                python -m flake8 src --count --select=E9,F63,F7,F82 --show-source --statistics
-                # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-                python -m flake8 src --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
     build-mac-binaries:
         name: "Build mac binaries"
-        needs: check-syntax-errors
         runs-on: macos-10.15
         env:
             PYTHON_VERSION: 3.8
@@ -53,14 +31,29 @@ jobs:
               shell: bash -l {0}
               run: |
                   conda upgrade -y pip setuptools
-                  conda install wheel setuptools_scm PyInstaller
-                  pip install qtpy>1.3 qtawesome PySide2!=5.15.0 dmgbuild
+                  conda install wheel PyInstaller
+                  pip install qtpy>1.3 qtawesome dmgbuild
 
             - name: Build binaries
               shell: bash -l {0}
               run: |
-                  make install
-                  make mac_dmg
+                  # make python packages
+                  python3 setup.py bdist_wheel
+
+                  # install
+                  rm -r example.egg-info
+                  python3 -m pip install --isolated --upgrade --no-index --only-binary example --find-links=dist example
+
+                  # make binaries
+                  python3 -m PyInstaller --workpath build/pyi-build --clean --distpath dist/ example.spec
+                  conda list --export > dist/example/package_versions.txt
+
+                  # make mac app bundle
+                  ./build_app_bundle.sh
+                  
+                  # make dmg
+                  dmgbuild -Dexampledir="build/mac_app/Example.app" -s "dmgconf.py" "Example" "dist/Example.dmg"
+
 
             - name: Upload DMG artifact
               uses: actions/upload-artifact@v2-preview

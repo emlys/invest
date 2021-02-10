@@ -3,22 +3,16 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDisplayName</key>
-    <string>++NAME++</string>
+    <string>Example</string>
     <key>CFBundleName</key>
-    <string>++NAME++</string>
+    <string>Example</string>
     <key>CFBundleIdentifier</key>
     <string>example.example</string>
     <key>CFBundleExecutable</key>
-    <string>MacOS/++NAME++</string>
+    <string>MacOS/Example</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>++VERSION++</string>
-    <key>LSBackgroundOnly</key>
-    <string>0</string>
-    <key>CFBundleIconFile</key>
-    <string>invest</string>
 </dict>
 </plist>
