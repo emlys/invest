@@ -1,7 +1,6 @@
 # Configuration script for DMGBuild
 
 import os
-MAC_INSTALLER_DIR = os.path.join('installer', 'darwin')
 
 def get_size(start_path = '.'):
     total_size = 0
@@ -16,7 +15,7 @@ print('Volume size: %s' % size)
 print('Packaging dirname %s' % defines['exampledir'])
 _example_dirname = os.path.basename(defines['exampledir'])
 
-badge_icon = os.path.join(MAC_INSTALLER_DIR, 'invest.icns')
+badge_icon = os.path.join('.', 'invest.icns')
 symlinks = {'Applications': '/Applications'}
 files = [defines['exampledir']]
 
@@ -29,8 +28,7 @@ text_size = 12
 
 # Window Settings
 window_rect = ((100, 100), (900, 660))
-background = os.path.join(MAC_INSTALLER_DIR, 'background.png')
-#background = 'builtin-arrow'
+background = 'builtin-arrow'
 default_view = 'icon-view'
 
 format = 'UDZO'

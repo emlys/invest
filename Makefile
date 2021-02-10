@@ -53,10 +53,10 @@ $(DIST_DIR)/example%.whl: | $(DIST_DIR)
 binaries: $(EXAMPLE_BINARIES_DIR)
 $(EXAMPLE_BINARIES_DIR): | $(DIST_DIR) $(BUILD_DIR)
 	$(info make binaries...)
-	python3 -m PyInstaller --workpath $(BUILD_DIR)/pyi-build --clean --distpath $(DIST_DIR) exe/example.spec
+	python3 -m PyInstaller --workpath $(BUILD_DIR)/pyi-build --clean --distpath $(DIST_DIR) example.spec
 	conda list --export > $(EXAMPLE_BINARIES_DIR)/package_versions.txt
 
-DMG_CONFIG_FILE := installer/darwin/dmgconf.py
+DMG_CONFIG_FILE := dmgconf.py
 mac_dmg: $(MAC_DISK_IMAGE_FILE)
 $(MAC_DISK_IMAGE_FILE): $(DIST_DIR) $(MAC_APPLICATION_BUNDLE) $(USERGUIDE_TARGET_DIR)
 	$(info make mac_dmg...)
@@ -68,5 +68,5 @@ $(MAC_APPLICATION_BUNDLE): $(BUILD_DIR) $(EXAMPLE_BINARIES_DIR)
 	$(info make mac_app...)
 	@echo "MAC_APPLICATION_BUNDLE:"
 	@echo $(MAC_APPLICATION_BUNDLE)
-	./installer/darwin/build_app_bundle.sh $(EXAMPLE_BINARIES_DIR) $(USERGUIDE_TARGET_DIR) $(MAC_APPLICATION_BUNDLE)
+	./build_app_bundle.sh $(EXAMPLE_BINARIES_DIR) $(USERGUIDE_TARGET_DIR) $(MAC_APPLICATION_BUNDLE)
 

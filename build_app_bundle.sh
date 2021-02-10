@@ -24,7 +24,6 @@ _APPDIR="$3"
 _MACOSDIR="$_APPDIR/Contents/MacOS"
 _RESOURCEDIR="$_APPDIR/Contents/Resources"
 _EXAMPLE_DIST_DIR="$_MACOSDIR/example_dist"
-CONFIG_DIR="installer/darwin"
 echo "APPDIR:"
 echo $3
 echo "$_APPDIR/Contents/MacOS"
@@ -35,10 +34,10 @@ mkdir -p "${_RESOURCEDIR}"
 cp -r "$1" "$_EXAMPLE_DIST_DIR"
 
 new_command_file="$_MACOSDIR/$new_basename"
-cp $CONFIG_DIR/invest.icns "$_RESOURCEDIR/invest.icns"
+cp "invest.icns" "$_RESOURCEDIR/invest.icns"
 
 new_plist_file="$_APPDIR/Contents/Info.plist"
-cp $CONFIG_DIR/Info.plist "$new_plist_file"
+cp "Info.plist" "$new_plist_file"
 
 # replace the version and application name strings in the Info.plist file
 sed -i '' "s|++NAME++|$new_basename|g" "$new_plist_file"
