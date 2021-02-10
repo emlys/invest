@@ -7,7 +7,7 @@
     <key>CFBundleName</key>
     <string>++NAME++</string>
     <key>CFBundleIdentifier</key>
-    <string>org.naturalcapitalproject.InVEST</string>
+    <string>example.example</string>
     <key>CFBundleExecutable</key>
     <string>MacOS/++NAME++</string>
     <key>CFBundleInfoDictionaryVersion</key>

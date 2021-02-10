@@ -1,13 +1,4 @@
 # encoding=UTF-8
-"""setup.py module for natcap.invest.
-
-InVEST - Integrated Valuation of Ecosystem Services and Tradeoffs
-
-Common functionality provided by setup.py:
-    build_sphinx
-
-For other commands, try `python setup.py --help-commands`
-"""
 import platform
 
 from setuptools.extension import Extension
@@ -35,15 +26,11 @@ if platform.system() == 'Darwin':
     compiler_and_linker_args = ['-stdlib=libc++']
 
 setup(
-    name='natcap.invest',
-    description="InVEST Ecosystem Service models",
-    maintainer='James Douglass',
-    maintainer_email='jdouglass@stanford.edu',
-    url='http://github.com/natcap/invest',
-    namespace_packages=['natcap'],
-    packages=['natcap'],
+    name='example',
+    namespace_packages=['example'],
+    packages=['example'],
     package_dir={
-        'natcap': 'src/natcap'
+        'example': 'src/example'
     },
     use_scm_version={'version_scheme': 'post-release',
                      'local_scheme': 'node-and-date'},

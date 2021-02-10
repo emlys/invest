@@ -1,7 +1,5 @@
 # Configuration script for DMGBuild
-#
-# __file__ is not available within this script, so we're just assuming that
-# this is being executed relative to the InVEST project root.
+
 import os
 MAC_INSTALLER_DIR = os.path.join('installer', 'darwin')
 
@@ -13,17 +11,17 @@ def get_size(start_path = '.'):
             total_size += os.path.getsize(fp)
     return str(int(total_size/1024.) + 1024*50) + 'K'
 
-size = get_size(defines['investdir'])
+size = get_size(defines['exampledir'])
 print('Volume size: %s' % size)
-print('Packaging dirname %s' % defines['investdir'])
-_invest_dirname = os.path.basename(defines['investdir'])
+print('Packaging dirname %s' % defines['exampledir'])
+_example_dirname = os.path.basename(defines['exampledir'])
 
 badge_icon = os.path.join(MAC_INSTALLER_DIR, 'invest.icns')
 symlinks = {'Applications': '/Applications'}
-files = [defines['investdir']]
+files = [defines['exampledir']]
 
 icon_locations = {
-    _invest_dirname: (220, 290),
+    _example_dirname: (220, 290),
     'Applications': (670, 290)
 }
 icon_size = 100

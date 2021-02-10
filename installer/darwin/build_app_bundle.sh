@@ -3,13 +3,12 @@
 # This script is assumed to be executed from the project root.
 #
 # Arguments:
-#  $1 = the version string to use
-#  $2 = the path to the binary dir to package.
-#  $3 = the path to the HTML documentation
-#  $4 = the path to where the application bundle should be written.
+#  $1 = the path to the binary dir to package.
+#  $2 = the path to the HTML documentation
+#  $3 = the path to where the application bundle should be written.
 
 # remove temp files that can get in the way
-tempdir=`basename $3`
+tempdir=`basename $2`
 echo "tempdir:"
 echo "$tempdir"
 if [ -d "$tempdir" ]
@@ -20,23 +19,20 @@ fi
 # prepare a local temp dir for a filesystem
 mkdir -p "$tempdir"
 
-# copy out all the invest shell files and fixup the paths.
-# .command extension makes the scripts runnable by the user.
-# Shell files without the `invest_` prefix will be left alone.
-new_basename='InVEST'
-_APPDIR="$4"
+new_basename='Example'
+_APPDIR="$3"
 _MACOSDIR="$_APPDIR/Contents/MacOS"
 _RESOURCEDIR="$_APPDIR/Contents/Resources"
-_INVEST_DIST_DIR="$_MACOSDIR/invest_dist"
+_EXAMPLE_DIST_DIR="$_MACOSDIR/example_dist"
 CONFIG_DIR="installer/darwin"
 echo "APPDIR:"
-echo $4
+echo $3
 echo "$_APPDIR/Contents/MacOS"
 
-mkdir -p "${4}/Contents/MacOS"
+mkdir -p "${3}/Contents/MacOS"
 mkdir -p "${_RESOURCEDIR}"
 
-cp -r "$2" "$_INVEST_DIST_DIR"
+cp -r "$1" "$_EXAMPLE_DIST_DIR"
 
 new_command_file="$_MACOSDIR/$new_basename"
 cp $CONFIG_DIR/invest.icns "$_RESOURCEDIR/invest.icns"
@@ -54,6 +50,6 @@ echo '#' >> $new_command_file
 echo '# the QT_MAC_WANTS_LAYER definition is supposed to have been set by the' >> $new_command_file
 echo "# runtime hook, but doesn't seem to be working.  Setting it here allows the" >> $new_command_file
 echo "# binary to run on OSX Big Sur." >> $new_command_file
-echo 'QT_MAC_WANTS_LAYER=1 `dirname $0`/invest_dist/invest launch' >> $new_command_file
+echo 'QT_MAC_WANTS_LAYER=1 `dirname $0`/example_dist/example launch' >> $new_command_file
 chmod a+x $new_command_file
 
