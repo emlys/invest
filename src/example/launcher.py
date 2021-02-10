@@ -1,4 +1,5 @@
 import sys
+import PySide2
 from qtpy import QtWidgets
 
 
