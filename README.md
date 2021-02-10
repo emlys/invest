@@ -19,3 +19,5 @@ Sandbox: example(55,805) deny(1) file-read-data /Users/emily/Library/Containers/
 Sandbox: example(55,805) deny(1) file-read-data /Users/emily/Library/Containers/com.apple.news/Data/Library/Preferences
 Sandbox: example(55,805) deny(1) file-read-data /Users/emily/Library/Containers/com.apple.stocks/Data/Library/Preferences
 ```
+
+This does not happen if the Qt event loop doesn't start (if you take out `APP.exec_()` from `launcher.py`).
