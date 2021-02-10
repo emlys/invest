@@ -1,4 +1,4 @@
-name: Build InVEST App Binaries
+name: Build Example App Binaries
 
 on:
     push:
@@ -41,12 +41,6 @@ jobs:
             - name: Fetch git tags
               run: git fetch origin +refs/tags/*:refs/tags/*
 
-            - name: Restore conda cache
-              uses: actions/cache@v2
-              with:
-                  path: ~/opt/anaconda3
-                  key: mac-py${{ env.PYTHON_VERSION }}-${{ env.PYTHON_ARCH}}-conda-${{ hashFiles('**/requirements*.txt') }}-exe
-
             - name: Setup conda environment
               uses: conda-incubator/setup-miniconda@v2
               with:
@@ -60,10 +54,7 @@ jobs:
               run: |
                   conda upgrade -y pip setuptools
                   conda install wheel setuptools_scm PyInstaller
-                  pip install qtpy>1.3
-                  pip install qtawesome
-                  pip install PySide2!=5.15.0
-                  pip install dmgbuild
+                  pip install qtpy>1.3 qtawesome PySide2!=5.15.0 dmgbuild
 
             - name: Build binaries
               shell: bash -l {0}
@@ -74,7 +65,7 @@ jobs:
             - name: Upload DMG artifact
               uses: actions/upload-artifact@v2-preview
               with:
-                  name: InVEST-dmg
-                  path: dist/InVEST*.dmg
+                  name: Example-dmg
+                  path: dist/Example.dmg
 
   
