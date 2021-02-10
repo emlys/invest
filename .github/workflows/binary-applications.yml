@@ -59,7 +59,7 @@ jobs:
               shell: bash -l {0}
               run: |
                   conda upgrade -y pip setuptools
-                  conda install wheel setuptools_scm
+                  conda install wheel setuptools_scm PyInstaller
                   pip install qtpy>1.3
                   pip install qtawesome
                   pip install PySide2!=5.15.0
