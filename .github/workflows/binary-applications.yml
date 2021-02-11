@@ -50,13 +50,13 @@ jobs:
                   ./build_app_bundle.sh
                   
                   # make dmg
-                  dmgbuild -Dexampledir="build/mac_app/Example.app" -s "dmgconf.py" "Example" "dist/Example.dmg"
+                  dmgbuild -Dexampledir="build/mac_app/ExampleApp.app" -s "dmgconf.py" "ExampleApp" "dist/ExampleApp.dmg"
 
 
             - name: Upload DMG artifact
               uses: actions/upload-artifact@v2-preview
               with:
-                  name: Example-dmg
-                  path: dist/Example.dmg
+                  name: ExampleApp-dmg
+                  path: dist/ExampleApp.dmg
 
   

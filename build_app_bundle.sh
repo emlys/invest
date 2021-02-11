@@ -3,12 +3,12 @@
 # This script is assumed to be executed from the project root.
 
 # Make the app bundle
-mkdir -p "build/mac_app/Example.app/Contents/MacOS"
-cp -r "dist/example_" "build/mac_app/Example.app/Contents/MacOS/"
-cp "Info.plist" "build/mac_app/Example.app/Contents/Info.plist"
+mkdir -p "build/mac_app/ExampleApp.app/Contents/MacOS"
+cp -r "dist/example_" "build/mac_app/ExampleApp.app/Contents/MacOS/"
+cp "Info.plist" "build/mac_app/ExampleApp.app/Contents/Info.plist"
 
 
-executable_file="build/mac_app/Example.app/Contents/MacOS/Example"
+executable_file="build/mac_app/ExampleApp.app/Contents/MacOS/ExampleApp"
 # This is the command that will launch the application.
 echo '#!/bin/bash' > $executable_file
 echo '#' >> $executable_file

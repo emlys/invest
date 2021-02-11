@@ -12,7 +12,7 @@ pyz = PYZ(a.pure, a.zipped_data)
 exe = EXE(
     pyz,
     a.scripts,
-    name='example_',
+    name='example',
     exclude_binaries=True)
 
 # Collect Files into Distributable Folder/File
@@ -21,4 +21,4 @@ dist = COLLECT(
     a.binaries,
     a.zipfiles,
     a.datas,
-    name='example_')
+    name='example')

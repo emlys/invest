@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDisplayName</key>
-    <string>Example</string>
+    <string>ExampleApp</string>
     <key>CFBundleName</key>
-    <string>Example</string>
+    <string>ExampleApp</string>
     <key>CFBundleIdentifier</key>
     <string>example.example</string>
     <key>CFBundleExecutable</key>
-    <string>MacOS/Example</string>
+    <string>MacOS/ExampleApp</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundlePackageType</key>
