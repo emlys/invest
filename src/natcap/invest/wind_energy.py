@@ -7,27 +7,23 @@ import shutil
 import tempfile
 
 import numpy
-from scipy import integrate
-
-import shapely.wkb
-import shapely.wkt
+import pygeoprocessing
 import shapely.ops
 import shapely.prepared
-from shapely import speedups
-
+import shapely.wkb
+import shapely.wkt
+import taskgraph
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
+from scipy import integrate
+from shapely import speedups
 
-import pygeoprocessing
-import taskgraph
-from . import utils
-from . import spec_utils
-from .unit_registry import u
-from . import validation
-from .model_metadata import MODEL_METADATA
 from . import gettext
-
+from . import spec_utils
+from . import utils
+from . import validation
+from .unit_registry import u
 
 LOGGER = logging.getLogger(__name__)
 speedups.enable()
@@ -95,12 +91,23 @@ OUTPUT_WIND_DATA_FIELDS = {
 }
 
 MODEL_SPEC = {
-    "model_name": MODEL_METADATA["wind_energy"].model_title,
-    "pyname": MODEL_METADATA["wind_energy"].pyname,
-    "userguide": MODEL_METADATA["wind_energy"].userguide,
+    "model_id": "wind_energy",
+    "model_name": gettext("Wind Energy Production"),
+    "pyname": "natcap.invest.wind_energy",
+    "userguide": "wind_energy.html",
+    "aliases": (),
+    "ui_spec": {
+        "order": [
+            ['workspace_dir', 'results_suffix'],
+            ['wind_data_path', 'aoi_vector_path', 'bathymetry_path', 'land_polygon_vector_path', 'global_wind_parameters_path'],
+            ['turbine_parameters_path', 'number_of_turbines', 'min_depth', 'max_depth', 'min_distance', 'max_distance'],
+            ['valuation_container', 'foundation_cost', 'discount_rate', 'grid_points_path', 'avg_grid_distance', 'price_table', 'wind_schedule', 'wind_price', 'rate_change'],
+        ],
+        "hidden": ["n_workers"]
+    },
     "args_with_spatial_overlap": {
-        "spatial_keys": ['aoi_vector_path', 'bathymetry_path',
-                         'land_polygon_vector_path'],
+        "spatial_keys": ["aoi_vector_path", "bathymetry_path",
+                         "land_polygon_vector_path"],
         "different_projections_ok": True,
     },
     "args": {
@@ -117,7 +124,7 @@ MODEL_SPEC = {
             **spec_utils.AOI,
             "projected": True,
             "projection_units": u.meter,
-            "required": "valuation_container & grid_points_path",
+            "required": "valuation_container and grid_points_path",
             "about": gettext(
                 "Map of the area(s) of interest over which to run the model "
                 "and aggregate valuation results. Required if Run Valuation "
@@ -134,7 +141,8 @@ MODEL_SPEC = {
             "type": "vector",
             "fields": {},
             "geometries": {"POLYGON", "MULTIPOLYGON"},
-            "required": "min_distance | max_distance | valuation_container",
+            "required": "min_distance or max_distance or valuation_container",
+            "allowed": "aoi_vector_path",
             "about": gettext(
                 "Map of the coastlines of landmasses in the area of interest. "
                 "Required if the Minimum Distance and Maximum Distance inputs "
@@ -292,6 +300,7 @@ MODEL_SPEC = {
             "type": "number",
             "units": u.meter,
             "required": "valuation_container",
+            "allowed": "land_polygon_vector_path",
             "about": gettext(
                 "Minimum distance from shore for offshore wind farm "
                 "installation. Required if Run Valuation is selected."),
@@ -301,6 +310,7 @@ MODEL_SPEC = {
             "type": "number",
             "units": u.meter,
             "required": "valuation_container",
+            "allowed": "land_polygon_vector_path",
             "about": gettext(
                 "Maximum distance from shore for offshore wind farm "
                 "installation. Required if Run Valuation is selected."),
@@ -316,12 +326,14 @@ MODEL_SPEC = {
             "type": "number",
             "units": u.currency,
             "required": "valuation_container",
+            "allowed": "valuation_container",
             "about": gettext("The cost of the foundation for one turbine."),
             "name": gettext("foundation cost")
         },
         "discount_rate": {
             "type": "ratio",
             "required": "valuation_container",
+            "allowed": "valuation_container",
             "about": gettext("Annual discount rate to apply to valuation."),
             "name": gettext("discount rate")
         },
@@ -353,7 +365,8 @@ MODEL_SPEC = {
                     "about": gettext("Longitude of the connection point.")
                 }
             },
-            "required": "valuation_container & (not avg_grid_distance)",
+            "required": "valuation_container and not avg_grid_distance",
+            "allowed": "valuation_container",
             "about": gettext(
                 "Table of grid and land connection points to which cables "
                 "will connect. Required if Run Valuation is selected and "
@@ -364,7 +377,8 @@ MODEL_SPEC = {
             "expression": "value > 0",
             "type": "number",
             "units": u.kilometer,
-            "required": "valuation_container & (not grid_points_path)",
+            "required": "valuation_container and not grid_points_path",
+            "allowed": "valuation_container",
             "about": gettext(
                 "Average distance to the onshore grid from coastal cable "
                 "landing points. Required if Run Valuation is selected and "
@@ -374,6 +388,7 @@ MODEL_SPEC = {
         "price_table": {
             "type": "boolean",
             "required": "valuation_container",
+            "allowed": "valuation_container",
             "about": gettext(
                 "Use a Wind Energy Price Table instead of calculating annual "
                 "prices from the initial Energy Price and Rate of Price Change "
@@ -399,7 +414,8 @@ MODEL_SPEC = {
                     "about": gettext("Price of energy for each year.")
                 }
             },
-            "required": "valuation_container & price_table",
+            "required": "valuation_container and price_table",
+            "allowed": "price_table",
             "about": gettext(
                 "Table of yearly prices for wind energy. There must be a row "
                 "for each year in the lifespan given in the 'time_period' "
@@ -410,7 +426,8 @@ MODEL_SPEC = {
         "wind_price": {
             "type": "number",
             "units": u.currency/u.kilowatt_hour,
-            "required": "valuation_container & (not price_table)",
+            "required": "valuation_container and (not price_table)",
+            "allowed": "valuation_container and not price_table",
             "about": gettext(
                 "The initial price of wind energy, at the first year in the "
                 "wind energy farm lifespan. Required if Run Valuation is "
@@ -419,7 +436,8 @@ MODEL_SPEC = {
         },
         "rate_change": {
             "type": "ratio",
-            "required": "valuation_container & (not price_table)",
+            "required": "valuation_container and not price_table",
+            "allowed": "valuation_container and not price_table",
             "about": gettext(
                 "The annual rate of change in the price of wind energy. "
                 "Required if Run Valuation is selected and Use Price Table "
@@ -1292,10 +1310,15 @@ def execute(args):
     levelized_raster_path = os.path.join(
         out_dir, 'levelized_cost_price_per_kWh%s.tif' % suffix)
 
+    # Include foundation_cost, discount_rate, number_of_turbines with
+    # parameters_dict to pass for NPV calculation
+    for key in ['foundation_cost', 'discount_rate', 'number_of_turbines']:
+        parameters_dict[key] = float(args[key])
+
     task_graph.add_task(
         func=_calculate_npv_levelized_rasters,
         args=(harvested_masked_path, final_dist_raster_path, npv_raster_path,
-              levelized_raster_path, parameters_dict, args, price_list),
+              levelized_raster_path, parameters_dict, price_list),
         target_path_list=[npv_raster_path, levelized_raster_path],
         task_name='calculate_npv_levelized_rasters',
         dependent_task_list=[final_dist_task])
@@ -1324,7 +1347,7 @@ def execute(args):
 def _calculate_npv_levelized_rasters(
         base_harvested_raster_path, base_dist_raster_path,
         target_npv_raster_path, target_levelized_raster_path,
-        parameters_dict, args, price_list):
+        parameters_dict, price_list):
     """Calculate NPV and levelized rasters from harvested and dist rasters.
 
     Args:
@@ -1343,9 +1366,6 @@ def _calculate_npv_levelized_rasters(
 
         parameters_dict (dict): a dictionary of the turbine and biophysical
             global parameters.
-
-        args (dict): a dictionary that contains information on
-            ``foundation_cost``, ``discount_rate``, ``number_of_turbines``.
 
         price_list (list): a list of wind energy prices for a period of time.
 
@@ -1378,7 +1398,7 @@ def _calculate_npv_levelized_rasters(
     # The cost of infield cable in currency units per km
     infield_cost = parameters_dict['infield_cable_cost']
     # The cost of the foundation in currency units
-    foundation_cost = args['foundation_cost']
+    foundation_cost = parameters_dict['foundation_cost']
     # The cost of each turbine unit in currency units
     unit_cost = parameters_dict['turbine_cost']
     # The installation cost as a decimal
@@ -1388,7 +1408,7 @@ def _calculate_npv_levelized_rasters(
     # The operations and maintenance costs as a decimal factor of capex_arr
     op_maint_cost = parameters_dict['operation_maintenance_cost']
     # The discount rate as a decimal
-    discount_rate = args['discount_rate']
+    discount_rate = parameters_dict['discount_rate']
     # The cost to decommission the farm as a decimal factor of capex_arr
     decom = parameters_dict['decommission_cost']
     # The mega watt value for the turbines in MW
@@ -1404,16 +1424,15 @@ def _calculate_npv_levelized_rasters(
 
     # The total mega watt capacity of the wind farm where mega watt is the
     # turbines rated power
-    total_mega_watt = mega_watt * int(args['number_of_turbines'])
+    number_of_turbines = int(parameters_dict['number_of_turbines'])
+    total_mega_watt = mega_watt * number_of_turbines
 
     # Total infield cable cost
-    infield_cable_cost = infield_length * infield_cost * int(
-        args['number_of_turbines'])
+    infield_cable_cost = infield_length * infield_cost * number_of_turbines
     LOGGER.debug('infield_cable_cost : %s', infield_cable_cost)
 
     # Total foundation cost
-    total_foundation_cost = (foundation_cost + unit_cost) * int(
-        args['number_of_turbines'])
+    total_foundation_cost = (foundation_cost + unit_cost) * number_of_turbines
     LOGGER.debug('total_foundation_cost : %s', total_foundation_cost)
 
     # Nominal Capital Cost (CAP) minus the cost of cable which needs distances

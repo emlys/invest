@@ -1,3 +1,4 @@
+import { app, ipcRenderer } from 'electron';
 import fs from 'fs';
 import https from 'https';
 import os from 'os';
@@ -7,33 +8,51 @@ import url from 'url';
 
 import React from 'react';
 import { render } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 
-import * as server_requests from '../../src/renderer/server_requests';
+import * as serverRequests from '../../src/renderer/server_requests';
 import { argsDictFromObject } from '../../src/renderer/utils';
 import SetupTab from '../../src/renderer/components/SetupTab';
 import ResourcesLinks from '../../src/renderer/components/ResourcesLinks';
 import {
-  createPythonFlaskProcess,
-  shutdownPythonProcess,
-  getFlaskIsReady,
+  createCoreServerProcess,
+  shutdownPythonProcess
 } from '../../src/main/createPythonFlaskProcess';
 import findInvestBinaries from '../../src/main/findInvestBinaries';
+import { settingsStore } from '../../src/main/settingsStore';
+import { checkFirstRun, APP_HAS_RUN_TOKEN } from '../../src/main/setupCheckFirstRun';
+import { ipcMainChannels } from '../../src/main/ipcMainChannels';
 
 // This test starts a python subprocess, which can be slow
 jest.setTimeout(120000);
 
+const CORE_PORT = 56789;
 let flaskSubprocess;
 beforeAll(async () => {
+  jest.spyOn(ipcRenderer, 'invoke').mockImplementation((channel, arg) => {
+    if (channel === ipcMainChannels.GET_SETTING) {
+      if (arg === 'core.port') {
+        return CORE_PORT;
+      }
+      if (arg.endsWith('.type')) {
+        return 'core';
+      }
+    }
+    return Promise.resolve();
+  });
+  const userDataPath = app.getPath('userData');
+  const hasRunTokenPath = path.join(userDataPath, APP_HAS_RUN_TOKEN);
+  if (fs.existsSync(hasRunTokenPath)) {
+    fs.unlinkSync(hasRunTokenPath);
+  }
   const isDevMode = true; // otherwise need to mock process.resourcesPath
   const investExe = findInvestBinaries(isDevMode);
-  flaskSubprocess = createPythonFlaskProcess(investExe);
-  await getFlaskIsReady();
+  settingsStore.set('investExe', investExe);
+  await createCoreServerProcess(CORE_PORT);
 });
 
 afterAll(async () => {
-  await shutdownPythonProcess(flaskSubprocess);
+  await shutdownPythonProcess(settingsStore.get('core.pid'));
 });
 
 describe('requests to flask endpoints', () => {
@@ -46,38 +65,32 @@ describe('requests to flask endpoints', () => {
     fs.rmSync(WORKSPACE, { recursive: true, force: true });
   });
 
-  test('invest list items have expected properties', async () => {
-    const investList = await server_requests.getInvestModelNames();
-    Object.values(investList).forEach((item) => {
-      expect(item.model_name).not.toBeUndefined();
-    });
-  });
-
   test('fetch invest model args spec', async () => {
-    const spec = await server_requests.getSpec('carbon');
+    const spec = await serverRequests.getSpec('carbon');
     const expectedKeys = ['model_name', 'pyname', 'userguide', 'args'];
     expectedKeys.forEach((key) => {
-      expect(spec[key]).not.toBeUndefined();
+      expect(spec[key]).toBeDefined();
     });
   });
 
   test('fetch invest validation', async () => {
-    const spec = await server_requests.getSpec('carbon');
+    const spec = await serverRequests.getSpec('carbon');
     // it's okay to validate even if none of the args have values yet
     const argsDict = argsDictFromObject(spec.args);
     const payload = {
       model_module: spec.pyname,
+      modelId: 'carbon',
       args: JSON.stringify(argsDict),
     };
 
-    const results = await server_requests.fetchValidation(payload);
+    const results = await serverRequests.fetchValidation(payload);
     // There's always an array of arrays, where each child array has
     // two elements: 1) an array of invest arg keys, 2) string message
     expect(results[0]).toHaveLength(2);
   });
 
   test('write parameters to file and parse them from file', async () => {
-    const spec = await server_requests.getSpec('carbon');
+    const spec = await serverRequests.getSpec('carbon');
     const argsDict = argsDictFromObject(spec.args);
     const workspace = fs.mkdtempSync(WORKSPACE);
     const filepath = path.join(workspace, 'foo.json');
@@ -89,19 +102,19 @@ describe('requests to flask endpoints', () => {
     };
 
     // First test the data is written
-    await server_requests.writeParametersToFile(payload);
+    await serverRequests.writeParametersToFile(payload);
     const data = JSON.parse(fs.readFileSync(filepath));
     const expectedKeys = [
       'args',
       'invest_version',
-      'model_name'
+      'model_name',
     ];
     expectedKeys.forEach((key) => {
-      expect(data[key]).not.toBeUndefined();
+      expect(data[key]).toBeDefined();
     });
 
     // Second test the datastack is read and parsed
-    const data2 = await server_requests.fetchDatastackFromFile(
+    const data2 = await serverRequests.fetchDatastackFromFile(
       { filepath: filepath });
     const expectedKeys2 = [
       'type',
@@ -112,13 +125,13 @@ describe('requests to flask endpoints', () => {
       'model_human_name',
     ];
     expectedKeys2.forEach((key) => {
-      expect(data2[key]).not.toBeUndefined();
+      expect(data2[key]).toBeDefined();
     });
   });
 
   test('write parameters to python script', async () => {
     const modelName = 'carbon'; // as appearing in `invest list`
-    const spec = await server_requests.getSpec(modelName);
+    const spec = await serverRequests.getSpec(modelName);
     const argsDict = argsDictFromObject(spec.args);
     const workspace = fs.mkdtempSync(WORKSPACE);
     const filepath = path.join(workspace, 'foo.py');
@@ -127,7 +140,7 @@ describe('requests to flask endpoints', () => {
       modelname: modelName,
       args: JSON.stringify(argsDict),
     };
-    await server_requests.saveToPython(payload);
+    await serverRequests.saveToPython(payload);
 
     const file = readline.createInterface({
       input: fs.createReadStream(filepath),
@@ -138,44 +151,6 @@ describe('requests to flask endpoints', () => {
       expect(`${line}`).toBe('# coding=UTF-8');
       break;
     }
-  });
-});
-
-describe('validate the UI spec', () => {
-  test('each model has a complete entry', async () => {
-    const { UI_SPEC } = require('../../src/renderer/ui_config');
-    const models = await server_requests.getInvestModelNames();
-    const modelInternalNames = Object.keys(models)
-      .map((key) => models[key].model_name);
-    // get the args spec for each model
-    const argsSpecs = await Promise.all(modelInternalNames.map(
-      (model) => server_requests.getSpec(model)
-    ));
-
-    argsSpecs.forEach((spec, idx) => {
-      const modelName = modelInternalNames[idx];
-      expect(spec.model_name).toBeDefined();
-      expect(Object.keys(UI_SPEC)).toContain(modelName);
-      expect(Object.keys(UI_SPEC[modelName])).toContain('order');
-      // expect each MODEL_SPEC arg to exist in 'order' or 'hidden' property
-      const orderArray = UI_SPEC[modelName].order.flat();
-      // 'hidden' is an optional property. It need not include 'n_workers',
-      // but we should insert 'n_workers' here as it is present in MODEL_SPEC.
-      const hiddenArray = UI_SPEC[modelName].hidden || [];
-      const allArgs = orderArray.concat(hiddenArray.concat('n_workers'));
-      const argsSet = new Set(allArgs);
-      expect(allArgs).toHaveLength(argsSet.size); // no duplicates
-      expect(argsSet).toEqual(new Set(Object.keys(spec.args)));
-
-      // for other properties, expect each key is an arg
-      for (const property in UI_SPEC[modelName]) {
-        if (!['order', 'hidden'].includes(property)) {
-          Object.keys(UI_SPEC[modelName][property]).forEach((arg) => {
-            expect(Object.keys(spec.args)).toContain(arg);
-          });
-        }
-      }
-    });
   });
 });
 
@@ -206,20 +181,45 @@ expect.extend({
   },
 });
 
-describe('Build each model UI from MODEL_SPEC', () => {
-  const { UI_SPEC } = require('../../src/renderer/ui_config');
+describe('Test building model UIs and forum links', () => {
+  const models = [
+    'annual_water_yield',
+    'carbon',
+    'coastal_blue_carbon',
+    'coastal_blue_carbon_preprocessor',
+    'coastal_vulnerability',
+    'crop_production_percentile',
+    'crop_production_regression',
+    'delineateit',
+    'forest_carbon_edge_effect',
+    'habitat_quality',
+    'habitat_risk_assessment',
+    'ndr',
+    'pollination',
+    'recreation',
+    'routedem',
+    'scenario_generator_proximity',
+    'scenic_quality',
+    'sdr',
+    'seasonal_water_yield',
+    'stormwater',
+    'urban_cooling_model',
+    'urban_flood_risk_mitigation',
+    'urban_nature_access',
+    'wave_energy',
+    'wind_energy',
+  ];
 
-  test.each(Object.keys(UI_SPEC))('%s', async (model) => {
-    const argsSpec = await server_requests.getSpec(model);
-    const uiSpec = UI_SPEC[model];
-
+  test.each(models)('test building each model setup tab', async (model) => {
+    const argsSpec = await serverRequests.getSpec(model);
     const { findByRole } = render(
       <SetupTab
         pyModuleName={argsSpec.pyname}
         modelName={argsSpec.model_name}
+        modelId={model}
         argsSpec={argsSpec.args}
         userguide={argsSpec.userguide}
-        uiSpec={uiSpec}
+        uiSpec={argsSpec.ui_spec}
         argsInitValues={undefined}
         investExecute={() => {}}
         nWorkers="-1"
@@ -232,14 +232,9 @@ describe('Build each model UI from MODEL_SPEC', () => {
     expect(await findByRole('textbox', { name: /workspace/i }))
       .toBeInTheDocument();
   });
-});
 
-describe('Check Forum links for each model', () => {
-  const { UI_SPEC } = require('../../src/renderer/ui_config');
-
-  test.each(Object.keys(UI_SPEC))('%s - Forum', async (model) => {
-    const argsSpec = await server_requests.getSpec(model);
-
+  test.each(models)('test each forum link', async (model) => {
+    const argsSpec = await serverRequests.getSpec(model);
     const { findByRole } = render(
       <ResourcesLinks
         moduleName={model}

@@ -22,7 +22,6 @@ from . import gettext
 from . import spec_utils
 from . import utils
 from . import validation
-from .model_metadata import MODEL_METADATA
 from .spec_utils import u
 
 LOGGER = logging.getLogger(__name__)
@@ -40,9 +39,20 @@ RADIUS_OPT_POP_GROUP = 'radius per population group'
 POP_FIELD_REGEX = '^pop_'
 ID_FIELDNAME = 'adm_unit_id'
 MODEL_SPEC = {
-    'model_name': MODEL_METADATA['urban_nature_access'].model_title,
-    'pyname': MODEL_METADATA['urban_nature_access'].pyname,
-    'userguide': MODEL_METADATA['urban_nature_access'].userguide,
+    'model_id': 'urban_nature_access',
+    'model_name': gettext('Urban Nature Access'),
+    'pyname': 'natcap.invest.urban_nature_access',
+    'userguide': 'urban_nature_access.html',
+    'aliases': ('una',),
+    'ui_spec': {
+        'order': [
+            ['workspace_dir', 'results_suffix'],
+            ['lulc_raster_path', 'lulc_attribute_table'],
+            ['population_raster_path', 'admin_boundaries_vector_path', 'population_group_radii_table', 'urban_nature_demand', 'aggregate_by_pop_group'],
+            ['search_radius_mode', 'decay_function', 'search_radius']
+        ],
+        "hidden": ["n_workers"]
+    },
     'args_with_spatial_overlap': {
         'spatial_keys': [
             'lulc_raster_path', 'population_raster_path',
@@ -249,6 +259,7 @@ MODEL_SPEC = {
             'units': u.m,
             'expression': 'value > 0',
             'required': f'search_radius_mode == "{RADIUS_OPT_UNIFORM}"',
+            'allowed': f'search_radius_mode == "{RADIUS_OPT_UNIFORM}"',
             'about': gettext(
                 'The search radius to use when running the model under a '
                 'uniform search radius. Required when running the model '
@@ -258,6 +269,7 @@ MODEL_SPEC = {
             'name': 'population group radii table',
             'type': 'csv',
             'required': f'search_radius_mode == "{RADIUS_OPT_POP_GROUP}"',
+            'allowed': f'search_radius_mode == "{RADIUS_OPT_POP_GROUP}"',
             'index_col': 'pop_group',
             'columns': {
                 "pop_group": {
@@ -272,8 +284,6 @@ MODEL_SPEC = {
                 'search_radius_m': {
                     'type': 'number',
                     'units': u.meter,
-                    'required':
-                        f'search_radius_mode == "{RADIUS_OPT_POP_GROUP}"',
                     'expression': 'value >= 0',
                     'about': gettext(
                         "The search radius in meters to use "
@@ -1856,8 +1866,10 @@ def _reclassify_urban_nature_area(
             urban_nature_area = squared_pixel_area * urban_nature_proportion
         urban_nature_area_map[lucode] = urban_nature_area
 
-    lulc_raster_info = pygeoprocessing.get_raster_info(lulc_raster_path)
-    urban_nature_area_map[lulc_raster_info['nodata'][0]] = FLOAT32_NODATA
+    lulc_raster_nodata = pygeoprocessing.get_raster_info(
+        lulc_raster_path)['nodata'][0]
+    if lulc_raster_nodata is not None:
+        urban_nature_area_map[lulc_raster_nodata] = FLOAT32_NODATA
 
     utils.reclassify_raster(
         raster_path_band=(lulc_raster_path, 1),

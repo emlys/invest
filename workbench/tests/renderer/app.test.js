@@ -12,6 +12,7 @@ import {
   getSpec,
   fetchValidation,
   fetchDatastackFromFile,
+  fetchArgsEnabled,
   getSupportedLanguages
 } from '../../src/renderer/server_requests';
 import InvestJob from '../../src/renderer/InvestJob';
@@ -22,11 +23,6 @@ import {
 import { ipcMainChannels } from '../../src/main/ipcMainChannels';
 import { removeIpcMainListeners } from '../../src/main/main';
 import { mockUISpec } from './utils';
-// It's quite a pain to dynamically mock a const from a module,
-// here we do it by importing as another object, then
-// we can overwrite the object we want to mock later
-// https://stackoverflow.com/questions/42977961/how-to-mock-an-exported-const-in-jest
-import * as uiConfig from '../../src/renderer/ui_config';
 
 jest.mock('../../src/renderer/server_requests');
 
@@ -55,21 +51,19 @@ const SAMPLE_SPEC = {
       type: 'csv',
     },
   },
+  ui_spec: {
+    order: [['workspace_dir', 'carbon_pools_path']],
+  },
 };
-
-// Because we mock UI_SPEC without using jest's API
-// we also need to reset it without jest's API.
-const { UI_SPEC } = uiConfig;
-afterEach(() => {
-  uiConfig.UI_SPEC = UI_SPEC;
-});
 
 describe('Various ways to open and close InVEST models', () => {
   beforeEach(async () => {
     getInvestModelNames.mockResolvedValue(MOCK_INVEST_LIST);
     getSpec.mockResolvedValue(SAMPLE_SPEC);
     fetchValidation.mockResolvedValue(MOCK_VALIDATION_VALUE);
-    uiConfig.UI_SPEC = mockUISpec(SAMPLE_SPEC, MOCK_MODEL_RUN_NAME);
+    fetchArgsEnabled.mockResolvedValue({
+      workspace_dir: true, carbon_pools_path: true
+    });
   });
 
   afterEach(async () => {
@@ -105,6 +99,7 @@ describe('Various ways to open and close InVEST models', () => {
       modelHumanName: 'Carbon Sequestration',
       argsValues: argsValues,
       status: 'success',
+      type: 'core',
     });
     await InvestJob.saveJob(mockJob);
 
@@ -141,7 +136,12 @@ describe('Various ways to open and close InVEST models', () => {
       model_run_name: 'carbon',
       model_human_name: 'Carbon',
     };
-    ipcRenderer.invoke.mockResolvedValue(mockDialogData);
+    ipcRenderer.invoke.mockImplementation((channel) => {
+      if (channel === ipcMainChannels.GET_SETTING) {
+        return Promise.resolve();
+      }
+      return mockDialogData;
+    });
     fetchDatastackFromFile.mockResolvedValue(mockDatastack);
 
     const { findByText, findByLabelText, findByRole } = render(
@@ -167,7 +167,12 @@ describe('Various ways to open and close InVEST models', () => {
       canceled: true,
       filePaths: [],
     };
-    ipcRenderer.invoke.mockResolvedValue(mockDialogData);
+    ipcRenderer.invoke.mockImplementation((channel) => {
+      if (channel === ipcMainChannels.GET_SETTING) {
+        return Promise.resolve();
+      }
+      return mockDialogData;
+    });
 
     const { findByRole } = render(
       <App />
@@ -293,6 +298,7 @@ describe('Display recently executed InVEST jobs on Home tab', () => {
         results_suffix: 'suffix',
       },
       status: 'error',
+      type: 'core',
     });
     const recentJobs = await InvestJob.saveJob(job2);
     const initialJobs = [job1, job2];
@@ -334,12 +340,14 @@ describe('Display recently executed InVEST jobs on Home tab', () => {
         workspace_dir: 'dir',
       },
       status: 'success',
+      type: 'core',
     });
     const job2 = new InvestJob({
       // argsValues is missing
       modelRunName: MOCK_MODEL_RUN_NAME,
       modelHumanName: 'invest B',
       status: 'success',
+      type: 'core',
     });
     await InvestJob.saveJob(job1);
     await InvestJob.saveJob(job2);
@@ -358,6 +366,7 @@ describe('Display recently executed InVEST jobs on Home tab', () => {
         workspace_dir: 'dir',
       },
       status: 'success',
+      type: 'core',
     });
     await InvestJob.saveJob(job1);
     const { findByText, queryByText } = render(<App />);
@@ -384,6 +393,8 @@ describe('Display recently executed InVEST jobs on Home tab', () => {
         workspace_dir: 'work1',
       },
       status: 'success',
+      // leave out the 'type' attribute to make sure it defaults to core
+      // for backwards compatibility
     });
     const recentJobs = await InvestJob.saveJob(job1);
 
