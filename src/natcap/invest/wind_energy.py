@@ -561,6 +561,7 @@ _HARVESTED_FIELD_NAME = 'Harv_MWhr'
 _TARGET_RESAMPLE_METHOD = 'near'
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Wind Energy.
 
@@ -1323,6 +1324,7 @@ def execute(args):
     LOGGER.info('Wind Energy Valuation Model Completed')
 
 
+@utils.gdal_use_exceptions
 def _calculate_npv_levelized_rasters(
         base_harvested_raster_path, base_dist_raster_path,
         target_npv_raster_path, target_levelized_raster_path,
@@ -1539,6 +1541,7 @@ def _calculate_npv_levelized_rasters(
     levelized_raster = None
 
 
+@utils.gdal_use_exceptions
 def _get_feature_count(base_vector_path):
     """Get feature count from vector and return it.
 
@@ -1637,6 +1640,7 @@ def _add_avg_dist_op(tmp_dist, avg_grid_distance):
     return out_array
 
 
+@utils.gdal_use_exceptions
 def _create_aoi_raster(base_aoi_vector_path, target_aoi_raster_path,
                        target_pixel_size, target_sr_wkt, work_dir):
     """Create an AOI raster from a vector w/ target pixel size and projection.
@@ -1729,6 +1733,7 @@ def _calculate_carbon_op(harvested_arr, carbon_coef):
     return out_array
 
 
+@utils.gdal_use_exceptions
 def _calculate_land_to_grid_distance(
         base_land_vector_path, base_grid_vector_path, dist_field_name,
         target_land_vector_path):
@@ -1845,6 +1850,7 @@ def _mask_by_distance(base_raster_path, min_dist, max_dist, out_nodata,
                                       out_nodata)
 
 
+@utils.gdal_use_exceptions
 def _create_distance_raster(base_raster_path, base_vector_path,
                             target_dist_raster_path, work_dir):
     """Create and rasterize vector onto a raster, and calculate dist transform.
@@ -2062,6 +2068,7 @@ def _compute_density_harvested_fields(
         pickle.dump(wind_dict_copy, pickle_file)
 
 
+@utils.gdal_use_exceptions
 def _dictionary_to_point_vector(
         base_dict_data, layer_name, target_vector_path):
     """Create a point shapefile from a dictionary.
@@ -2149,6 +2156,7 @@ def _dictionary_to_point_vector(
     output_layer.SyncToDisk()
 
 
+@utils.gdal_use_exceptions
 def _get_suitable_projection_params(
         base_raster_path, aoi_vector_path, target_pickle_path):
     """Choose projection, pixel size and bounding box for clipping a raster.
@@ -2315,6 +2323,7 @@ def _convert_degree_pixel_size_to_square_meters(pixel_size, center_lat):
     return meter_pixel_size_tuple
 
 
+@utils.gdal_use_exceptions
 def _wind_data_to_point_vector(wind_data_pickle_path,
                                layer_name,
                                target_vector_path,
@@ -2476,6 +2485,7 @@ def _clip_and_reproject_vector(base_vector_path, clip_vector_path,
     LOGGER.info('Finished _clip_and_reproject_vector')
 
 
+@utils.gdal_use_exceptions
 def _clip_vector_by_vector(
         base_vector_path, clip_vector_path, target_vector_path, work_dir):
     """Clip a vector from another vector keeping features.
@@ -2561,6 +2571,7 @@ def _clip_vector_by_vector(
     LOGGER.info('Finished _clip_vector_by_vector')
 
 
+@utils.gdal_use_exceptions
 def _calculate_distances_land_grid(base_point_vector_path, base_raster_path,
                                    target_dist_raster_path, work_dir):
     """Creates a distance transform raster.

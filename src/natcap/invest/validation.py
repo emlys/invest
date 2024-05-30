@@ -242,6 +242,7 @@ def check_permissions(path, permissions):
             return MESSAGES['NEED_PERMISSION'].format(permission=letter)
 
 
+@utils.gdal_use_exceptions
 def _check_projection(srs, projected, projection_units):
     """Validate a GDAL projection.
 
@@ -282,6 +283,7 @@ def _check_projection(srs, projected, projection_units):
     return None
 
 
+@utils.gdal_use_exceptions
 def check_raster(filepath, projected=False, projection_units=None, **kwargs):
     """Validate a GDAL Raster on disk.
 
@@ -301,11 +303,9 @@ def check_raster(filepath, projected=False, projection_units=None, **kwargs):
     if file_warning:
         return file_warning
 
-    gdal.PushErrorHandler('CPLQuietErrorHandler')
-    gdal_dataset = gdal.OpenEx(filepath, gdal.OF_RASTER)
-    gdal.PopErrorHandler()
-
-    if gdal_dataset is None:
+    try:
+        gdal_dataset = gdal.OpenEx(filepath, gdal.OF_RASTER)
+    except Exception:
         return MESSAGES['NOT_GDAL_RASTER']
     # Check that an overview .ovr file wasn't opened.
     if os.path.splitext(filepath)[1] == '.ovr':
@@ -323,6 +323,7 @@ def check_raster(filepath, projected=False, projection_units=None, **kwargs):
     return None
 
 
+@utils.gdal_use_exceptions
 def load_fields_from_vector(filepath, layer_id=0):
     """Load fieldnames from a given vector.
 
@@ -345,6 +346,7 @@ def load_fields_from_vector(filepath, layer_id=0):
     return fieldnames
 
 
+@utils.gdal_use_exceptions
 def check_vector(filepath, geometries, fields=None, projected=False,
                  projection_units=None, **kwargs):
     """Validate a GDAL vector on disk.
@@ -375,9 +377,10 @@ def check_vector(filepath, geometries, fields=None, projected=False,
     if file_warning:
         return file_warning
 
-    gdal.PushErrorHandler('CPLQuietErrorHandler')
-    gdal_dataset = gdal.OpenEx(filepath, gdal.OF_VECTOR)
-    gdal.PopErrorHandler()
+    try:
+        gdal_dataset = gdal.OpenEx(filepath, gdal.OF_VECTOR)
+    except Exception:
+        return MESSAGES['NOT_GDAL_VECTOR']
 
     geom_map = {
         'POINT': [ogr.wkbPoint, ogr.wkbPointM, ogr.wkbPointZM,
@@ -398,9 +401,6 @@ def check_vector(filepath, geometries, fields=None, projected=False,
     allowed_geom_types = []
     for geom in geometries:
         allowed_geom_types += geom_map[geom]
-
-    if gdal_dataset is None:
-        return MESSAGES['NOT_GDAL_VECTOR']
 
     # NOTE: this only checks the layer geometry type, not the types of the
     # actual geometries (layer.GetGeometryTypes()). This is probably equivalent
@@ -772,6 +772,7 @@ def check_headers(expected_headers, actual_headers, header_type='header'):
     return None
 
 
+@utils.gdal_use_exceptions
 def check_spatial_overlap(spatial_filepaths_list,
                           different_projections_ok=False):
     """Check that the given spatial files spatially overlap.
@@ -796,7 +797,7 @@ def check_spatial_overlap(spatial_filepaths_list,
     for filepath in spatial_filepaths_list:
         try:
             info = pygeoprocessing.get_raster_info(filepath)
-        except ValueError:
+        except RuntimeError:
             info = pygeoprocessing.get_vector_info(filepath)
 
         if info['projection_wkt'] is None:

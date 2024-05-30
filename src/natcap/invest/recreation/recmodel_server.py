@@ -243,6 +243,7 @@ class RecModel(object):
         with open(aoi_pud_archive_path, 'rb') as aoi_pud_archive:
             return aoi_pud_archive.read(), workspace_id
 
+    @utils.gdal_use_exceptions
     def _calc_aggregated_points_in_aoi(
             self, aoi_path, workspace_path, date_range, out_vector_filename):
         """Aggregate the PUD in the AOI.
@@ -543,6 +544,7 @@ def _file_len(file_path):
     return int(result.strip().split()[0])
 
 
+@utils.gdal_use_exceptions
 def construct_userday_quadtree(
         initial_bounding_box, raw_photo_csv_table, cache_dir,
         max_points_per_node):
@@ -665,6 +667,7 @@ def construct_userday_quadtree(
     return ooc_qt_picklefilename
 
 
+@utils.gdal_use_exceptions
 def build_quadtree_shape(
         quad_tree_shapefile_path, quadtree, spatial_reference):
     """Generate a vector of the quadtree geometry.
@@ -695,6 +698,7 @@ def build_quadtree_shape(
     quadtree.build_node_shapes(polygon_layer)
 
 
+@utils.gdal_use_exceptions
 def _calc_poly_pud(
         local_qt_pickle_path, aoi_path, date_range, poly_test_queue,
         pud_poly_feature_queue):

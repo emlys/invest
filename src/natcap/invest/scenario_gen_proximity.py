@@ -318,6 +318,7 @@ def execute(args):
     task_graph.join()
 
 
+@utils.gdal_use_exceptions
 def _mask_raster_by_vector(
         base_raster_path_band, vector_path, working_dir, target_raster_path):
     """Mask pixels outside of the vector to nodata.
@@ -385,6 +386,7 @@ def _mask_raster_by_vector(
         LOGGER.warning("Unable to delete temporary file %s", mask_raster_path)
 
 
+@utils.gdal_use_exceptions
 def _convert_landscape(
         base_lulc_path, replacement_lucode, area_to_convert,
         focal_landcover_codes, convertible_type_list, score_weight, n_steps,
@@ -729,6 +731,7 @@ def _sort_to_disk(dataset_path, score_weight=1.0):
     return heapq.merge(*iters)
 
 
+@utils.gdal_use_exceptions
 def _convert_by_score(
         score_path, max_pixels_to_convert, out_raster_path, convert_value,
         stats_cache, score_weight):

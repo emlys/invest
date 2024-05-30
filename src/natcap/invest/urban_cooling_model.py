@@ -351,6 +351,7 @@ MODEL_SPEC = {
 }
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Urban Cooling.
 
@@ -842,6 +843,7 @@ def execute(args):
     LOGGER.info('Urban Cooling Model complete.')
 
 
+@utils.gdal_use_exceptions
 def calculate_uhi_result_vector(
         base_aoi_path, t_ref_val, t_air_stats_pickle_path,
         cc_stats_pickle_path,
@@ -1019,6 +1021,7 @@ def calculate_uhi_result_vector(
     target_uhi_layer.CommitTransaction()
 
 
+@utils.gdal_use_exceptions
 def calculate_energy_savings(
         t_air_stats_pickle_path, t_ref_raw, uhi_max,
         energy_consumption_table_path, base_building_vector_path,

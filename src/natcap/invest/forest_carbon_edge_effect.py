@@ -259,6 +259,7 @@ MODEL_SPEC = {
 }
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Forest Carbon Edge Effect.
 
@@ -530,6 +531,7 @@ def combine_carbon_maps(*carbon_maps):
     return result
 
 
+@utils.gdal_use_exceptions
 def _aggregate_carbon_map(
         aoi_vector_path, carbon_map_path, target_aggregate_vector_path):
     """Helper function to aggregate carbon values for the given serviceshed.
@@ -596,6 +598,7 @@ def _aggregate_carbon_map(
     target_aggregate_layer, target_aggregate_vector = None, None
 
 
+@utils.gdal_use_exceptions
 def _calculate_lulc_carbon_map(
         lulc_raster_path, biophysical_table_path, carbon_pool_type,
         ignore_tropical_type, compute_forest_edge_effects, carbon_map_path):
@@ -662,6 +665,7 @@ def _calculate_lulc_carbon_map(
         reclass_error_details)
 
 
+@utils.gdal_use_exceptions
 def _map_distance_from_tropical_forest_edge(
         base_lulc_raster_path, biophysical_table_path, edge_distance_path,
         target_non_forest_mask_path):
@@ -729,6 +733,7 @@ def _map_distance_from_tropical_forest_edge(
             yoff=offset_dict['yoff'])
 
 
+@utils.gdal_use_exceptions
 def _build_spatial_index(
         base_raster_path, local_model_dir,
         tropical_forest_edge_carbon_model_vector_path,
@@ -803,6 +808,7 @@ def _build_spatial_index(
                 (kd_tree, theta_model_parameters, method_model_parameter)))
 
 
+@utils.gdal_use_exceptions
 def _calculate_tropical_forest_edge_carbon_map(
         edge_distance_path, spatial_index_pickle_path, n_nearest_model_points,
         biomass_to_carbon_conversion_factor,

@@ -439,6 +439,7 @@ _VALID_RISK_EQS = set(MODEL_SPEC['args']['risk_eq']['options'].keys())
 _VALID_DECAY_TYPES = set(MODEL_SPEC['args']['decay_eq']['options'].keys())
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Habitat Risk Assessment.
 
@@ -1139,6 +1140,7 @@ def execute(args):
     LOGGER.info('HRA complete!')
 
 
+@utils.gdal_use_exceptions
 def _create_mask_for_polygonization(source_raster_path, target_raster_path):
     """Create a mask of non-nodata pixels.
 
@@ -1175,6 +1177,7 @@ def _create_mask_for_polygonization(source_raster_path, target_raster_path):
         gdal.GDT_Byte, 0)
 
 
+@utils.gdal_use_exceptions
 def _polygonize(source_raster_path, mask_raster_path,
                 target_polygonized_vector, field_name, layer_name):
     """Polygonize a raster.
@@ -1235,6 +1238,7 @@ def _polygonize(source_raster_path, mask_raster_path,
     mask_raster = None
 
 
+@utils.gdal_use_exceptions
 def _create_summary_statistics_file(
         subregions_vector_path,
         pairwise_raster_dicts,
@@ -1451,6 +1455,7 @@ def _create_summary_statistics_file(
     out_dataframe.to_csv(target_summary_csv_path, index=False)
 
 
+@utils.gdal_use_exceptions
 def _align(raster_path_map, vector_path_map, target_pixel_size,
            target_srs_wkt, all_touched_vectors=None):
     """Align a stack of rasters and/or vectors.
@@ -1592,6 +1597,7 @@ def _align(raster_path_map, vector_path_map, target_pixel_size,
                 burn_values=burn_values, option_list=rasterize_option_list)
 
 
+@utils.gdal_use_exceptions
 def _simplify(source_vector_path, tolerance, target_vector_path,
               preserve_columns=None):
     """Simplify a geometry to a given tolerance.
@@ -1672,6 +1678,7 @@ def _simplify(source_vector_path, tolerance, target_vector_path,
     target_vector = None
 
 
+@utils.gdal_use_exceptions
 def _prep_input_criterion_raster(
         source_raster_path, target_filepath):
     """Prepare an input criterion raster for internal use.
@@ -1724,6 +1731,7 @@ def _prep_input_criterion_raster(
         _TARGET_GDAL_TYPE_FLOAT32, _TARGET_NODATA_FLOAT32)
 
 
+@utils.gdal_use_exceptions
 def _mask_binary_presence_absence_rasters(
         source_raster_paths, target_mask_path):
     """Create a mask where any values in a raster stack are 1.
@@ -1968,6 +1976,7 @@ def _parse_criteria_table(criteria_table_path, target_composite_csv_path):
     return (known_habitats, known_stressors)
 
 
+@utils.gdal_use_exceptions
 def _calculate_decayed_distance(stressor_raster_path, decay_type,
                                 buffer_distance, target_edt_path):
     """Decay the influence of a stressor given decay type and buffer distance.
@@ -2085,6 +2094,7 @@ def _calculate_decayed_distance(stressor_raster_path, decay_type,
     target_edt_raster = None
 
 
+@utils.gdal_use_exceptions
 def _calc_criteria(attributes_list, habitat_mask_raster_path,
                    target_criterion_path,
                    decayed_edt_raster_path=None):
@@ -2208,6 +2218,7 @@ def _calc_criteria(attributes_list, habitat_mask_raster_path,
     target_criterion_raster = None
 
 
+@utils.gdal_use_exceptions
 def _calculate_pairwise_risk(habitat_mask_raster_path, exposure_raster_path,
                              consequence_raster_path, risk_equation,
                              target_risk_raster_path):

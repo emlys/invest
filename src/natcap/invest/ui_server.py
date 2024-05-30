@@ -13,6 +13,7 @@ from natcap.invest import datastack
 from natcap.invest import set_locale
 from natcap.invest.model_metadata import MODEL_METADATA
 from natcap.invest import spec_utils
+from natcap.invest import utils
 from natcap.invest import usage
 
 LOGGER = logging.getLogger(__name__)
@@ -108,6 +109,7 @@ def get_invest_validate():
     return json.dumps(results)
 
 
+@utils.gdal_use_exceptions
 @app.route(f'/{PREFIX}/colnames', methods=['POST'])
 def get_vector_colnames():
     """Get a list of column names from a vector.

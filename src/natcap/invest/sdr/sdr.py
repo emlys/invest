@@ -509,6 +509,7 @@ _BYTE_NODATA = 255
 _IC_NODATA = float(numpy.finfo('float32').min)
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Sediment Delivery Ratio.
 
@@ -981,6 +982,7 @@ def usle_op(rkls, cp_factor): return rkls * cp_factor
 def inverse_ws_op(w_factor, s_factor): return 1 / (w_factor * s_factor)
 
 
+@utils.gdal_use_exceptions
 def _calculate_what_drains_to_stream(
         flow_dir_mfd_path, dist_to_channel_mfd_path, target_mask_path):
     """Create a mask indicating regions that do or do not drain to a stream.
@@ -1269,6 +1271,7 @@ def threshold_slope_op(slope):
     return slope_m
 
 
+@utils.gdal_use_exceptions
 def _calculate_w(
         lulc_to_c, lulc_path, w_factor_path,
         out_thresholded_w_factor_path):
@@ -1308,6 +1311,7 @@ def _calculate_w(
         target_path=out_thresholded_w_factor_path)
 
 
+@utils.gdal_use_exceptions
 def _calculate_cp(lulc_to_cp, lulc_path, cp_factor_path):
     """Map LULC to C*P value.
 
@@ -1398,6 +1402,7 @@ def _calculate_d_up_bare(
         target_path=out_d_up_bare_path)
 
 
+@utils.gdal_use_exceptions
 def _calculate_ic(d_up_path, d_dn_path, out_ic_factor_path):
     """Calculate log10(d_up/d_dn)."""
     # ic can be positive or negative, so float.min is a reasonable nodata value
@@ -1420,6 +1425,7 @@ def _calculate_ic(d_up_path, d_dn_path, out_ic_factor_path):
         gdal.GDT_Float32, _IC_NODATA)
 
 
+@utils.gdal_use_exceptions
 def _calculate_sdr(
         k_factor, ic_0, sdr_max, ic_path, stream_path, out_sdr_path):
     """Derive SDR from k, ic0, ic; 0 on the stream and clamped to sdr_max."""
@@ -1439,6 +1445,7 @@ def _calculate_sdr(
         gdal.GDT_Float32, _TARGET_NODATA)
 
 
+@utils.gdal_use_exceptions
 def _calculate_e_prime(usle_path, sdr_path, stream_path, target_e_prime):
     """Calculate USLE * (1-SDR)."""
     def e_prime_op(usle, sdr, streams):
@@ -1461,6 +1468,7 @@ def _calculate_e_prime(usle_path, sdr_path, stream_path, target_e_prime):
         target_e_prime, gdal.GDT_Float32, _TARGET_NODATA)
 
 
+@utils.gdal_use_exceptions
 def _generate_report(
         watersheds_path, usle_path, sed_export_path,
         sed_deposition_path, avoided_export_path, avoided_erosion_path,

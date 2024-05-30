@@ -639,6 +639,7 @@ _INTERMEDIATE_BASE_FILES = {
 }
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Urban Nature Access.
 
@@ -1576,6 +1577,7 @@ def execute(args):
 def _sum_op(*array_list): return numpy.sum(array_list, axis=0)
 
 
+@utils.gdal_use_exceptions
 def _geometries_overlap(vector_path):
     """Check if the geometries of the vector's first layer overlap.
 
@@ -1610,6 +1612,7 @@ def _geometries_overlap(vector_path):
     return True
 
 
+@utils.gdal_use_exceptions
 def _reproject_and_identify(base_vector_path, target_projection_wkt,
                             target_path, driver_name, id_fieldname,
                             target_layer_name):
@@ -1649,6 +1652,7 @@ def _reproject_and_identify(base_vector_path, target_projection_wkt,
     vector = None
 
 
+@utils.gdal_use_exceptions
 def _weighted_sum(raster_path_list, weight_raster_list, target_path):
     """Create a spatially-weighted sum.
 
@@ -1693,6 +1697,7 @@ def _weighted_sum(raster_path_list, weight_raster_list, target_path):
         _weight_and_sum, target_path, gdal.GDT_Float32, FLOAT32_NODATA)
 
 
+@utils.gdal_use_exceptions
 def _reclassify_and_multiply(
         aois_raster_path, reclassification_map, supply_raster_path,
         target_raster_path):
@@ -1751,6 +1756,7 @@ def _reclassify_and_multiply(
     supply_raster = None
 
 
+@utils.gdal_use_exceptions
 def _read_field_from_vector(vector_path, key_field, value_field):
     """Read a field from a vector's first layer.
 
@@ -1779,6 +1785,7 @@ def _read_field_from_vector(vector_path, key_field, value_field):
     return attribute_map
 
 
+@utils.gdal_use_exceptions
 def _rasterize_aois(base_raster_path, aois_vector_path,
                     target_raster_path, id_fieldname):
     """Rasterize the admin units vector onto a new raster.
@@ -1806,6 +1813,7 @@ def _rasterize_aois(base_raster_path, aois_vector_path,
         option_list=[f"ATTRIBUTE={id_fieldname}"])
 
 
+@utils.gdal_use_exceptions
 def _reclassify_urban_nature_area(
         lulc_raster_path, lulc_attribute_table, target_raster_path,
         only_these_urban_nature_codes=None):
@@ -1906,6 +1914,7 @@ def _filter_population(population, urban_nature_budget, numpy_filter_op):
     return population_matching_filter
 
 
+@utils.gdal_use_exceptions
 def _supply_demand_vector_for_pop_groups(
         source_aoi_vector_path,
         target_aoi_vector_path,
@@ -2080,6 +2089,7 @@ def _supply_demand_vector_for_single_raster_modes(
         source_aoi_vector_path, stats_by_feature, target_aoi_vector_path)
 
 
+@utils.gdal_use_exceptions
 def _write_supply_demand_vector(source_aoi_vector_path, feature_attrs,
                                 target_aoi_vector_path):
     """Write data to a copy of an existing AOI vector.
@@ -2125,6 +2135,7 @@ def _write_supply_demand_vector(source_aoi_vector_path, feature_attrs,
     target_vector = None
 
 
+@utils.gdal_use_exceptions
 def _calculate_urban_nature_balance_percapita(
         urban_nature_supply_path, urban_nature_demand, target_path):
     supply_nodata = pygeoprocessing.get_raster_info(
@@ -2248,6 +2259,7 @@ def _urban_nature_population_ratio(urban_nature_area, convolved_population):
     return out_array
 
 
+@utils.gdal_use_exceptions
 def _convolve_and_set_lower_bound(
         signal_path_band, kernel_path_band, target_path, working_dir):
     """Convolve a raster and set all values below 0 to 0.
@@ -2319,6 +2331,7 @@ def _square_off_pixels(raster_path):
     return pixel_tuple
 
 
+@utils.gdal_use_exceptions
 def _resample_population_raster(
         source_population_raster_path, target_population_raster_path,
         lulc_pixel_size, lulc_bb, lulc_projection_wkt, working_dir):
@@ -2498,6 +2511,7 @@ def _kernel_density(distance, max_distance):
     return kernel
 
 
+@utils.gdal_use_exceptions
 def _create_valid_pixels_nodata_mask(raster_list, target_mask_path):
     """Create a valid pixels mask across a stack of aligned rasters.
 

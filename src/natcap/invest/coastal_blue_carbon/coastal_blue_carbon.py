@@ -528,6 +528,7 @@ MODEL_SPEC = {
 }
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Coastal Blue Carbon.
 
@@ -1589,6 +1590,7 @@ def _calculate_accumulation_over_time(
     return target_matrix
 
 
+@utils.gdal_use_exceptions
 def _track_disturbance(
         disturbance_magnitude_raster_path, stock_raster_path,
         prior_disturbance_volume_raster_path,
@@ -1718,6 +1720,7 @@ def _track_disturbance(
     target_year_of_disturbance_raster = None
 
 
+@utils.gdal_use_exceptions
 def _calculate_net_sequestration(
         accumulation_raster_path, emissions_raster_path, target_raster_path):
     """Calculate net sequestration for a given timestep and pool.
@@ -1841,6 +1844,7 @@ def _calculate_emissions(
     return emissions_matrix
 
 
+@utils.gdal_use_exceptions
 def _sum_n_rasters(
         raster_path_list, target_raster_path):
     """Sum an arbitrarily-large list of rasters in a memory-efficient manner.
@@ -2049,6 +2053,7 @@ def _read_transition_matrix(transition_csv_path, biophysical_df):
     return (disturbance_matrices, accumulation_matrices)
 
 
+@utils.gdal_use_exceptions
 def _reclassify_accumulation_transition(
         landuse_transition_from_raster, landuse_transition_to_raster,
         accumulation_rate_matrix, target_raster_path):

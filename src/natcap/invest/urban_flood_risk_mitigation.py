@@ -210,6 +210,7 @@ MODEL_SPEC = {
 }
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Urban Flood Risk Mitigation.
 
@@ -507,6 +508,7 @@ def execute(args):
     task_graph.join()
 
 
+@utils.gdal_use_exceptions
 def _write_summary_vector(
         source_aoi_vector_path, target_vector_path, runoff_ret_stats,
         runoff_ret_vol_stats, flood_volume_stats, damage_per_aoi_stats=None):
@@ -617,6 +619,7 @@ def _write_summary_vector(
     target_watershed_vector = None
 
 
+@utils.gdal_use_exceptions
 def _calculate_damage_to_infrastructure_in_aoi(
         aoi_vector_path, structures_vector_path, structures_damage_table):
     """Determine the damage to infrastructure in each AOI feature.

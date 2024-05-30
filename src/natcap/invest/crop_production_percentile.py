@@ -425,6 +425,7 @@ _EXPECTED_LUCODE_TABLE_HEADER = 'lucode'
 _NODATA_YIELD = -1
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Crop Production Percentile.
 

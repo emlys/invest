@@ -65,6 +65,7 @@ def log_run(model_pyname, args):
         log_exit_thread.start()
 
 
+@utils.gdal_use_exceptions
 def _calculate_args_bounding_box(args, args_spec):
     """Calculate the bounding boxes of any GIS types found in `args_dict`.
 

@@ -312,6 +312,7 @@ _SCALING_PARAM = 2.5
 _THREAT_SCENARIO_MAP = {'_c': 'cur_path', '_f': 'fut_path', '_b': 'base_path'}
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Habitat Quality.
 

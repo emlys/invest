@@ -25,6 +25,8 @@ from libc.math cimport sqrt
 from libc.math cimport ceil
 from libc.math cimport exp
 
+from .. import utils
+
 cdef extern from "time.h" nogil:
     ctypedef int time_t
     time_t time(time_t*)
@@ -180,52 +182,54 @@ cdef class _ManagedRaster:
                 inc(it)
             return
 
-        raster = gdal.OpenEx(
-            self.raster_path, gdal.GA_Update | gdal.OF_RASTER)
-        raster_band = raster.GetRasterBand(self.band_id)
-
-        # if we get here, we're in write_mode
         cdef cset[int].iterator dirty_itr
-        while it != end:
-            double_buffer = deref(it).second
-            block_index = deref(it).first
 
-            # write to disk if block is dirty
-            dirty_itr = self.dirty_blocks.find(block_index)
-            if dirty_itr != self.dirty_blocks.end():
-                self.dirty_blocks.erase(dirty_itr)
-                block_xi = block_index % self.block_nx
-                block_yi = block_index // self.block_nx
+        with utils.GDALUseExceptions():
+            raster = gdal.OpenEx(
+                self.raster_path, gdal.GA_Update | gdal.OF_RASTER)
+            raster_band = raster.GetRasterBand(self.band_id)
 
-                # we need the offsets to subtract from global indexes for
-                # cached array
-                xoff = block_xi << self.block_xbits
-                yoff = block_yi << self.block_ybits
+            # if we get here, we're in write_mode
+            while it != end:
+                double_buffer = deref(it).second
+                block_index = deref(it).first
 
-                win_xsize = self.block_xsize
-                win_ysize = self.block_ysize
+                # write to disk if block is dirty
+                dirty_itr = self.dirty_blocks.find(block_index)
+                if dirty_itr != self.dirty_blocks.end():
+                    self.dirty_blocks.erase(dirty_itr)
+                    block_xi = block_index % self.block_nx
+                    block_yi = block_index // self.block_nx
 
-                # clip window sizes if necessary
-                if xoff+win_xsize > self.raster_x_size:
-                    win_xsize = win_xsize - (
-                        xoff+win_xsize - self.raster_x_size)
-                if yoff+win_ysize > self.raster_y_size:
-                    win_ysize = win_ysize - (
-                        yoff+win_ysize - self.raster_y_size)
+                    # we need the offsets to subtract from global indexes for
+                    # cached array
+                    xoff = block_xi << self.block_xbits
+                    yoff = block_yi << self.block_ybits
 
-                for xi_copy in xrange(win_xsize):
-                    for yi_copy in xrange(win_ysize):
-                        block_array[yi_copy, xi_copy] = (
-                            double_buffer[
-                                (yi_copy << self.block_xbits) + xi_copy])
-                raster_band.WriteArray(
-                    block_array[0:win_ysize, 0:win_xsize],
-                    xoff=xoff, yoff=yoff)
-            PyMem_Free(double_buffer)
-            inc(it)
-        raster_band.FlushCache()
-        raster_band = None
-        raster = None
+                    win_xsize = self.block_xsize
+                    win_ysize = self.block_ysize
+
+                    # clip window sizes if necessary
+                    if xoff+win_xsize > self.raster_x_size:
+                        win_xsize = win_xsize - (
+                            xoff+win_xsize - self.raster_x_size)
+                    if yoff+win_ysize > self.raster_y_size:
+                        win_ysize = win_ysize - (
+                            yoff+win_ysize - self.raster_y_size)
+
+                    for xi_copy in xrange(win_xsize):
+                        for yi_copy in xrange(win_ysize):
+                            block_array[yi_copy, xi_copy] = (
+                                double_buffer[
+                                    (yi_copy << self.block_xbits) + xi_copy])
+                    raster_band.WriteArray(
+                        block_array[0:win_ysize, 0:win_xsize],
+                        xoff=xoff, yoff=yoff)
+                PyMem_Free(double_buffer)
+                inc(it)
+            raster_band.FlushCache()
+            raster_band = None
+            raster = None
 
     cdef inline void set(self, long xi, long yi, double value):
         """Set the pixel at `xi,yi` to `value`."""
@@ -283,71 +287,72 @@ cdef class _ManagedRaster:
         if yoff+win_ysize > self.raster_y_size:
             win_ysize = win_ysize - (yoff+win_ysize - self.raster_y_size)
 
-        raster = gdal.OpenEx(self.raster_path, gdal.OF_RASTER)
-        raster_band = raster.GetRasterBand(self.band_id)
-        block_array = raster_band.ReadAsArray(
-            xoff=xoff, yoff=yoff, win_xsize=win_xsize,
-            win_ysize=win_ysize).astype(
-            numpy.float64)
-        raster_band = None
-        raster = None
-        double_buffer = <double*>PyMem_Malloc(
-            (sizeof(double) << self.block_xbits) * win_ysize)
-        for xi_copy in xrange(win_xsize):
-            for yi_copy in xrange(win_ysize):
-                double_buffer[(yi_copy<<self.block_xbits)+xi_copy] = (
-                    block_array[yi_copy, xi_copy])
-        self.lru_cache.put(
-            <int>block_index, <double*>double_buffer, removed_value_list)
-
-        if self.write_mode:
-            raster = gdal.OpenEx(
-                self.raster_path, gdal.GA_Update | gdal.OF_RASTER)
+        with utils.GDALUseExceptions():
+            raster = gdal.OpenEx(self.raster_path, gdal.OF_RASTER)
             raster_band = raster.GetRasterBand(self.band_id)
-
-        block_array = numpy.empty(
-            (self.block_ysize, self.block_xsize), dtype=numpy.double)
-        while not removed_value_list.empty():
-            # write the changed value back if desired
-            double_buffer = removed_value_list.front().second
-
-            if self.write_mode:
-                block_index = removed_value_list.front().first
-
-                # write back the block if it's dirty
-                dirty_itr = self.dirty_blocks.find(block_index)
-                if dirty_itr != self.dirty_blocks.end():
-                    self.dirty_blocks.erase(dirty_itr)
-
-                    block_xi = block_index % self.block_nx
-                    block_yi = block_index // self.block_nx
-
-                    xoff = block_xi << self.block_xbits
-                    yoff = block_yi << self.block_ybits
-
-                    win_xsize = self.block_xsize
-                    win_ysize = self.block_ysize
-
-                    if xoff+win_xsize > self.raster_x_size:
-                        win_xsize = win_xsize - (
-                            xoff+win_xsize - self.raster_x_size)
-                    if yoff+win_ysize > self.raster_y_size:
-                        win_ysize = win_ysize - (
-                            yoff+win_ysize - self.raster_y_size)
-
-                    for xi_copy in xrange(win_xsize):
-                        for yi_copy in xrange(win_ysize):
-                            block_array[yi_copy, xi_copy] = double_buffer[
-                                (yi_copy << self.block_xbits) + xi_copy]
-                    raster_band.WriteArray(
-                        block_array[0:win_ysize, 0:win_xsize],
-                        xoff=xoff, yoff=yoff)
-            PyMem_Free(double_buffer)
-            removed_value_list.pop_front()
-
-        if self.write_mode:
+            block_array = raster_band.ReadAsArray(
+                xoff=xoff, yoff=yoff, win_xsize=win_xsize,
+                win_ysize=win_ysize).astype(
+                numpy.float64)
             raster_band = None
             raster = None
+            double_buffer = <double*>PyMem_Malloc(
+                (sizeof(double) << self.block_xbits) * win_ysize)
+            for xi_copy in xrange(win_xsize):
+                for yi_copy in xrange(win_ysize):
+                    double_buffer[(yi_copy<<self.block_xbits)+xi_copy] = (
+                        block_array[yi_copy, xi_copy])
+            self.lru_cache.put(
+                <int>block_index, <double*>double_buffer, removed_value_list)
+
+            if self.write_mode:
+                raster = gdal.OpenEx(
+                    self.raster_path, gdal.GA_Update | gdal.OF_RASTER)
+                raster_band = raster.GetRasterBand(self.band_id)
+
+            block_array = numpy.empty(
+                (self.block_ysize, self.block_xsize), dtype=numpy.double)
+            while not removed_value_list.empty():
+                # write the changed value back if desired
+                double_buffer = removed_value_list.front().second
+
+                if self.write_mode:
+                    block_index = removed_value_list.front().first
+
+                    # write back the block if it's dirty
+                    dirty_itr = self.dirty_blocks.find(block_index)
+                    if dirty_itr != self.dirty_blocks.end():
+                        self.dirty_blocks.erase(dirty_itr)
+
+                        block_xi = block_index % self.block_nx
+                        block_yi = block_index // self.block_nx
+
+                        xoff = block_xi << self.block_xbits
+                        yoff = block_yi << self.block_ybits
+
+                        win_xsize = self.block_xsize
+                        win_ysize = self.block_ysize
+
+                        if xoff+win_xsize > self.raster_x_size:
+                            win_xsize = win_xsize - (
+                                xoff+win_xsize - self.raster_x_size)
+                        if yoff+win_ysize > self.raster_y_size:
+                            win_ysize = win_ysize - (
+                                yoff+win_ysize - self.raster_y_size)
+
+                        for xi_copy in xrange(win_xsize):
+                            for yi_copy in xrange(win_ysize):
+                                block_array[yi_copy, xi_copy] = double_buffer[
+                                    (yi_copy << self.block_xbits) + xi_copy]
+                        raster_band.WriteArray(
+                            block_array[0:win_ysize, 0:win_xsize],
+                            xoff=xoff, yoff=yoff)
+                PyMem_Free(double_buffer)
+                removed_value_list.pop_front()
+
+            if self.write_mode:
+                raster_band = None
+                raster = None
 
 
 def ndr_eff_calculation(

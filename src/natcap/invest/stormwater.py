@@ -400,6 +400,7 @@ FINAL_OUTPUTS = {
 }
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Execute the urban stormwater retention model.
 
@@ -1014,6 +1015,7 @@ def adjust_op(ratio_array, avg_ratio_array, near_connected_lulc_array,
         ).astype(bool))
 
 
+@utils.gdal_use_exceptions
 def aggregate_results(base_aggregate_areas_path, target_vector_path, srs_wkt,
                       aggregations):
     """Aggregate outputs into regions of interest.
@@ -1105,6 +1107,7 @@ def is_near(input_path, radius, distance_path, out_path):
         target_nodata=UINT8_NODATA)
 
 
+@utils.gdal_use_exceptions
 def raster_average(raster_path, radius, kernel_path, out_path):
     """Average pixel values within a radius.
 
@@ -1156,7 +1159,7 @@ def raster_average(raster_path, radius, kernel_path, out_path):
         target_nodata=FLOAT_NODATA)
 
 
-@ validation.invest_validator
+@validation.invest_validator
 def validate(args, limit_to=None):
     """Validate args to ensure they conform to `execute`'s contract.
 

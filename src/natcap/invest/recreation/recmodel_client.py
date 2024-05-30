@@ -369,6 +369,7 @@ _INTERMEDIATE_BASE_FILES = {
 }
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Recreation.
 
@@ -565,6 +566,7 @@ def execute(args):
     task_graph.join()
 
 
+@utils.gdal_use_exceptions
 def _copy_aoi_no_grid(source_aoi_path, dest_aoi_path):
     """Copy a shapefile from source to destination"""
     aoi_vector = gdal.OpenEx(source_aoi_path, gdal.OF_VECTOR)
@@ -674,6 +676,7 @@ def _retrieve_photo_user_days(
     recmodel_server._pyroRelease()
 
 
+@utils.gdal_use_exceptions
 def _grid_vector(vector_path, grid_type, cell_size, out_grid_vector_path):
     """Convert vector to a regular grid.
 
@@ -898,6 +901,7 @@ def _schedule_predictor_data_processing(
     return assemble_predictor_data_task
 
 
+@utils.gdal_use_exceptions
 def _prepare_response_polygons_lookup(
         response_vector_path, target_pickle_path):
     """Translate a shapefile to a dictionary that maps FIDs to geometries."""
@@ -914,6 +918,7 @@ def _prepare_response_polygons_lookup(
         pickle.dump(response_polygons_lookup, pickle_file)
 
 
+@utils.gdal_use_exceptions
 def _json_to_shp_table(
         response_vector_path, predictor_vector_path,
         predictor_json_list):
@@ -1230,6 +1235,7 @@ def _point_count(
         json.dump(point_count_lookup, jsonfile)
 
 
+@utils.gdal_use_exceptions
 def _ogr_to_geometry_list(vector_path):
     """Convert an OGR type with one layer to a list of shapely geometry.
 
@@ -1326,6 +1332,7 @@ def _compute_and_summarize_regression(
         json.dump(predictor_estimates, json_file)
 
 
+@utils.gdal_use_exceptions
 def _build_regression(
         response_vector_path, predictor_vector_path,
         response_id):
@@ -1447,6 +1454,7 @@ def _build_regression(
     return predictor_names, coefficients, ssres, r_sq, r_sq_adj, std_err, dof, se_est
 
 
+@utils.gdal_use_exceptions
 def _calculate_scenario(
         scenario_results_path, response_id, coefficient_json_path):
     """Estimate the PUD of a scenario given an existing regression equation.
@@ -1575,6 +1583,7 @@ def _validate_same_ids_and_types(
                 f'scenario: {scenario_predictor_pairs}')
 
 
+@utils.gdal_use_exceptions
 def _validate_same_projection(base_vector_path, table_path):
     """Assert the GIS data in the table are in the same projection as the AOI.
 

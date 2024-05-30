@@ -156,6 +156,7 @@ _WS_ID_OVERWRITE_WARNING = (
     'named "ws_id". Field values will be overwritten.')
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """DelineateIt: Watershed Delineation.
 
@@ -365,6 +366,7 @@ def _threshold_streams(flow_accum, src_nodata, out_nodata, threshold):
     return out_matrix
 
 
+@utils.gdal_use_exceptions
 def preprocess_geometries(outlet_vector_path, dem_path, target_vector_path,
                           skip_invalid_geometry=False):
     """Preprocess geometries in the incoming vector.
@@ -503,6 +505,7 @@ def preprocess_geometries(outlet_vector_path, dem_path, target_vector_path,
     target_vector = None
 
 
+@utils.gdal_use_exceptions
 def snap_points_to_nearest_stream(points_vector_path, stream_raster_path,
                                   flow_accum_raster_path, snap_distance,
                                   snapped_points_vector_path):
@@ -675,6 +678,7 @@ def snap_points_to_nearest_stream(points_vector_path, stream_raster_path,
     points_vector = None
 
 
+@utils.gdal_use_exceptions
 def detect_pour_points(flow_dir_raster_path_band, target_vector_path):
     """
     Create a pour point vector from D8 flow direction raster.
@@ -733,6 +737,7 @@ def detect_pour_points(flow_dir_raster_path_band, target_vector_path):
     target_vector = None
 
 
+@utils.gdal_use_exceptions
 def _find_raster_pour_points(flow_dir_raster_path_band):
     """
     Memory-safe pour point calculation from a flow direction raster.

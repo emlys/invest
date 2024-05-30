@@ -493,6 +493,7 @@ _INTERMEDIATE_BASE_FILES = {
 _TARGET_NODATA = -1
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Nutrient Delivery Ratio.
 
@@ -1043,6 +1044,7 @@ def _slope_proportion_and_threshold_op(slope):
     return slope_fraction
 
 
+@utils.gdal_use_exceptions
 def _create_mask_raster(source_raster_path, source_vector_path,
                         target_raster_path):
     """Create a mask raster from a vector.
@@ -1108,6 +1110,7 @@ def _mask_raster(source_raster_path, mask_raster_path,
         target_masked_raster_path, target_dtype, nodata)
 
 
+@utils.gdal_use_exceptions
 def _add_fields_to_shapefile(field_pickle_map, target_vector_path):
     """Add fields and values to an OGR layer open for writing.
 
@@ -1367,6 +1370,7 @@ def d_up_calculation(s_bar_path, flow_accum_path, target_d_up_path):
         target_nodata=_TARGET_NODATA)
 
 
+@utils.gdal_use_exceptions
 def calculate_ic(d_up_path, d_dn_path, target_ic_path):
     """Calculate IC as log_10(d_up/d_dn)."""
     ic_nodata = float(numpy.finfo(numpy.float32).min)
@@ -1389,6 +1393,7 @@ def calculate_ic(d_up_path, d_dn_path, target_ic_path):
         target_ic_path, gdal.GDT_Float32, ic_nodata)
 
 
+@utils.gdal_use_exceptions
 def _calculate_ndr(
         effective_retention_path, ic_factor_path, k_param, target_ndr_path):
     """Calculate NDR as a function of Equation 4 in the user's guide."""

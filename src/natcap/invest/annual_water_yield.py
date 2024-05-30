@@ -439,6 +439,7 @@ MODEL_SPEC = {
 }
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Annual Water Yield: Reservoir Hydropower Production.
 
@@ -872,6 +873,7 @@ def execute(args):
 def wyield_op(fractp, precip): return (1 - fractp) * precip
 
 
+@utils.gdal_use_exceptions
 def copy_vector(base_vector_path, target_vector_path):
     """Wrapper around CreateCopy that handles opening & closing the dataset.
 
@@ -945,6 +947,7 @@ def write_output_vector_attributes(target_vector_path, ws_id_name,
             compute_watershed_valuation(target_vector_path, valuation_df)
 
 
+@utils.gdal_use_exceptions
 def convert_vector_to_csv(base_vector_path, target_csv_path):
     """Create a CSV with all the fields present in vector attribute table.
 
@@ -1078,6 +1081,7 @@ def fractp_op(
     return fractp
 
 
+@utils.gdal_use_exceptions
 def compute_watershed_valuation(watershed_results_vector_path, val_df):
     """Compute net present value and energy for the watersheds.
 
@@ -1145,6 +1149,7 @@ def compute_watershed_valuation(watershed_results_vector_path, val_df):
             ws_layer.SetFeature(ws_feat)
 
 
+@utils.gdal_use_exceptions
 def compute_rsupply_volume(watershed_results_vector_path):
     """Calculate the total realized water supply volume.
 
@@ -1199,6 +1204,7 @@ def compute_rsupply_volume(watershed_results_vector_path):
             ws_layer.SetFeature(ws_feat)
 
 
+@utils.gdal_use_exceptions
 def compute_water_yield_volume(watershed_results_vector_path):
     """Calculate the water yield volume per sub-watershed or watershed.
 
@@ -1244,6 +1250,7 @@ def compute_water_yield_volume(watershed_results_vector_path):
             layer.SetFeature(feat)
 
 
+@utils.gdal_use_exceptions
 def _add_zonal_stats_dict_to_shape(
         watershed_results_vector_path,
         stats_map, field_name, aggregate_field_id):

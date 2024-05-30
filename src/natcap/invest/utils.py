@@ -1,6 +1,7 @@
 """InVEST specific code utils."""
 import codecs
 import contextlib
+import functools
 import logging
 import os
 import platform
@@ -44,6 +45,26 @@ GDAL_ERROR_LEVELS = {
 # axis order, which will use Lon,Lat order for Geographic CRS, but otherwise
 # leaves Projected CRS alone
 DEFAULT_OSR_AXIS_MAPPING_STRATEGY = osr.OAMS_TRADITIONAL_GIS_ORDER
+
+
+class GDALUseExceptions(object):
+    def __init__(self):
+        pass
+
+    def __enter__(self):
+        self.currentUseExceptions = gdal.GetUseExceptions()
+        gdal.UseExceptions()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.currentUseExceptions == 0:
+            gdal.DontUseExceptions()
+
+def wrapper(func, *args, **kwargs):
+    with GDALUseExceptions():
+        return func(*args, **kwargs)
+
+def gdal_use_exceptions(func):
+    return functools.partial(wrapper, func)
 
 
 def _log_gdal_errors(*args, **kwargs):
@@ -499,6 +520,7 @@ def mean_pixel_size_and_area(pixel_size_tuple):
     return (x_size, x_size*y_size)
 
 
+@gdal_use_exceptions
 def create_coordinate_transformer(
         base_ref, target_ref,
         osr_axis_mapping_strategy=DEFAULT_OSR_AXIS_MAPPING_STRATEGY):
@@ -537,6 +559,7 @@ def create_coordinate_transformer(
     return transformer
 
 
+@gdal_use_exceptions
 def _assert_vectors_equal(
         expected_vector_path, actual_vector_path, field_value_atol=1e-3):
     """Assert two vectors are equal.

@@ -515,6 +515,7 @@ _INTERMEDIATE_BASE_FILES = {
 }
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Seasonal Water Yield.
 
@@ -984,6 +985,7 @@ def _calculate_l_avail(l_path, gamma, target_l_avail_path):
         target_path=target_l_avail_path)
 
 
+@utils.gdal_use_exceptions
 def _calculate_vri(l_path, target_vri_path):
     """Calculate VRI as li_array / qb_sum.
 
@@ -1025,6 +1027,7 @@ def _calculate_vri(l_path, target_vri_path):
         li_nodata)
 
 
+@utils.gdal_use_exceptions
 def _calculate_monthly_quick_flow(precip_path, n_events_path, stream_path,
         si_path, qf_monthly_path):
     """Calculate quick flow for a month.
@@ -1273,6 +1276,7 @@ def _calculate_curve_number_raster(
         target_path=cn_path)
 
 
+@utils.gdal_use_exceptions
 def _calculate_si_raster(cn_path, stream_path, si_path):
     """Calculate the S factor of the quickflow equation [1].
 
@@ -1305,6 +1309,7 @@ def _calculate_si_raster(cn_path, stream_path, si_path):
         TARGET_NODATA)
 
 
+@utils.gdal_use_exceptions
 def _aggregate_recharge(
         aoi_path, l_path, vri_path, aggregate_vector_path):
     """Aggregate recharge values for the provided watersheds/AOIs.

@@ -240,6 +240,7 @@ def execute(args):
     task_graph.join()
 
 
+@utils.gdal_use_exceptions
 def _create_transition_table(landcover_df, lulc_snapshot_list,
                              target_table_path):
     """Create the transition table from a series of landcover snapshots.

@@ -95,6 +95,7 @@ def _tarfile_safe_extract(archive_path, dest_dir_path):
         safe_extract(tar, dest_dir_path)
 
 
+@utils.gdal_use_exceptions
 def _copy_spatial_files(spatial_filepath, target_dir):
     """Copy spatial files to a new directory.
 

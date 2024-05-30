@@ -534,6 +534,7 @@ def _accumulate_totals(raster_path):
     return raster_sum
 
 
+@utils.gdal_use_exceptions
 def _generate_carbon_map(
         lulc_path, carbon_pool_by_type, out_carbon_stock_path):
     """Generate carbon stock raster by mapping LULC values to carbon pools.

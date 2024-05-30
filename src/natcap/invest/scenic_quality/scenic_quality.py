@@ -217,6 +217,7 @@ MODEL_SPEC = {
 }
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Scenic Quality.
 
@@ -454,6 +455,7 @@ def execute(args):
     graph.join()
 
 
+@utils.gdal_use_exceptions
 def _determine_valid_viewpoints(dem_path, structures_path):
     """Determine which viewpoints are valid and return them.
 
@@ -640,6 +642,7 @@ def _determine_valid_viewpoints(dem_path, structures_path):
         for (point, meta) in valid_structures.items())
 
 
+@utils.gdal_use_exceptions
 def _clip_vector(shape_to_clip_path, binding_shape_path, output_path):
     """Clip one vector by another.
 
@@ -693,6 +696,7 @@ def _clip_vector(shape_to_clip_path, binding_shape_path, output_path):
     binding_shape = None
 
 
+@utils.gdal_use_exceptions
 def _sum_valuation_rasters(dem_path, valuation_filepaths, target_path):
     """Sum up all valuation rasters.
 
@@ -730,6 +734,7 @@ def _sum_valuation_rasters(dem_path, valuation_filepaths, target_path):
         raster_driver_creation_tuple=FLOAT_GTIFF_CREATION_OPTIONS)
 
 
+@utils.gdal_use_exceptions
 def _calculate_valuation(visibility_path, viewpoint, weight,
                          valuation_method, valuation_coefficients,
                          max_valuation_radius,
@@ -866,6 +871,7 @@ def _calculate_valuation(visibility_path, viewpoint, weight,
     valuation_raster = None
 
 
+@utils.gdal_use_exceptions
 def _clip_and_mask_dem(dem_path, aoi_path, target_path, working_dir):
     """Clip and mask the DEM to the AOI.
 
@@ -935,6 +941,7 @@ def _clip_and_mask_dem(dem_path, aoi_path, target_path, working_dir):
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+@utils.gdal_use_exceptions
 def _count_and_weight_visible_structures(visibility_raster_path_list, weights,
                                          clipped_dem_path, target_path):
     """Count (and weight) the number of visible structures for each pixel.

@@ -1222,3 +1222,18 @@ class ExpandPathTests(unittest.TestCase):
         for value in ('', None, False, 0):
             self.assertEqual(
                 None, utils.expand_path(value, self.workspace_dir))
+
+    def test_gdal_use_exceptions(self):
+        from natcap.invest import utils
+
+        gdal.DontUseExceptions()
+
+        @utils.gdal_use_exceptions
+        def test_func():
+            self.assertEqual(gdal.GetUseExceptions(), 1)
+
+        test_func()
+
+        self.assertEqual(gdal.GetUseExceptions(), 0)
+
+

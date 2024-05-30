@@ -420,6 +420,7 @@ _EXPECTED_FARM_HEADERS = [
     _FARM_NESTING_SUBSTRATE_RE_PATTERN, _CROP_POLLINATOR_DEPENDENCE_FIELD]
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Pollination.
 
@@ -1087,6 +1088,7 @@ def pyt_op(mp_array, FP_array): return numpy.minimum(mp_array + FP_array, 1)
 def pyw_op(mp_array, PYT_array): return numpy.maximum(PYT_array - mp_array, 0)
 
 
+@utils.gdal_use_exceptions
 def _rasterize_vector_onto_base(
         base_raster_path, base_vector_path, attribute_id,
         target_raster_path, filter_string=None):
@@ -1121,6 +1123,7 @@ def _rasterize_vector_onto_base(
     vector = None
 
 
+@utils.gdal_use_exceptions
 def _create_farm_result_vector(
         base_vector_path, target_vector_path):
     """Create a copy of `base_vector_path` and add FID field to it.
@@ -1174,6 +1177,7 @@ def _create_farm_result_vector(
     target_vector = None
 
 
+@utils.gdal_use_exceptions
 def _parse_scenario_variables(args):
     """Parse out scenario variables from input parameters.
 

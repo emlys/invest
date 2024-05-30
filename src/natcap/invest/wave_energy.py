@@ -642,6 +642,7 @@ class IntersectionError(Exception):
     pass
 
 
+@utils.gdal_use_exceptions
 def execute(args):
     """Wave Energy.
 
@@ -1133,6 +1134,7 @@ def execute(args):
     LOGGER.info('End of Wave Energy Valuation.')
 
 
+@utils.gdal_use_exceptions
 def _copy_vector_or_raster(base_file_path, target_file_path):
     """Make a copy of a vector or raster.
 
@@ -1304,6 +1306,7 @@ def _get_npv_results(captured_wave_energy, depth, number_of_machines,
     return npv_result, capwe_all_result
 
 
+@utils.gdal_use_exceptions
 def _add_target_fields_to_wave_vector(
         base_wave_vector_path, base_land_vector_path, base_grid_vector_path,
         target_wave_vector_path, machine_econ_dict, number_of_machines):
@@ -1392,6 +1395,7 @@ def _add_target_fields_to_wave_vector(
     target_wave_vector = None
 
 
+@utils.gdal_use_exceptions
 def _dict_to_point_vector(base_dict_data, target_vector_path, layer_name,
                           base_sr_wkt, target_sr_wkt):
     """Given a dictionary of data create a point shapefile that represents it.
@@ -1474,6 +1478,7 @@ def _dict_to_point_vector(base_dict_data, target_vector_path, layer_name,
     LOGGER.info('Finished _dict_to_point_vector')
 
 
+@utils.gdal_use_exceptions
 def _get_points_geometries(base_vector_path):
     """Retrieve the XY coordinates from a point shapefile.
 
@@ -1612,6 +1617,7 @@ def _binary_wave_data_to_dict(wave_file_path):
     return wave_dict
 
 
+@utils.gdal_use_exceptions
 def _get_vector_spatial_ref(base_vector_path):
     """Get the spatial reference of an OGR vector (datasource).
 
@@ -1770,6 +1776,7 @@ def _create_percentile_rasters(base_raster_path, target_raster_path,
     table_df.to_csv(attribute_table_path, index=False, columns=column_names)
 
 
+@utils.gdal_use_exceptions
 def _clip_vector_by_vector(base_vector_path, clip_vector_path,
                            target_clipped_vector_path, target_sr_wkt,
                            work_dir):
@@ -1989,6 +1996,7 @@ def _wave_energy_capacity_to_dict(wave_data, interp_z, machine_param):
     return energy_cap
 
 
+@utils.gdal_use_exceptions
 def _index_raster_value_to_point_vector(
         base_point_vector_path, base_raster_path, target_point_vector_path,
         field_name):
@@ -2127,6 +2135,7 @@ def _index_raster_value_to_point_vector(
     target_vector = None
 
 
+@utils.gdal_use_exceptions
 def _energy_and_power_to_wave_vector(
         energy_cap, base_wave_vector_path, target_wave_vector_path):
     """Add captured wave energy value from energy_cap to a field in wave_vector.
@@ -2238,6 +2247,7 @@ def _count_pixels_groups(raster_path, group_values):
     return pixel_count
 
 
+@utils.gdal_use_exceptions
 def _pixel_size_helper(base_vector_path, coord_trans, coord_trans_opposite,
                        base_raster_path):
     """Retrieve pixel size of a raster given a vector w/ certain projection.
@@ -2279,6 +2289,7 @@ def _pixel_size_helper(base_vector_path, coord_trans, coord_trans_opposite,
     return (pixel_size_x, pixel_size_y)
 
 
+@utils.gdal_use_exceptions
 def _pixel_size_based_on_coordinate_transform(base_raster_path, coord_trans,
                                               reference_point):
     """Get width and height of cell in meters.
@@ -2327,6 +2338,7 @@ def _pixel_size_based_on_coordinate_transform(base_raster_path, coord_trans,
     return (pixel_diff_x, pixel_diff_y)
 
 
+@utils.gdal_use_exceptions
 def _create_raster_attr_table(base_raster_path, attr_dict, column_name):
     """Create a raster attribute table (RAT).
 
