@@ -1483,54 +1483,55 @@ def _generate_report(
     Returns:
         ``None``
     """
-    original_datasource = gdal.OpenEx(watersheds_path, gdal.OF_VECTOR)
-    if os.path.exists(watershed_results_sdr_path):
-        LOGGER.warning(f'overwriting results at {watershed_results_sdr_path}')
-        os.remove(watershed_results_sdr_path)
-    driver = gdal.GetDriverByName('ESRI Shapefile')
-    target_vector = driver.CreateCopy(
-        watershed_results_sdr_path, original_datasource)
+    with utils.GDALUseExceptions():
+        original_datasource = gdal.OpenEx(watersheds_path, gdal.OF_VECTOR)
+        if os.path.exists(watershed_results_sdr_path):
+            LOGGER.warning(f'overwriting results at {watershed_results_sdr_path}')
+            os.remove(watershed_results_sdr_path)
+        driver = gdal.GetDriverByName('ESRI Shapefile')
+        target_vector = driver.CreateCopy(
+            watershed_results_sdr_path, original_datasource)
 
-    target_layer = target_vector.GetLayer()
-    target_layer.SyncToDisk()
+        target_layer = target_vector.GetLayer()
+        target_layer.SyncToDisk()
 
-    # It's worth it to check if the geometries don't significantly overlap.
-    # On large rasters, this can save a TON of time rasterizing even a
-    # relatively simple vector.
-    geometries_might_overlap = urban_nature_access._geometries_overlap(
-        watershed_results_sdr_path)
-    fields_and_rasters = [
-        ('usle_tot', usle_path), ('sed_export', sed_export_path),
-        ('sed_dep', sed_deposition_path), ('avoid_exp', avoided_export_path),
-        ('avoid_eros', avoided_erosion_path)]
+        # It's worth it to check if the geometries don't significantly overlap.
+        # On large rasters, this can save a TON of time rasterizing even a
+        # relatively simple vector.
+        geometries_might_overlap = urban_nature_access._geometries_overlap(
+            watershed_results_sdr_path)
+        fields_and_rasters = [
+            ('usle_tot', usle_path), ('sed_export', sed_export_path),
+            ('sed_dep', sed_deposition_path), ('avoid_exp', avoided_export_path),
+            ('avoid_eros', avoided_erosion_path)]
 
-    # Using the list option for raster path bands so that we can reduce
-    # rasterizations, which are costly on large datasets.
-    zonal_stats_results = pygeoprocessing.zonal_statistics(
-        [(raster_path, 1) for (_, raster_path) in fields_and_rasters],
-        watershed_results_sdr_path,
-        polygons_might_overlap=geometries_might_overlap)
+        # Using the list option for raster path bands so that we can reduce
+        # rasterizations, which are costly on large datasets.
+        zonal_stats_results = pygeoprocessing.zonal_statistics(
+            [(raster_path, 1) for (_, raster_path) in fields_and_rasters],
+            watershed_results_sdr_path,
+            polygons_might_overlap=geometries_might_overlap)
 
-    field_summaries = {
-        field: stats for ((field, _), stats) in
-        zip(fields_and_rasters, zonal_stats_results)}
+        field_summaries = {
+            field: stats for ((field, _), stats) in
+            zip(fields_and_rasters, zonal_stats_results)}
 
-    for field_name in field_summaries:
-        field_def = ogr.FieldDefn(field_name, ogr.OFTReal)
-        field_def.SetWidth(24)
-        field_def.SetPrecision(11)
-        target_layer.CreateField(field_def)
-
-    target_layer.ResetReading()
-    for feature in target_layer:
-        feature_id = feature.GetFID()
         for field_name in field_summaries:
-            feature.SetField(
-                field_name,
-                float(field_summaries[field_name][feature_id]['sum']))
-        target_layer.SetFeature(feature)
-    target_vector = None
-    target_layer = None
+            field_def = ogr.FieldDefn(field_name, ogr.OFTReal)
+            field_def.SetWidth(24)
+            field_def.SetPrecision(11)
+            target_layer.CreateField(field_def)
+
+        target_layer.ResetReading()
+        for feature in target_layer:
+            feature_id = feature.GetFID()
+            for field_name in field_summaries:
+                feature.SetField(
+                    field_name,
+                    float(field_summaries[field_name][feature_id]['sum']))
+            target_layer.SetFeature(feature)
+        target_vector = None
+        target_layer = None
 
 
 @validation.invest_validator

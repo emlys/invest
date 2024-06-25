@@ -360,25 +360,26 @@ def _mask_raster_by_vector(
     # Rasterize the vector onto the mask raster
     pygeoprocessing.rasterize(vector_path, mask_raster_path, [1], None)
 
-    # Parallel iterate over warped raster and mask raster to mask out original.
-    target_raster = gdal.OpenEx(
-        target_raster_path, gdal.GA_Update | gdal.OF_RASTER)
-    target_band = target_raster.GetRasterBand(1)
-    mask_raster = gdal.OpenEx(mask_raster_path, gdal.OF_RASTER)
-    mask_band = mask_raster.GetRasterBand(1)
+    with utils.GDALUseExceptions():
+        # Parallel iterate over warped raster and mask raster to mask out original.
+        target_raster = gdal.OpenEx(
+            target_raster_path, gdal.GA_Update | gdal.OF_RASTER)
+        target_band = target_raster.GetRasterBand(1)
+        mask_raster = gdal.OpenEx(mask_raster_path, gdal.OF_RASTER)
+        mask_band = mask_raster.GetRasterBand(1)
 
-    for offset_dict in pygeoprocessing.iterblocks(
-            (mask_raster_path, 1), offset_only=True):
-        data_array = target_band.ReadAsArray(**offset_dict)
-        mask_array = mask_band.ReadAsArray(**offset_dict)
-        data_array[mask_array != 1] = nodata
-        target_band.WriteArray(
-            data_array, xoff=offset_dict['xoff'], yoff=offset_dict['yoff'])
-    target_band.FlushCache()
-    target_band = None
-    target_raster = None
-    mask_band = None
-    mask_raster = None
+        for offset_dict in pygeoprocessing.iterblocks(
+                (mask_raster_path, 1), offset_only=True):
+            data_array = target_band.ReadAsArray(**offset_dict)
+            mask_array = mask_band.ReadAsArray(**offset_dict)
+            data_array[mask_array != 1] = nodata
+            target_band.WriteArray(
+                data_array, xoff=offset_dict['xoff'], yoff=offset_dict['yoff'])
+        target_band.FlushCache()
+        target_band = None
+        target_raster = None
+        mask_band = None
+        mask_raster = None
     try:
         shutil.rmtree(tmp_dir)
     except OSError:
@@ -826,11 +827,12 @@ def _convert_by_score(
             out_array[mask_array] = convert_value
             out_band.WriteArray(out_array, xoff=col_index, yoff=row_index)
 
-    out_ds = gdal.OpenEx(out_raster_path, gdal.OF_RASTER | gdal.GA_Update)
-    out_band = out_ds.GetRasterBand(1)
-    out_block_col_size, out_block_row_size = out_band.GetBlockSize()
-    n_rows = out_band.YSize
-    n_cols = out_band.XSize
+    with utils.GDALUseExceptions():
+        out_ds = gdal.OpenEx(out_raster_path, gdal.OF_RASTER | gdal.GA_Update)
+        out_band = out_ds.GetRasterBand(1)
+        out_block_col_size, out_block_row_size = out_band.GetBlockSize()
+        n_rows = out_band.YSize
+        n_cols = out_band.XSize
     pixels_converted = 0
 
     row_array = numpy.empty((_BLOCK_SIZE,), dtype=numpy.uint32)

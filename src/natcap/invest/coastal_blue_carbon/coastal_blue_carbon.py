@@ -1631,91 +1631,92 @@ def _track_disturbance(
     Returns:
         ``None``
     """
-    pygeoprocessing.new_raster_from_base(
-        disturbance_magnitude_raster_path,
-        target_disturbance_volume_raster_path, gdal.GDT_Float32,
-        [NODATA_FLOAT32_MIN])
+    with utils.GDALUseExceptions():
+        pygeoprocessing.new_raster_from_base(
+            disturbance_magnitude_raster_path,
+            target_disturbance_volume_raster_path, gdal.GDT_Float32,
+            [NODATA_FLOAT32_MIN])
 
-    pygeoprocessing.new_raster_from_base(
-        disturbance_magnitude_raster_path,
-        target_year_of_disturbance_raster_path, gdal.GDT_UInt16,
-        [NODATA_UINT16_MAX])
+        pygeoprocessing.new_raster_from_base(
+            disturbance_magnitude_raster_path,
+            target_year_of_disturbance_raster_path, gdal.GDT_UInt16,
+            [NODATA_UINT16_MAX])
 
-    target_disturbance_volume_raster = gdal.OpenEx(
-        target_disturbance_volume_raster_path,
-        gdal.OF_RASTER | gdal.GA_Update)
-    target_disturbance_volume_band = target_disturbance_volume_raster.GetRasterBand(
-        1)
+        target_disturbance_volume_raster = gdal.OpenEx(
+            target_disturbance_volume_raster_path,
+            gdal.OF_RASTER | gdal.GA_Update)
+        target_disturbance_volume_band = target_disturbance_volume_raster.GetRasterBand(
+            1)
 
-    target_year_of_disturbance_raster = gdal.OpenEx(
-        target_year_of_disturbance_raster_path,
-        gdal.OF_RASTER | gdal.GA_Update)
-    target_year_of_disturbance_band = target_year_of_disturbance_raster.GetRasterBand(
-        1)
+        target_year_of_disturbance_raster = gdal.OpenEx(
+            target_year_of_disturbance_raster_path,
+            gdal.OF_RASTER | gdal.GA_Update)
+        target_year_of_disturbance_band = target_year_of_disturbance_raster.GetRasterBand(
+            1)
 
-    stock_raster = gdal.OpenEx(stock_raster_path, gdal.OF_RASTER)
-    stock_band = stock_raster.GetRasterBand(1)
+        stock_raster = gdal.OpenEx(stock_raster_path, gdal.OF_RASTER)
+        stock_band = stock_raster.GetRasterBand(1)
 
-    year_of_disturbance_raster = None
-    year_of_disturbance_band = None
-    if year_of_disturbance_raster_path:
-        year_of_disturbance_raster = gdal.OpenEx(
-            year_of_disturbance_raster_path, gdal.OF_RASTER | gdal.GA_Update)
-        year_of_disturbance_band = year_of_disturbance_raster.GetRasterBand(1)
+        year_of_disturbance_raster = None
+        year_of_disturbance_band = None
+        if year_of_disturbance_raster_path:
+            year_of_disturbance_raster = gdal.OpenEx(
+                year_of_disturbance_raster_path, gdal.OF_RASTER | gdal.GA_Update)
+            year_of_disturbance_band = year_of_disturbance_raster.GetRasterBand(1)
 
-        prior_disturbance_volume_raster = gdal.OpenEx(
-            prior_disturbance_volume_raster_path, gdal.OF_RASTER)
-        prior_disturbance_volume_band = (
-            prior_disturbance_volume_raster.GetRasterBand(1))
+            prior_disturbance_volume_raster = gdal.OpenEx(
+                prior_disturbance_volume_raster_path, gdal.OF_RASTER)
+            prior_disturbance_volume_band = (
+                prior_disturbance_volume_raster.GetRasterBand(1))
 
-    for block_info, disturbance_magnitude_matrix in pygeoprocessing.iterblocks(
-            (disturbance_magnitude_raster_path, 1)):
-        year_last_disturbed = numpy.empty(
-            disturbance_magnitude_matrix.shape, dtype=numpy.uint16)
-        year_last_disturbed[:] = NODATA_UINT16_MAX
+        for block_info, disturbance_magnitude_matrix in pygeoprocessing.iterblocks(
+                (disturbance_magnitude_raster_path, 1)):
+            year_last_disturbed = numpy.empty(
+                disturbance_magnitude_matrix.shape, dtype=numpy.uint16)
+            year_last_disturbed[:] = NODATA_UINT16_MAX
 
-        disturbed_carbon_volume = numpy.empty(
-            disturbance_magnitude_matrix.shape, dtype=numpy.float32)
-        disturbed_carbon_volume[:] = NODATA_FLOAT32_MIN
-        disturbed_carbon_volume[
-            ~pygeoprocessing.array_equals_nodata(disturbance_magnitude_matrix,
-                           NODATA_FLOAT32_MIN)] = 0.0
+            disturbed_carbon_volume = numpy.empty(
+                disturbance_magnitude_matrix.shape, dtype=numpy.float32)
+            disturbed_carbon_volume[:] = NODATA_FLOAT32_MIN
+            disturbed_carbon_volume[
+                ~pygeoprocessing.array_equals_nodata(disturbance_magnitude_matrix,
+                               NODATA_FLOAT32_MIN)] = 0.0
 
-        if year_of_disturbance_band:
-            known_transition_years_matrix = (
-                year_of_disturbance_band.ReadAsArray(**block_info))
-            pixels_previously_disturbed = (
-                ~pygeoprocessing.array_equals_nodata(
-                    known_transition_years_matrix, NODATA_UINT16_MAX))
-            year_last_disturbed[pixels_previously_disturbed] = (
-                known_transition_years_matrix[pixels_previously_disturbed])
+            if year_of_disturbance_band:
+                known_transition_years_matrix = (
+                    year_of_disturbance_band.ReadAsArray(**block_info))
+                pixels_previously_disturbed = (
+                    ~pygeoprocessing.array_equals_nodata(
+                        known_transition_years_matrix, NODATA_UINT16_MAX))
+                year_last_disturbed[pixels_previously_disturbed] = (
+                    known_transition_years_matrix[pixels_previously_disturbed])
 
-            prior_disturbance_volume_matrix = (
-                prior_disturbance_volume_band.ReadAsArray(**block_info))
-            disturbed_carbon_volume[pixels_previously_disturbed] = (
-                prior_disturbance_volume_matrix[pixels_previously_disturbed])
+                prior_disturbance_volume_matrix = (
+                    prior_disturbance_volume_band.ReadAsArray(**block_info))
+                disturbed_carbon_volume[pixels_previously_disturbed] = (
+                    prior_disturbance_volume_matrix[pixels_previously_disturbed])
 
-        stock_matrix = stock_band.ReadAsArray(**block_info)
-        pixels_changed_this_year = (
-            ~pygeoprocessing.array_equals_nodata(disturbance_magnitude_matrix, NODATA_FLOAT32_MIN) &
-            ~pygeoprocessing.array_equals_nodata(disturbance_magnitude_matrix, 0.0) &
-            ~pygeoprocessing.array_equals_nodata(stock_matrix, NODATA_FLOAT32_MIN)
-        )
+            stock_matrix = stock_band.ReadAsArray(**block_info)
+            pixels_changed_this_year = (
+                ~pygeoprocessing.array_equals_nodata(disturbance_magnitude_matrix, NODATA_FLOAT32_MIN) &
+                ~pygeoprocessing.array_equals_nodata(disturbance_magnitude_matrix, 0.0) &
+                ~pygeoprocessing.array_equals_nodata(stock_matrix, NODATA_FLOAT32_MIN)
+            )
 
-        disturbed_carbon_volume[pixels_changed_this_year] = (
-            disturbance_magnitude_matrix[pixels_changed_this_year] *
-            stock_matrix[pixels_changed_this_year])
-        target_disturbance_volume_band.WriteArray(
-            disturbed_carbon_volume, block_info['xoff'], block_info['yoff'])
+            disturbed_carbon_volume[pixels_changed_this_year] = (
+                disturbance_magnitude_matrix[pixels_changed_this_year] *
+                stock_matrix[pixels_changed_this_year])
+            target_disturbance_volume_band.WriteArray(
+                disturbed_carbon_volume, block_info['xoff'], block_info['yoff'])
 
-        year_last_disturbed[pixels_changed_this_year] = current_year
-        target_year_of_disturbance_band.WriteArray(
-            year_last_disturbed, block_info['xoff'], block_info['yoff'])
+            year_last_disturbed[pixels_changed_this_year] = current_year
+            target_year_of_disturbance_band.WriteArray(
+                year_last_disturbed, block_info['xoff'], block_info['yoff'])
 
-    year_of_disturbance_band = None
-    year_of_disturbance_raster = None
-    target_year_of_disturbance_band = None
-    target_year_of_disturbance_raster = None
+        year_of_disturbance_band = None
+        year_of_disturbance_raster = None
+        target_year_of_disturbance_band = None
+        target_year_of_disturbance_raster = None
 
 
 def _calculate_net_sequestration(
@@ -1859,64 +1860,67 @@ def _sum_n_rasters(
     LOGGER.info('Summing %s rasters to %s', len(raster_path_list),
                 target_raster_path)
     LOGGER.debug('Attempting to open %s', raster_path_list[0])
-    pygeoprocessing.new_raster_from_base(
-        raster_path_list[0], target_raster_path, gdal.GDT_Float32,
-        [NODATA_FLOAT32_MIN])
 
-    target_raster = gdal.OpenEx(
-        target_raster_path, gdal.GA_Update | gdal.OF_RASTER)
-    target_band = target_raster.GetRasterBand(1)
+    with utils.GDALUseExceptions():
+        pygeoprocessing.new_raster_from_base(
+            raster_path_list[0], target_raster_path, gdal.GDT_Float32,
+            [NODATA_FLOAT32_MIN])
 
-    n_pixels_to_process = (
-        (target_raster.RasterXSize * target_raster.RasterYSize) *
-        len(raster_path_list))
-    n_pixels_processed = 0
-    last_log_time = time.time()
+        target_raster = gdal.OpenEx(
+            target_raster_path, gdal.GA_Update | gdal.OF_RASTER)
+        target_band = target_raster.GetRasterBand(1)
 
-    raster_tuple_list = []
-    for raster_path in raster_path_list:
-        raster = gdal.OpenEx(raster_path, gdal.OF_RASTER)
-        band = raster.GetRasterBand(1)
-        nodata = band.GetNoDataValue()
-        raster_tuple_list.append((raster, band, nodata))
+        n_pixels_to_process = (
+            (target_raster.RasterXSize * target_raster.RasterYSize) *
+            len(raster_path_list))
+        n_pixels_processed = 0
+        last_log_time = time.time()
 
-    for block_info in pygeoprocessing.iterblocks(
-            (raster_path_list[0], 1), offset_only=True):
+        raster_tuple_list = []
+        for raster_path in raster_path_list:
+            raster = gdal.OpenEx(raster_path, gdal.OF_RASTER)
+            band = raster.GetRasterBand(1)
+            nodata = band.GetNoDataValue()
+            raster_tuple_list.append((raster, band, nodata))
 
-        sum_array = numpy.empty(
-            (block_info['win_ysize'], block_info['win_xsize']),
-            dtype=numpy.float32)
-        sum_array[:] = 0.0
+        for block_info in pygeoprocessing.iterblocks(
+                (raster_path_list[0], 1), offset_only=True):
 
-        # Assume everything is valid until proven otherwise
-        pixels_touched = numpy.zeros(sum_array.shape, dtype=bool)
-        for (_, band, nodata) in raster_tuple_list:
-            if time.time() - last_log_time >= 5.0:
-                percent_complete = round(
-                    n_pixels_processed / n_pixels_to_process, 4)*100
-                LOGGER.info(f'Summation {percent_complete:.2f}% complete')
-                last_log_time = time.time()
+            sum_array = numpy.empty(
+                (block_info['win_ysize'], block_info['win_xsize']),
+                dtype=numpy.float32)
+            sum_array[:] = 0.0
 
-            array = band.ReadAsArray(**block_info)
-            valid_pixels = slice(None)
-            if nodata is not None:
-                valid_pixels = ~pygeoprocessing.array_equals_nodata(array, nodata)
+            # Assume everything is valid until proven otherwise
+            pixels_touched = numpy.zeros(sum_array.shape, dtype=bool)
+            for (_, band, nodata) in raster_tuple_list:
+                if time.time() - last_log_time >= 5.0:
+                    percent_complete = round(
+                        n_pixels_processed / n_pixels_to_process, 4)*100
+                    LOGGER.info(f'Summation {percent_complete:.2f}% complete')
+                    last_log_time = time.time()
 
-            sum_array[valid_pixels] += array[valid_pixels]
-            pixels_touched[valid_pixels] = 1
-            n_pixels_processed += sum_array.size  # for logging
+                array = band.ReadAsArray(**block_info)
+                valid_pixels = slice(None)
+                if nodata is not None:
+                    valid_pixels = ~pygeoprocessing.array_equals_nodata(
+                        array, nodata)
 
-        sum_array[~pixels_touched] = NODATA_FLOAT32_MIN
+                sum_array[valid_pixels] += array[valid_pixels]
+                pixels_touched[valid_pixels] = 1
+                n_pixels_processed += sum_array.size  # for logging
 
-        target_band.WriteArray(
-            sum_array, block_info['xoff'], block_info['yoff'])
+            sum_array[~pixels_touched] = NODATA_FLOAT32_MIN
 
-    LOGGER.info('Summation 100.00% complete')
-    raster_tuple_list = None
+            target_band.WriteArray(
+                sum_array, block_info['xoff'], block_info['yoff'])
 
-    target_band.ComputeStatistics(0)
-    target_band = None
-    target_raster = None
+        LOGGER.info('Summation 100.00% complete')
+        raster_tuple_list = None
+
+        target_band.ComputeStatistics(0)
+        target_band = None
+        target_raster = None
 
 
 def _read_transition_matrix(transition_csv_path, biophysical_df):

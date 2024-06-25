@@ -1587,18 +1587,19 @@ def _geometries_overlap(vector_path):
             in the first layer.
 
     """
-    vector = gdal.OpenEx(vector_path)
-    layer = vector.GetLayer()
-    area_sum = 0
-    geometries = []
-    for feature in layer:
-        ogr_geom = feature.GetGeometryRef()
-        area_sum += ogr_geom.Area()
-        shapely_geom = shapely.wkb.loads(bytes(ogr_geom.ExportToWkb()))
-        geometries.append(shapely_geom)
+    with utils.GDALUseExceptions():
+        vector = gdal.OpenEx(vector_path)
+        layer = vector.GetLayer()
+        area_sum = 0
+        geometries = []
+        for feature in layer:
+            ogr_geom = feature.GetGeometryRef()
+            area_sum += ogr_geom.Area()
+            shapely_geom = shapely.wkb.loads(bytes(ogr_geom.ExportToWkb()))
+            geometries.append(shapely_geom)
 
-    layer = None
-    vector = None
+        layer = None
+        vector = None
 
     union_area = shapely.ops.unary_union(geometries).area
     LOGGER.debug(
@@ -1635,18 +1636,19 @@ def _reproject_and_identify(base_vector_path, target_projection_wkt,
         target_layer_name=target_layer_name,
         driver_name=driver_name)
 
-    vector = gdal.OpenEx(target_path, gdal.GA_Update)
-    layer = vector.GetLayer()
-    field = ogr.FieldDefn(id_fieldname, ogr.OFTInteger)
-    layer.CreateField(field)
+    with utils.GDALUseExceptions():
+        vector = gdal.OpenEx(target_path, gdal.GA_Update)
+        layer = vector.GetLayer()
+        field = ogr.FieldDefn(id_fieldname, ogr.OFTInteger)
+        layer.CreateField(field)
 
-    layer.StartTransaction()
-    for field_id, feature in enumerate(layer):
-        feature.SetField(id_fieldname, field_id)
-        layer.SetFeature(feature)
-    layer.CommitTransaction()
-    layer = None
-    vector = None
+        layer.StartTransaction()
+        for field_id, feature in enumerate(layer):
+            feature.SetField(id_fieldname, field_id)
+            layer.SetFeature(feature)
+        layer.CommitTransaction()
+        layer = None
+        vector = None
 
 
 def _weighted_sum(raster_path_list, weight_raster_list, target_path):
@@ -1721,34 +1723,35 @@ def _reclassify_and_multiply(
         (aois_raster_path, 1), reclassification_map, target_raster_path,
         gdal.GDT_Float32, FLOAT32_NODATA)
 
-    pop_group_raster = gdal.OpenEx(target_raster_path,
-                                   gdal.GA_Update | gdal.OF_RASTER)
-    pop_group_band = pop_group_raster.GetRasterBand(1)
-    pop_group_nodata = pop_group_band.GetNoDataValue()
-    supply_raster = gdal.OpenEx(supply_raster_path,
-                                gdal.GA_ReadOnly | gdal.OF_RASTER)
-    supply_band = supply_raster.GetRasterBand(1)
-    supply_nodata = supply_band.GetNoDataValue()
-    for block_info in pygeoprocessing.iterblocks((target_raster_path, 1),
-                                                 offset_only=True):
-        pop_group_proportion_block = pop_group_band.ReadAsArray(**block_info)
-        supply_block = supply_band.ReadAsArray(**block_info)
+    with utils.GDALUseExceptions():
+        pop_group_raster = gdal.OpenEx(target_raster_path,
+                                       gdal.GA_Update | gdal.OF_RASTER)
+        pop_group_band = pop_group_raster.GetRasterBand(1)
+        pop_group_nodata = pop_group_band.GetNoDataValue()
+        supply_raster = gdal.OpenEx(supply_raster_path,
+                                    gdal.GA_ReadOnly | gdal.OF_RASTER)
+        supply_band = supply_raster.GetRasterBand(1)
+        supply_nodata = supply_band.GetNoDataValue()
+        for block_info in pygeoprocessing.iterblocks((target_raster_path, 1),
+                                                     offset_only=True):
+            pop_group_proportion_block = pop_group_band.ReadAsArray(**block_info)
+            supply_block = supply_band.ReadAsArray(**block_info)
 
-        valid_mask = (
-            ~pygeoprocessing.array_equals_nodata(
-                pop_group_proportion_block, pop_group_nodata) &
-            ~pygeoprocessing.array_equals_nodata(supply_block, supply_nodata))
-        target_block = numpy.full(supply_block.shape, FLOAT32_NODATA,
-                                  dtype=numpy.float32)
-        target_block[valid_mask] = (
-            pop_group_proportion_block[valid_mask] * supply_block[valid_mask])
-        pop_group_band.WriteArray(
-            target_block, xoff=block_info['xoff'], yoff=block_info['yoff'])
+            valid_mask = (
+                ~pygeoprocessing.array_equals_nodata(
+                    pop_group_proportion_block, pop_group_nodata) &
+                ~pygeoprocessing.array_equals_nodata(supply_block, supply_nodata))
+            target_block = numpy.full(supply_block.shape, FLOAT32_NODATA,
+                                      dtype=numpy.float32)
+            target_block[valid_mask] = (
+                pop_group_proportion_block[valid_mask] * supply_block[valid_mask])
+            pop_group_band.WriteArray(
+                target_block, xoff=block_info['xoff'], yoff=block_info['yoff'])
 
-    pop_group_band = None
-    pop_group_raster = None
-    supply_band = None
-    supply_raster = None
+        pop_group_band = None
+        pop_group_raster = None
+        supply_band = None
+        supply_raster = None
 
 
 def _read_field_from_vector(vector_path, key_field, value_field):
@@ -1767,15 +1770,16 @@ def _read_field_from_vector(vector_path, key_field, value_field):
         attribute_map (dict): A dict mapping each ``key_field`` key to
             the corresponding ``value_field`` value.
     """
-    vector = gdal.OpenEx(vector_path)
-    layer = vector.GetLayer()
-    attribute_map = {}
-    for feature in layer:
-        if key_field == 'FID':
-            key = feature.GetFID()
-        else:
-            key = feature.GetField(key_field)
-        attribute_map[key] = feature.GetField(value_field)
+    with utils.GDALUseExceptions():
+        vector = gdal.OpenEx(vector_path)
+        layer = vector.GetLayer()
+        attribute_map = {}
+        for feature in layer:
+            if key_field == 'FID':
+                key = feature.GetFID()
+            else:
+                key = feature.GetField(key_field)
+            attribute_map[key] = feature.GetField(value_field)
     return attribute_map
 
 
@@ -1937,17 +1941,18 @@ def _supply_demand_vector_for_pop_groups(
 
     pop_group_fields = []
     feature_ids = set()
-    vector = gdal.OpenEx(source_aoi_vector_path)
-    layer = vector.GetLayer()
-    for feature in layer:
-        feature_ids.add(feature.GetFID())
-    pop_group_fields = []
-    for field_defn in layer.schema:
-        fieldname = field_defn.GetName()
-        if re.match(POP_FIELD_REGEX, fieldname):
-            pop_group_fields.append(fieldname)
-    layer = None
-    vector = None
+    with utils.GDALUseExceptions():
+        vector = gdal.OpenEx(source_aoi_vector_path)
+        layer = vector.GetLayer()
+        for feature in layer:
+            feature_ids.add(feature.GetFID())
+        pop_group_fields = []
+        for field_defn in layer.schema:
+            fieldname = field_defn.GetName()
+            if re.match(POP_FIELD_REGEX, fieldname):
+                pop_group_fields.append(fieldname)
+        layer = None
+        vector = None
 
     sums = {
         'supply-demand': collections.defaultdict(float),
@@ -2094,35 +2099,36 @@ def _write_supply_demand_vector(source_aoi_vector_path, feature_attrs,
     Returns:
         ``None``
     """
-    source_vector = ogr.Open(source_aoi_vector_path)
-    driver = ogr.GetDriverByName('GPKG')
-    driver.CopyDataSource(source_vector, target_aoi_vector_path)
-    source_vector = None
-    driver = None
+    with utils.GDALUseExceptions():
+        source_vector = ogr.Open(source_aoi_vector_path)
+        driver = ogr.GetDriverByName('GPKG')
+        driver.CopyDataSource(source_vector, target_aoi_vector_path)
+        source_vector = None
+        driver = None
 
-    target_vector = gdal.OpenEx(target_aoi_vector_path, gdal.GA_Update)
-    target_layer = target_vector.GetLayer()
+        target_vector = gdal.OpenEx(target_aoi_vector_path, gdal.GA_Update)
+        target_layer = target_vector.GetLayer()
 
-    for fieldname in next(iter(feature_attrs.values())).keys():
-        field = ogr.FieldDefn(fieldname, ogr.OFTReal)
-        field.SetWidth(24)
-        field.SetPrecision(11)
-        target_layer.CreateField(field)
+        for fieldname in next(iter(feature_attrs.values())).keys():
+            field = ogr.FieldDefn(fieldname, ogr.OFTReal)
+            field.SetWidth(24)
+            field.SetPrecision(11)
+            target_layer.CreateField(field)
 
-    target_layer.StartTransaction()
-    for feature in target_layer:
-        feature_id = feature.GetFID()
-        for attr_name, attr_value in feature_attrs[feature_id].items():
-            # It is possible that attr_value may be a numpy.float32 object,
-            # which will raise a cryptic error.  Numpy.float64 will not raise
-            # this error.  Casting to float avoids the issue.
-            feature.SetField(attr_name, float(attr_value))
+        target_layer.StartTransaction()
+        for feature in target_layer:
+            feature_id = feature.GetFID()
+            for attr_name, attr_value in feature_attrs[feature_id].items():
+                # It is possible that attr_value may be a numpy.float32 object,
+                # which will raise a cryptic error.  Numpy.float64 will not raise
+                # this error.  Casting to float avoids the issue.
+                feature.SetField(attr_name, float(attr_value))
 
-        target_layer.SetFeature(feature)
-    target_layer.CommitTransaction()
+            target_layer.SetFeature(feature)
+        target_layer.CommitTransaction()
 
-    target_layer = None
-    target_vector = None
+        target_layer = None
+        target_vector = None
 
 
 def _calculate_urban_nature_balance_percapita(
@@ -2274,18 +2280,19 @@ def _convolve_and_set_lower_bound(
     # Sometimes there are negative values that should have been clamped to 0 in
     # the convolution but weren't, so let's clamp them to avoid support issues
     # later on.
-    target_raster = gdal.OpenEx(target_path, gdal.GA_Update)
-    target_band = target_raster.GetRasterBand(1)
-    target_nodata = target_band.GetNoDataValue()
-    for block_data, block in pygeoprocessing.iterblocks(
-            (target_path, 1)):
-        valid_pixels = ~pygeoprocessing.array_equals_nodata(block, target_nodata)
-        block[(block < 0) & valid_pixels] = 0
-        target_band.WriteArray(
-            block, xoff=block_data['xoff'], yoff=block_data['yoff'])
+    with utils.GDALUseExceptions():
+        target_raster = gdal.OpenEx(target_path, gdal.GA_Update)
+        target_band = target_raster.GetRasterBand(1)
+        target_nodata = target_band.GetNoDataValue()
+        for block_data, block in pygeoprocessing.iterblocks(
+                (target_path, 1)):
+            valid_pixels = ~pygeoprocessing.array_equals_nodata(block, target_nodata)
+            block[(block < 0) & valid_pixels] = 0
+            target_band.WriteArray(
+                block, xoff=block_data['xoff'], yoff=block_data['yoff'])
 
-    target_band = None
-    target_raster = None
+        target_band = None
+        target_raster = None
 
 
 def _square_off_pixels(raster_path):
@@ -2364,12 +2371,13 @@ def _resample_population_raster(
         source_population_raster_path)
     pixel_area = numpy.multiply(*population_raster_info['pixel_size'])
 
-    population_srs = osr.SpatialReference()
-    population_srs.ImportFromWkt(population_raster_info['projection_wkt'])
+    with utils.GDALUseExceptions():
+        population_srs = osr.SpatialReference()
+        population_srs.ImportFromWkt(population_raster_info['projection_wkt'])
 
-    # Convert population pixel area to square km
-    population_pixel_area = (
-        pixel_area * population_srs.GetLinearUnits()) / 1e6
+        # Convert population pixel area to square km
+        population_pixel_area = (
+            pixel_area * population_srs.GetLinearUnits()) / 1e6
 
     def _convert_population_to_density(population):
         """Convert population counts to population per square km.
@@ -2402,11 +2410,12 @@ def _resample_population_raster(
 
     # Step 3: convert the warped population raster back from density to the
     # population per pixel
-    target_srs = osr.SpatialReference()
-    target_srs.ImportFromWkt(lulc_projection_wkt)
-    # Calculate target pixel area in km to match above
-    target_pixel_area = (
-        numpy.multiply(*lulc_pixel_size) * target_srs.GetLinearUnits()) / 1e6
+    with utils.GDALUseExceptions():
+        target_srs = osr.SpatialReference()
+        target_srs.ImportFromWkt(lulc_projection_wkt)
+        # Calculate target pixel area in km to match above
+        target_pixel_area = (
+            numpy.multiply(*lulc_pixel_size) * target_srs.GetLinearUnits()) / 1e6
 
     def _convert_density_to_population(density):
         """Convert a population density raster back to population counts.

@@ -92,24 +92,25 @@ class OutOfCoreQuadTree(object):
         Returns:
             None
         """
-        # Create a new feature, setting the field and geometry
-        if self.is_leaf:
-            ring = ogr.Geometry(ogr.wkbLinearRing)
-            ring.AddPoint(self.bounding_box[0], self.bounding_box[3])
-            ring.AddPoint(self.bounding_box[0], self.bounding_box[1])
-            ring.AddPoint(self.bounding_box[2], self.bounding_box[1])
-            ring.AddPoint(self.bounding_box[2], self.bounding_box[3])
-            ring.AddPoint(self.bounding_box[0], self.bounding_box[3])
-            poly = ogr.Geometry(ogr.wkbPolygon)
-            poly.AddGeometry(ring)
-            feature = ogr.Feature(ogr_polygon_layer.GetLayerDefn())
-            feature.SetGeometry(poly)
-            feature.SetField('n_points', self.n_points_in_node)
-            feature.SetField('bb_box', str(self.bounding_box))
-            ogr_polygon_layer.CreateFeature(feature)
-        else:
-            for node_index in xrange(4):
-                self.nodes[node_index].build_node_shapes(ogr_polygon_layer)
+        with utils.GDALUseExceptions():
+            # Create a new feature, setting the field and geometry
+            if self.is_leaf:
+                ring = ogr.Geometry(ogr.wkbLinearRing)
+                ring.AddPoint(self.bounding_box[0], self.bounding_box[3])
+                ring.AddPoint(self.bounding_box[0], self.bounding_box[1])
+                ring.AddPoint(self.bounding_box[2], self.bounding_box[1])
+                ring.AddPoint(self.bounding_box[2], self.bounding_box[3])
+                ring.AddPoint(self.bounding_box[0], self.bounding_box[3])
+                poly = ogr.Geometry(ogr.wkbPolygon)
+                poly.AddGeometry(ring)
+                feature = ogr.Feature(ogr_polygon_layer.GetLayerDefn())
+                feature.SetGeometry(poly)
+                feature.SetField('n_points', self.n_points_in_node)
+                feature.SetField('bb_box', str(self.bounding_box))
+                ogr_polygon_layer.CreateFeature(feature)
+            else:
+                for node_index in xrange(4):
+                    self.nodes[node_index].build_node_shapes(ogr_polygon_layer)
 
     def _get_points_from_node(self):
         """Return points in current node as a list of tuples.

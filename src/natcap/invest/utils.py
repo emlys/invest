@@ -46,6 +46,36 @@ GDAL_ERROR_LEVELS = {
 DEFAULT_OSR_AXIS_MAPPING_STRATEGY = osr.OAMS_TRADITIONAL_GIS_ORDER
 
 
+class GDALUseExceptions:
+    """Context manager that enables GDAL exceptions and restores state after."""
+
+    def __init__(self):
+        pass
+
+    def __enter__(self):
+        self.currentUseExceptions = gdal.GetUseExceptions()
+        gdal.UseExceptions()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.currentUseExceptions == 0:
+            gdal.DontUseExceptions()
+
+
+def gdal_use_exceptions(func):
+    """Decorator that enables GDAL exceptions and restores state after.
+
+    Args:
+        func (callable): function to call with GDAL exceptions enabled
+
+    Returns:
+        Wrapper function that calls ``func`` with GDAL exceptions enabled
+    """
+    def wrapper(*args, **kwargs):
+        with GDALUseExceptions():
+            return func(*args, **kwargs)
+    return wrapper
+
+
 def _log_gdal_errors(*args, **kwargs):
     """Log error messages to osgeo.
 
@@ -518,22 +548,23 @@ def create_coordinate_transformer(
         An OSR Coordinate Transformation object
 
     """
-    # Make a copy of the base and target spatial references to avoid side
-    # effects from mutation of setting the axis mapping strategy
-    base_ref_wkt = base_ref.ExportToWkt()
-    target_ref_wkt = target_ref.ExportToWkt()
+    with utils.GDALUseExceptions():
+        # Make a copy of the base and target spatial references to avoid side
+        # effects from mutation of setting the axis mapping strategy
+        base_ref_wkt = base_ref.ExportToWkt()
+        target_ref_wkt = target_ref.ExportToWkt()
 
-    base_ref_copy = osr.SpatialReference()
-    target_ref_copy = osr.SpatialReference()
+        base_ref_copy = osr.SpatialReference()
+        target_ref_copy = osr.SpatialReference()
 
-    base_ref_copy.ImportFromWkt(base_ref_wkt)
-    target_ref_copy.ImportFromWkt(target_ref_wkt)
+        base_ref_copy.ImportFromWkt(base_ref_wkt)
+        target_ref_copy.ImportFromWkt(target_ref_wkt)
 
-    base_ref_copy.SetAxisMappingStrategy(osr_axis_mapping_strategy)
-    target_ref_copy.SetAxisMappingStrategy(osr_axis_mapping_strategy)
+        base_ref_copy.SetAxisMappingStrategy(osr_axis_mapping_strategy)
+        target_ref_copy.SetAxisMappingStrategy(osr_axis_mapping_strategy)
 
-    transformer = osr.CreateCoordinateTransformation(
-        base_ref_copy, target_ref_copy)
+        transformer = osr.CreateCoordinateTransformation(
+            base_ref_copy, target_ref_copy)
     return transformer
 
 
@@ -565,105 +596,106 @@ def _assert_vectors_equal(
            If vector projections, feature counts, field names, or geometries
            do not match.
     """
-    try:
-        # Open vectors
-        actual_vector = gdal.OpenEx(actual_vector_path, gdal.OF_VECTOR)
-        actual_layer = actual_vector.GetLayer()
-        expected_vector = gdal.OpenEx(expected_vector_path, gdal.OF_VECTOR)
-        expected_layer = expected_vector.GetLayer()
+    with utils.GDALUseExceptions():
+        try:
+            # Open vectors
+            actual_vector = gdal.OpenEx(actual_vector_path, gdal.OF_VECTOR)
+            actual_layer = actual_vector.GetLayer()
+            expected_vector = gdal.OpenEx(expected_vector_path, gdal.OF_VECTOR)
+            expected_layer = expected_vector.GetLayer()
 
-        # Check projections
-        expected_projection = expected_layer.GetSpatialRef()
-        expected_projection_wkt = expected_projection.ExportToWkt()
-        actual_projection = actual_layer.GetSpatialRef()
-        actual_projection_wkt = actual_projection.ExportToWkt()
-        if expected_projection_wkt != actual_projection_wkt:
-            raise AssertionError(
-                "Vector projections are not the same. \n"
-                f"Expected projection wkt: {expected_projection_wkt}. \n"
-                f"Actual projection wkt: {actual_projection_wkt}. ")
+            # Check projections
+            expected_projection = expected_layer.GetSpatialRef()
+            expected_projection_wkt = expected_projection.ExportToWkt()
+            actual_projection = actual_layer.GetSpatialRef()
+            actual_projection_wkt = actual_projection.ExportToWkt()
+            if expected_projection_wkt != actual_projection_wkt:
+                raise AssertionError(
+                    "Vector projections are not the same. \n"
+                    f"Expected projection wkt: {expected_projection_wkt}. \n"
+                    f"Actual projection wkt: {actual_projection_wkt}. ")
 
-        # Check feature count
-        actual_feat_count = actual_layer.GetFeatureCount()
-        expected_feat_count = expected_layer.GetFeatureCount()
-        if expected_feat_count != actual_feat_count:
-            raise AssertionError(
-                "Vector feature counts are not the same. \n"
-                f"Expected feature count: {expected_feat_count}. \n"
-                f"Actual feature count: {actual_feat_count}. ")
+            # Check feature count
+            actual_feat_count = actual_layer.GetFeatureCount()
+            expected_feat_count = expected_layer.GetFeatureCount()
+            if expected_feat_count != actual_feat_count:
+                raise AssertionError(
+                    "Vector feature counts are not the same. \n"
+                    f"Expected feature count: {expected_feat_count}. \n"
+                    f"Actual feature count: {actual_feat_count}. ")
 
-        # Check field names
-        expected_field_names = [field.name for field in expected_layer.schema]
-        actual_field_names = [field.name for field in actual_layer.schema]
-        if sorted(expected_field_names) != sorted(actual_field_names):
-            raise AssertionError(
-                "Vector field names are not the same. \n"
-                f"Expected field names: {sorted(expected_field_names)}. \n"
-                f"Actual field names: {sorted(actual_field_names)}. ")
+            # Check field names
+            expected_field_names = [field.name for field in expected_layer.schema]
+            actual_field_names = [field.name for field in actual_layer.schema]
+            if sorted(expected_field_names) != sorted(actual_field_names):
+                raise AssertionError(
+                    "Vector field names are not the same. \n"
+                    f"Expected field names: {sorted(expected_field_names)}. \n"
+                    f"Actual field names: {sorted(actual_field_names)}. ")
 
-        # Check field values and geometries
-        for expected_feature in expected_layer:
-            fid = expected_feature.GetFID()
-            expected_values = [
-                expected_feature.GetField(field)
-                for field in expected_field_names]
+            # Check field values and geometries
+            for expected_feature in expected_layer:
+                fid = expected_feature.GetFID()
+                expected_values = [
+                    expected_feature.GetField(field)
+                    for field in expected_field_names]
 
-            actual_feature = actual_layer.GetFeature(fid)
-            actual_values = [
-                actual_feature.GetField(field)
-                for field in expected_field_names]
+                actual_feature = actual_layer.GetFeature(fid)
+                actual_values = [
+                    actual_feature.GetField(field)
+                    for field in expected_field_names]
 
-            for av, ev in zip(actual_values, expected_values):
-                if av is not None:
-                    # Number comparison
-                    if isinstance(av, int) or isinstance(av, float):
-                        if not numpy.allclose(numpy.array([av]),
-                                              numpy.array([ev]),
-                                              atol=field_value_atol):
+                for av, ev in zip(actual_values, expected_values):
+                    if av is not None:
+                        # Number comparison
+                        if isinstance(av, int) or isinstance(av, float):
+                            if not numpy.allclose(numpy.array([av]),
+                                                  numpy.array([ev]),
+                                                  atol=field_value_atol):
+                                raise AssertionError(
+                                    "Vector field values are not equal: \n"
+                                    f"Expected value: {ev}. \n"
+                                    f"Actual value: {av}. ")
+                        # String and other comparison
+                        else:
+                            if av != ev:
+                                raise AssertionError(
+                                    "Vector field values are not equal. \n"
+                                    f"Expected value : {ev}. \n"
+                                    f"Actual value : {av}. ")
+                    else:
+                        if ev is not None:
                             raise AssertionError(
                                 "Vector field values are not equal: \n"
                                 f"Expected value: {ev}. \n"
                                 f"Actual value: {av}. ")
-                    # String and other comparison
-                    else:
-                        if av != ev:
-                            raise AssertionError(
-                                "Vector field values are not equal. \n"
-                                f"Expected value : {ev}. \n"
-                                f"Actual value : {av}. ")
-                else:
-                    if ev is not None:
-                        raise AssertionError(
-                            "Vector field values are not equal: \n"
-                            f"Expected value: {ev}. \n"
-                            f"Actual value: {av}. ")
 
-            expected_geom = expected_feature.GetGeometryRef()
-            expected_geom_wkt = expected_geom.ExportToWkt()
-            actual_geom = actual_feature.GetGeometryRef()
-            actual_geom_wkt = actual_geom.ExportToWkt()
-            expected_geom_shapely = loads(expected_geom_wkt)
-            actual_geom_shapely = loads(actual_geom_wkt)
-            # confusingly named, `equals` compares numbers exactly but
-            # allows coords to be in a different order.
-            # `equals_exact` compares numbers with a tolerance but
-            # coords must be in the same order.
-            geoms_equal = (
-                expected_geom_shapely.equals(actual_geom_shapely) or
-                expected_geom_shapely.equals_exact(actual_geom_shapely, 1e-6))
-            if not geoms_equal:
-                raise AssertionError(
-                    "Vector geometry assertion fail. \n"
-                    f"Expected geometry: {expected_geom_wkt}. \n"
-                    f"Actual geometry: {actual_geom_wkt}. ")
+                expected_geom = expected_feature.GetGeometryRef()
+                expected_geom_wkt = expected_geom.ExportToWkt()
+                actual_geom = actual_feature.GetGeometryRef()
+                actual_geom_wkt = actual_geom.ExportToWkt()
+                expected_geom_shapely = loads(expected_geom_wkt)
+                actual_geom_shapely = loads(actual_geom_wkt)
+                # confusingly named, `equals` compares numbers exactly but
+                # allows coords to be in a different order.
+                # `equals_exact` compares numbers with a tolerance but
+                # coords must be in the same order.
+                geoms_equal = (
+                    expected_geom_shapely.equals(actual_geom_shapely) or
+                    expected_geom_shapely.equals_exact(actual_geom_shapely, 1e-6))
+                if not geoms_equal:
+                    raise AssertionError(
+                        "Vector geometry assertion fail. \n"
+                        f"Expected geometry: {expected_geom_wkt}. \n"
+                        f"Actual geometry: {actual_geom_wkt}. ")
 
-            expected_feature = None
-            actual_feature = None
-    finally:
-        actual_layer = None
-        actual_vector = None
-        expected_layer = None
-        expected_vector = None
+                expected_feature = None
+                actual_feature = None
+        finally:
+            actual_layer = None
+            actual_vector = None
+            expected_layer = None
+            expected_vector = None
 
     return None
 
@@ -765,3 +797,39 @@ def matches_format_string(test_string, format_string):
     if re.fullmatch(pattern, test_string):
         return True
     return False
+
+
+def add_fields_to_vector(field_pickle_map, target_vector_path):
+    """Add fields and values to an OGR layer open for writing.
+
+    Args:
+        field_pickle_map (dict): maps field name to a pickle file that is a
+            result of pygeoprocessing.zonal_stats with FIDs that match
+            `target_vector_path`. Fields will be written in the order they
+            appear in this dictionary.
+        target_vector_path (string): path to target vector file.
+    Returns:
+        None.
+    """
+    with utils.GDALUseExceptions():
+        target_vector = gdal.OpenEx(
+            target_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        target_layer = target_vector.GetLayer()
+        field_summaries = {}
+        for field_name, pickle_file_name in field_pickle_map.items():
+            field_def = ogr.FieldDefn(field_name, ogr.OFTReal)
+            field_def.SetWidth(24)
+            field_def.SetPrecision(11)
+            target_layer.CreateField(field_def)
+            with open(pickle_file_name, 'rb') as pickle_file:
+                field_summaries[field_name] = pickle.load(pickle_file)
+
+        for feature in target_layer:
+            fid = feature.GetFID()
+            for field_name in field_pickle_map:
+                feature.SetField(
+                    field_name, float(field_summaries[field_name][fid]['sum']))
+            # Save back to datasource
+            target_layer.SetFeature(feature)
+        target_layer = None
+        target_vector = None

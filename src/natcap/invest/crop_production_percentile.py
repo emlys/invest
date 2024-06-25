@@ -500,13 +500,14 @@ def execute(args):
             "assuming all pixel values are valid"
             % args['landcover_raster_path'])
 
-    # Calculate lat/lng bounding box for landcover map
-    wgs84srs = osr.SpatialReference()
-    wgs84srs.ImportFromEPSG(4326)  # EPSG4326 is WGS84 lat/lng
-    landcover_wgs84_bounding_box = pygeoprocessing.transform_bounding_box(
-        landcover_raster_info['bounding_box'],
-        landcover_raster_info['projection_wkt'], wgs84srs.ExportToWkt(),
-        edge_samples=11)
+    with utils.GDALUseExceptions():
+        # Calculate lat/lng bounding box for landcover map
+        wgs84srs = osr.SpatialReference()
+        wgs84srs.ImportFromEPSG(4326)  # EPSG4326 is WGS84 lat/lng
+        landcover_wgs84_bounding_box = pygeoprocessing.transform_bounding_box(
+            landcover_raster_info['bounding_box'],
+            landcover_raster_info['projection_wkt'], wgs84srs.ExportToWkt(),
+            edge_samples=11)
 
     # Initialize a TaskGraph
     try:

@@ -552,48 +552,49 @@ def _aggregate_carbon_map(
         None
 
     """
-    aoi_vector = gdal.OpenEx(aoi_vector_path, gdal.OF_VECTOR)
-    driver = gdal.GetDriverByName('ESRI Shapefile')
+    with utils.GDALUseExceptions():
+        aoi_vector = gdal.OpenEx(aoi_vector_path, gdal.OF_VECTOR)
+        driver = gdal.GetDriverByName('ESRI Shapefile')
 
-    if os.path.exists(target_aggregate_vector_path):
-        os.remove(target_aggregate_vector_path)
-    driver.CreateCopy(target_aggregate_vector_path, aoi_vector)
-    aoi_vector = None
+        if os.path.exists(target_aggregate_vector_path):
+            os.remove(target_aggregate_vector_path)
+        driver.CreateCopy(target_aggregate_vector_path, aoi_vector)
+        aoi_vector = None
 
-    # aggregate carbon stocks by the FID
-    serviceshed_stats = pygeoprocessing.zonal_statistics(
-        (carbon_map_path, 1), target_aggregate_vector_path)
+        # aggregate carbon stocks by the FID
+        serviceshed_stats = pygeoprocessing.zonal_statistics(
+            (carbon_map_path, 1), target_aggregate_vector_path)
 
-    carbon_sum_field = ogr.FieldDefn('c_sum', ogr.OFTReal)
-    carbon_sum_field.SetWidth(24)
-    carbon_sum_field.SetPrecision(11)
-    carbon_mean_field = ogr.FieldDefn('c_ha_mean', ogr.OFTReal)
-    carbon_mean_field.SetWidth(24)
-    carbon_mean_field.SetPrecision(11)
+        carbon_sum_field = ogr.FieldDefn('c_sum', ogr.OFTReal)
+        carbon_sum_field.SetWidth(24)
+        carbon_sum_field.SetPrecision(11)
+        carbon_mean_field = ogr.FieldDefn('c_ha_mean', ogr.OFTReal)
+        carbon_mean_field.SetWidth(24)
+        carbon_mean_field.SetPrecision(11)
 
-    target_aggregate_vector = gdal.OpenEx(
-        target_aggregate_vector_path, gdal.OF_UPDATE)
-    target_aggregate_layer = target_aggregate_vector.GetLayer()
-    target_aggregate_layer.CreateField(carbon_sum_field)
-    target_aggregate_layer.CreateField(carbon_mean_field)
+        target_aggregate_vector = gdal.OpenEx(
+            target_aggregate_vector_path, gdal.OF_UPDATE)
+        target_aggregate_layer = target_aggregate_vector.GetLayer()
+        target_aggregate_layer.CreateField(carbon_sum_field)
+        target_aggregate_layer.CreateField(carbon_mean_field)
 
-    target_aggregate_layer.ResetReading()
-    target_aggregate_layer.StartTransaction()
+        target_aggregate_layer.ResetReading()
+        target_aggregate_layer.StartTransaction()
 
-    for poly_feat in target_aggregate_layer:
-        poly_fid = poly_feat.GetFID()
-        poly_feat.SetField(
-            'c_sum', serviceshed_stats[poly_fid]['sum'])
-        # calculates mean pixel value per ha in for each feature in AOI
-        poly_geom = poly_feat.GetGeometryRef()
-        poly_area_ha = poly_geom.GetArea() / 1e4  # converts m^2 to hectare
-        poly_geom = None
-        poly_feat.SetField(
-            'c_ha_mean', serviceshed_stats[poly_fid]['sum']/poly_area_ha)
+        for poly_feat in target_aggregate_layer:
+            poly_fid = poly_feat.GetFID()
+            poly_feat.SetField(
+                'c_sum', serviceshed_stats[poly_fid]['sum'])
+            # calculates mean pixel value per ha in for each feature in AOI
+            poly_geom = poly_feat.GetGeometryRef()
+            poly_area_ha = poly_geom.GetArea() / 1e4  # converts m^2 to hectare
+            poly_geom = None
+            poly_feat.SetField(
+                'c_ha_mean', serviceshed_stats[poly_fid]['sum']/poly_area_ha)
 
-        target_aggregate_layer.SetFeature(poly_feat)
-    target_aggregate_layer.CommitTransaction()
-    target_aggregate_layer, target_aggregate_vector = None, None
+            target_aggregate_layer.SetFeature(poly_feat)
+        target_aggregate_layer.CommitTransaction()
+        target_aggregate_layer, target_aggregate_vector = None, None
 
 
 def _calculate_lulc_carbon_map(
@@ -711,22 +712,19 @@ def _map_distance_from_tropical_forest_edge(
     pygeoprocessing.distance_transform_edt(
         (target_non_forest_mask_path, 1), edge_distance_path)
 
-    # mask out the meaningless distance pixels so they don't affect the output
-    lulc_raster = gdal.OpenEx(base_lulc_raster_path)
-    lulc_band = lulc_raster.GetRasterBand(1)
-    edge_distance_raster = gdal.OpenEx(edge_distance_path, gdal.GA_Update)
-    edge_distance_band = edge_distance_raster.GetRasterBand(1)
-
-    for offset_dict in pygeoprocessing.iterblocks((base_lulc_raster_path, 1), offset_only=True):
+    def do_mask(lulc, distance):
         # where LULC has nodata, overwrite edge distance with nodata value
-        lulc_block = lulc_band.ReadAsArray(**offset_dict)
-        distance_block = edge_distance_band.ReadAsArray(**offset_dict)
-        nodata_mask = pygeoprocessing.array_equals_nodata(lulc_block, lulc_nodata)
-        distance_block[nodata_mask] = lulc_nodata
-        edge_distance_band.WriteArray(
-            distance_block,
-            xoff=offset_dict['xoff'],
-            yoff=offset_dict['yoff'])
+        nodata_mask = pygeoprocessing.array_equals_nodata(lulc, lulc_nodata)
+        distance[nodata_mask] = lulc_nodata
+        return distance
+
+    pygeoprocessing.raster_calculator(
+        [(lulc_raster, 1), (edge_distance_path, 1)],
+        do_mask,
+        edge_distance_path,
+        gdal.GDT_Float32,
+        lulc_nodata
+    )
 
 
 def _build_spatial_index(
@@ -769,24 +767,25 @@ def _build_spatial_index(
         tropical_forest_edge_carbon_model_vector_path, lulc_projection_wkt,
         carbon_model_reproject_path)
 
-    model_vector = gdal.OpenEx(carbon_model_reproject_path)
-    model_layer = model_vector.GetLayer()
+    with utils.GDALUseExceptions():
+        model_vector = gdal.OpenEx(carbon_model_reproject_path)
+        model_layer = model_vector.GetLayer()
 
-    kd_points = []
-    theta_model_parameters = []
-    method_model_parameter = []
+        kd_points = []
+        theta_model_parameters = []
+        method_model_parameter = []
 
-    # put all the polygons in the kd_tree because it's fast and simple
-    for poly_feature in model_layer:
-        poly_geom = poly_feature.GetGeometryRef()
-        poly_centroid = poly_geom.Centroid()
-        # put in row/col order since rasters are row/col indexed
-        kd_points.append([poly_centroid.GetY(), poly_centroid.GetX()])
+        # put all the polygons in the kd_tree because it's fast and simple
+        for poly_feature in model_layer:
+            poly_geom = poly_feature.GetGeometryRef()
+            poly_centroid = poly_geom.Centroid()
+            # put in row/col order since rasters are row/col indexed
+            kd_points.append([poly_centroid.GetY(), poly_centroid.GetX()])
 
-        theta_model_parameters.append([
-            poly_feature.GetField(feature_id) for feature_id in
-            ['theta1', 'theta2', 'theta3']])
-        method_model_parameter.append(poly_feature.GetField('method'))
+            theta_model_parameters.append([
+                poly_feature.GetField(feature_id) for feature_id in
+                ['theta1', 'theta2', 'theta3']])
+            method_model_parameter.append(poly_feature.GetField('method'))
 
     method_model_parameter = numpy.array(
         method_model_parameter, dtype=numpy.int32)
@@ -851,147 +850,148 @@ def _calculate_tropical_forest_edge_carbon_map(
         edge_distance_path, tropical_forest_edge_carbon_map_path,
         gdal.GDT_Float32, band_nodata_list=[NODATA_VALUE],
         fill_value_list=[NODATA_VALUE])
-    edge_carbon_raster = gdal.OpenEx(
-        tropical_forest_edge_carbon_map_path, gdal.GA_Update)
-    edge_carbon_band = edge_carbon_raster.GetRasterBand(1)
-    edge_carbon_geotransform = edge_carbon_raster.GetGeoTransform()
+    with utils.GDALUseExceptions():
+        edge_carbon_raster = gdal.OpenEx(
+            tropical_forest_edge_carbon_map_path, gdal.GA_Update)
+        edge_carbon_band = edge_carbon_raster.GetRasterBand(1)
+        edge_carbon_geotransform = edge_carbon_raster.GetGeoTransform()
 
-    # create edge distance band for memory block reading
-    n_rows = edge_carbon_raster.RasterYSize
-    n_cols = edge_carbon_raster.RasterXSize
-    n_cells = n_rows * n_cols
-    n_cells_processed = 0
-    # timer to give updates per call
-    last_time = time.time()
+        # create edge distance band for memory block reading
+        n_rows = edge_carbon_raster.RasterYSize
+        n_cols = edge_carbon_raster.RasterXSize
+        n_cells = n_rows * n_cols
+        n_cells_processed = 0
+        # timer to give updates per call
+        last_time = time.time()
 
-    cell_xsize, cell_ysize = pygeoprocessing.get_raster_info(
-        edge_distance_path)['pixel_size']
-    cell_size_km = (abs(cell_xsize) + abs(cell_ysize))/2 / 1000
-    cell_area_ha = (abs(cell_xsize) * abs(cell_ysize)) / 10000
+        cell_xsize, cell_ysize = pygeoprocessing.get_raster_info(
+            edge_distance_path)['pixel_size']
+        cell_size_km = (abs(cell_xsize) + abs(cell_ysize))/2 / 1000
+        cell_area_ha = (abs(cell_xsize) * abs(cell_ysize)) / 10000
 
-    # Loop memory block by memory block, calculating the forest edge carbon
-    # for every forest pixel.
-    for edge_distance_data, edge_distance_block in pygeoprocessing.iterblocks(
-            (edge_distance_path, 1), largest_block=2**12):
-        current_time = time.time()
-        if current_time - last_time > 5:
-            LOGGER.info('Carbon edge calculation approx. '
-                        f'{n_cells_processed / n_cells * 100:.2f} complete')
-            last_time = current_time
-        n_cells_processed += (
-            edge_distance_data['win_xsize'] * edge_distance_data['win_ysize'])
-        # only forest pixels will have an edge distance > 0
-        valid_edge_distance_mask = (edge_distance_block > 0)
+        # Loop memory block by memory block, calculating the forest edge carbon
+        # for every forest pixel.
+        for edge_distance_data, edge_distance_block in pygeoprocessing.iterblocks(
+                (edge_distance_path, 1), largest_block=2**12):
+            current_time = time.time()
+            if current_time - last_time > 5:
+                LOGGER.info('Carbon edge calculation approx. '
+                            f'{n_cells_processed / n_cells * 100:.2f} complete')
+                last_time = current_time
+            n_cells_processed += (
+                edge_distance_data['win_xsize'] * edge_distance_data['win_ysize'])
+            # only forest pixels will have an edge distance > 0
+            valid_edge_distance_mask = (edge_distance_block > 0)
 
-        # if no valid forest pixels to calculate, skip to the next block
-        if not valid_edge_distance_mask.any():
-            continue
+            # if no valid forest pixels to calculate, skip to the next block
+            if not valid_edge_distance_mask.any():
+                continue
 
-        # calculate local coordinates for each pixel so we can test for
-        # distance to the nearest carbon model points
-        col_range = numpy.linspace(
-            edge_carbon_geotransform[0] +
-            edge_carbon_geotransform[1] * edge_distance_data['xoff'],
-            edge_carbon_geotransform[0] +
-            edge_carbon_geotransform[1] * (
-                edge_distance_data['xoff'] + edge_distance_data['win_xsize']),
-            num=edge_distance_data['win_xsize'], endpoint=False)
-        row_range = numpy.linspace(
-            edge_carbon_geotransform[3] +
-            edge_carbon_geotransform[5] * edge_distance_data['yoff'],
-            edge_carbon_geotransform[3] +
-            edge_carbon_geotransform[5] * (
-                edge_distance_data['yoff'] + edge_distance_data['win_ysize']),
-            num=edge_distance_data['win_ysize'], endpoint=False)
-        col_coords, row_coords = numpy.meshgrid(col_range, row_range)
+            # calculate local coordinates for each pixel so we can test for
+            # distance to the nearest carbon model points
+            col_range = numpy.linspace(
+                edge_carbon_geotransform[0] +
+                edge_carbon_geotransform[1] * edge_distance_data['xoff'],
+                edge_carbon_geotransform[0] +
+                edge_carbon_geotransform[1] * (
+                    edge_distance_data['xoff'] + edge_distance_data['win_xsize']),
+                num=edge_distance_data['win_xsize'], endpoint=False)
+            row_range = numpy.linspace(
+                edge_carbon_geotransform[3] +
+                edge_carbon_geotransform[5] * edge_distance_data['yoff'],
+                edge_carbon_geotransform[3] +
+                edge_carbon_geotransform[5] * (
+                    edge_distance_data['yoff'] + edge_distance_data['win_ysize']),
+                num=edge_distance_data['win_ysize'], endpoint=False)
+            col_coords, row_coords = numpy.meshgrid(col_range, row_range)
 
-        # query nearest points for every point in the grid
-        # workers=-1 means use all available CPUs
-        coord_points = list(zip(
-            row_coords[valid_edge_distance_mask].ravel(),
-            col_coords[valid_edge_distance_mask].ravel()))
-        # for each forest point x, for each of its k nearest neighbors
-        # shape of distances and indexes: (x, k)
-        distances, indexes = kd_tree.query(
-            coord_points, k=n_nearest_model_points,
-            distance_upper_bound=DISTANCE_UPPER_BOUND, workers=-1)
+            # query nearest points for every point in the grid
+            # workers=-1 means use all available CPUs
+            coord_points = list(zip(
+                row_coords[valid_edge_distance_mask].ravel(),
+                col_coords[valid_edge_distance_mask].ravel()))
+            # for each forest point x, for each of its k nearest neighbors
+            # shape of distances and indexes: (x, k)
+            distances, indexes = kd_tree.query(
+                coord_points, k=n_nearest_model_points,
+                distance_upper_bound=DISTANCE_UPPER_BOUND, workers=-1)
 
-        if n_nearest_model_points == 1:
-            distances = distances.reshape(distances.shape[0], 1)
-            indexes = indexes.reshape(indexes.shape[0], 1)
+            if n_nearest_model_points == 1:
+                distances = distances.reshape(distances.shape[0], 1)
+                indexes = indexes.reshape(indexes.shape[0], 1)
 
-        # 3 is for the 3 thetas in the carbon model. thetas shape: (x, k, 3)
-        thetas = numpy.zeros((indexes.shape[0], indexes.shape[1], 3))
-        valid_index_mask = (indexes != kd_tree.n)
-        thetas[valid_index_mask] = theta_model_parameters[
-            indexes[valid_index_mask]]
+            # 3 is for the 3 thetas in the carbon model. thetas shape: (x, k, 3)
+            thetas = numpy.zeros((indexes.shape[0], indexes.shape[1], 3))
+            valid_index_mask = (indexes != kd_tree.n)
+            thetas[valid_index_mask] = theta_model_parameters[
+                indexes[valid_index_mask]]
 
-        # reshape to an N,nearest_points so we can multiply by thetas
-        valid_edge_distances_km = numpy.repeat(
-            edge_distance_block[valid_edge_distance_mask] * cell_size_km,
-            n_nearest_model_points).reshape(-1, n_nearest_model_points)
+            # reshape to an N,nearest_points so we can multiply by thetas
+            valid_edge_distances_km = numpy.repeat(
+                edge_distance_block[valid_edge_distance_mask] * cell_size_km,
+                n_nearest_model_points).reshape(-1, n_nearest_model_points)
 
-        # For each forest pixel x, for each of its k nearest neighbors, the
-        # chosen regression method (1, 2, or 3). model_index shape: (x, k)
-        model_index = numpy.zeros(indexes.shape, dtype=numpy.int8)
-        model_index[valid_index_mask] = (
-            method_model_parameter[indexes[valid_index_mask]])
+            # For each forest pixel x, for each of its k nearest neighbors, the
+            # chosen regression method (1, 2, or 3). model_index shape: (x, k)
+            model_index = numpy.zeros(indexes.shape, dtype=numpy.int8)
+            model_index[valid_index_mask] = (
+                method_model_parameter[indexes[valid_index_mask]])
 
-        # biomass shape: (x, k)
-        biomass = numpy.zeros((indexes.shape[0], indexes.shape[1]),
-                              dtype=numpy.float32)
+            # biomass shape: (x, k)
+            biomass = numpy.zeros((indexes.shape[0], indexes.shape[1]),
+                                  dtype=numpy.float32)
 
-        # mask shapes: (x, k)
-        mask_1 = model_index == 1
-        mask_2 = model_index == 2
-        mask_3 = model_index == 3
+            # mask shapes: (x, k)
+            mask_1 = model_index == 1
+            mask_2 = model_index == 2
+            mask_3 = model_index == 3
 
-        # exponential model
-        # biomass_1 = t1 - t2 * exp(-t3 * edge_dist_km)
-        biomass[mask_1] = (
-            thetas[mask_1][:, 0] - thetas[mask_1][:, 1] * numpy.exp(
-                -thetas[mask_1][:, 2] * valid_edge_distances_km[mask_1])
-        ) * cell_area_ha
+            # exponential model
+            # biomass_1 = t1 - t2 * exp(-t3 * edge_dist_km)
+            biomass[mask_1] = (
+                thetas[mask_1][:, 0] - thetas[mask_1][:, 1] * numpy.exp(
+                    -thetas[mask_1][:, 2] * valid_edge_distances_km[mask_1])
+            ) * cell_area_ha
 
-        # logarithmic model
-        # biomass_2 = t1 + t2 * numpy.log(edge_dist_km)
-        biomass[mask_2] = (
-            thetas[mask_2][:, 0] + thetas[mask_2][:, 1] * numpy.log(
-                valid_edge_distances_km[mask_2])) * cell_area_ha
+            # logarithmic model
+            # biomass_2 = t1 + t2 * numpy.log(edge_dist_km)
+            biomass[mask_2] = (
+                thetas[mask_2][:, 0] + thetas[mask_2][:, 1] * numpy.log(
+                    valid_edge_distances_km[mask_2])) * cell_area_ha
 
-        # linear regression
-        # biomass_3 = t1 + t2 * edge_dist_km
-        biomass[mask_3] = (
-            thetas[mask_3][:, 0] + thetas[mask_3][:, 1] *
-            valid_edge_distances_km[mask_3]) * cell_area_ha
+            # linear regression
+            # biomass_3 = t1 + t2 * edge_dist_km
+            biomass[mask_3] = (
+                thetas[mask_3][:, 0] + thetas[mask_3][:, 1] *
+                valid_edge_distances_km[mask_3]) * cell_area_ha
 
-        # reshape the array so that each set of points is in a separate
-        # dimension, here distances are distances to each valid model
-        # point, not distance to edge of forest
-        weights = numpy.zeros(distances.shape)
-        valid_distance_mask = (distances > 0) & (distances < numpy.inf)
-        weights[valid_distance_mask] = (
-            n_nearest_model_points / distances[valid_distance_mask])
+            # reshape the array so that each set of points is in a separate
+            # dimension, here distances are distances to each valid model
+            # point, not distance to edge of forest
+            weights = numpy.zeros(distances.shape)
+            valid_distance_mask = (distances > 0) & (distances < numpy.inf)
+            weights[valid_distance_mask] = (
+                n_nearest_model_points / distances[valid_distance_mask])
 
-        # Denominator is the sum of the weights per nearest point (axis 1)
-        denom = numpy.sum(weights, axis=1)
-        # To avoid a divide by 0
-        valid_denom = denom != 0
-        average_biomass = numpy.zeros(distances.shape[0])
-        average_biomass[valid_denom] = (
-            numpy.sum(weights[valid_denom] *
-                      biomass[valid_denom], axis=1) / denom[valid_denom])
+            # Denominator is the sum of the weights per nearest point (axis 1)
+            denom = numpy.sum(weights, axis=1)
+            # To avoid a divide by 0
+            valid_denom = denom != 0
+            average_biomass = numpy.zeros(distances.shape[0])
+            average_biomass[valid_denom] = (
+                numpy.sum(weights[valid_denom] *
+                          biomass[valid_denom], axis=1) / denom[valid_denom])
 
-        # Ensure the result has nodata everywhere the distance was invalid
-        result = numpy.full(edge_distance_block.shape, NODATA_VALUE,
-                            dtype=numpy.float32)
-        # convert biomass to carbon in this stage
-        result[valid_edge_distance_mask] = (
-            average_biomass * biomass_to_carbon_conversion_factor)
-        edge_carbon_band.WriteArray(
-            result, xoff=edge_distance_data['xoff'],
-            yoff=edge_distance_data['yoff'])
-    LOGGER.info('Carbon edge calculation 100.0% complete')
+            # Ensure the result has nodata everywhere the distance was invalid
+            result = numpy.full(edge_distance_block.shape, NODATA_VALUE,
+                                dtype=numpy.float32)
+            # convert biomass to carbon in this stage
+            result[valid_edge_distance_mask] = (
+                average_biomass * biomass_to_carbon_conversion_factor)
+            edge_carbon_band.WriteArray(
+                result, xoff=edge_distance_data['xoff'],
+                yoff=edge_distance_data['yoff'])
+        LOGGER.info('Carbon edge calculation 100.0% complete')
 
 
 @validation.invest_validator

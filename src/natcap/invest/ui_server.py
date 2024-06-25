@@ -125,8 +125,9 @@ def get_vector_colnames():
     # a lot of times the path will be empty so don't even try to open it
     if vector_path:
         try:
-            vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR)
-            colnames = [defn.GetName() for defn in vector.GetLayer().schema]
+            with utils.GDALUseExceptions():
+                vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR)
+                colnames = [defn.GetName() for defn in vector.GetLayer().schema]
             LOGGER.debug(colnames)
             return json.dumps(colnames)
         except Exception as e:

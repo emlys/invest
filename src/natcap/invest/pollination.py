@@ -1024,45 +1024,46 @@ def execute(args):
                 (total_pollinator_abundance_index_path, 1),
                 target_farm_result_path))
 
-    target_farm_vector = gdal.OpenEx(target_farm_result_path, 1)
-    target_farm_layer = target_farm_vector.GetLayer()
+    with utils.GDALUseExceptions():
+        target_farm_vector = gdal.OpenEx(target_farm_result_path, 1)
+        target_farm_layer = target_farm_vector.GetLayer()
 
-    # aggregate results per farm
-    for farm_feature in target_farm_layer:
-        nu = float(farm_feature.GetField(_CROP_POLLINATOR_DEPENDENCE_FIELD))
-        fid = farm_feature.GetFID()
-        if total_farm_results[fid]['count'] > 0:
-            # total pollinator farm yield is 1-*nu(1-tot_pollination_coverage)
-            # this is YT from the user's guide (y_tot)
-            farm_feature.SetField(
-                _TOTAL_FARM_YIELD_FIELD_ID,
-                1 - nu * (
-                    1 - total_farm_results[fid]['sum'] /
-                    float(total_farm_results[fid]['count'])))
+        # aggregate results per farm
+        for farm_feature in target_farm_layer:
+            nu = float(farm_feature.GetField(_CROP_POLLINATOR_DEPENDENCE_FIELD))
+            fid = farm_feature.GetFID()
+            if total_farm_results[fid]['count'] > 0:
+                # total pollinator farm yield is 1-*nu(1-tot_pollination_coverage)
+                # this is YT from the user's guide (y_tot)
+                farm_feature.SetField(
+                    _TOTAL_FARM_YIELD_FIELD_ID,
+                    1 - nu * (
+                        1 - total_farm_results[fid]['sum'] /
+                        float(total_farm_results[fid]['count'])))
 
-            # this is PYW ('pdep_y_w')
-            farm_feature.SetField(
-                _POLLINATOR_PROPORTION_FARM_YIELD_FIELD_ID,
-                (wild_pollinator_yield_aggregate[fid]['sum'] /
-                 float(wild_pollinator_yield_aggregate[fid]['count'])))
+                # this is PYW ('pdep_y_w')
+                farm_feature.SetField(
+                    _POLLINATOR_PROPORTION_FARM_YIELD_FIELD_ID,
+                    (wild_pollinator_yield_aggregate[fid]['sum'] /
+                     float(wild_pollinator_yield_aggregate[fid]['count'])))
 
-            # this is YW ('y_wild')
-            farm_feature.SetField(
-                _WILD_POLLINATOR_FARM_YIELD_FIELD_ID,
-                nu * (wild_pollinator_yield_aggregate[fid]['sum'] /
-                      float(wild_pollinator_yield_aggregate[fid]['count'])))
+                # this is YW ('y_wild')
+                farm_feature.SetField(
+                    _WILD_POLLINATOR_FARM_YIELD_FIELD_ID,
+                    nu * (wild_pollinator_yield_aggregate[fid]['sum'] /
+                          float(wild_pollinator_yield_aggregate[fid]['count'])))
 
-            # this is PAT ('p_abund')
-            farm_season = farm_feature.GetField(_FARM_SEASON_FIELD)
-            farm_feature.SetField(
-                _POLLINATOR_ABUNDANCE_FARM_FIELD_ID,
-                pollinator_abundance_results[farm_season][fid]['sum'] /
-                float(pollinator_abundance_results[farm_season][fid]['count']))
+                # this is PAT ('p_abund')
+                farm_season = farm_feature.GetField(_FARM_SEASON_FIELD)
+                farm_feature.SetField(
+                    _POLLINATOR_ABUNDANCE_FARM_FIELD_ID,
+                    pollinator_abundance_results[farm_season][fid]['sum'] /
+                    float(pollinator_abundance_results[farm_season][fid]['count']))
 
-        target_farm_layer.SetFeature(farm_feature)
-    target_farm_layer.SyncToDisk()
-    target_farm_layer = None
-    target_farm_vector = None
+            target_farm_layer.SetFeature(farm_feature)
+        target_farm_layer.SyncToDisk()
+        target_farm_layer = None
+        target_farm_vector = None
 
     task_graph.close()
     task_graph.join()
@@ -1088,38 +1089,27 @@ def pyw_op(mp_array, PYT_array): return numpy.maximum(PYT_array - mp_array, 0)
 
 
 def _rasterize_vector_onto_base(
-        base_raster_path, base_vector_path, attribute_id,
-        target_raster_path, filter_string=None):
+        base_raster_path, base_vector_path, attribute_id, target_raster_path):
     """Rasterize attribute from vector onto a copy of base.
 
     Args:
         base_raster_path (string): path to a base raster file
+        base_vector_path (string): path to the vector to rasterize
         attribute_id (string): id in `base_vector_path` to rasterize.
         target_raster_path (string): a copy of `base_raster_path` with
             `base_vector_path[attribute_id]` rasterized on top.
-        filter_string (string): filtering string to select from farm layer
 
     Returns:
         None.
     """
-    base_raster = gdal.OpenEx(base_raster_path, gdal.OF_RASTER)
-    raster_driver = gdal.GetDriverByName('GTiff')
-    target_raster = raster_driver.CreateCopy(target_raster_path, base_raster)
-    base_raster = None
+    with utils.GDALUseExceptions():
+        base_raster = gdal.OpenEx(base_raster_path, gdal.OF_RASTER)
+        raster_driver = gdal.GetDriverByName('GTiff')
+        target_raster = raster_driver.CreateCopy(target_raster_path, base_raster)
+        base_raster = None
 
-    vector = gdal.OpenEx(base_vector_path)
-    layer = vector.GetLayer()
-
-    if filter_string is not None:
-        layer.SetAttributeFilter(str(filter_string))
-    gdal.RasterizeLayer(
-        target_raster, [1], layer,
-        options=[f'ATTRIBUTE={attribute_id}'])
-    target_raster.FlushCache()
-    target_raster = None
-    layer = None
-    vector = None
-
+    pygeoprocessing.rasterize(
+        base_vector_path, target_raster_path, option_list=[f'ATTRIBUTE={attribute_id}'])
 
 def _create_farm_result_vector(
         base_vector_path, target_vector_path):
@@ -1139,39 +1129,40 @@ def _create_farm_result_vector(
         None.
 
     """
-    base_vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
+    with utils.GDALUseExceptions():
+        base_vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
 
-    driver = gdal.GetDriverByName('ESRI Shapefile')
-    target_vector = driver.CreateCopy(target_vector_path, base_vector)
-    target_layer = target_vector.GetLayer()
+        driver = gdal.GetDriverByName('ESRI Shapefile')
+        target_vector = driver.CreateCopy(target_vector_path, base_vector)
+        target_layer = target_vector.GetLayer()
 
-    farm_pollinator_abundance_defn = ogr.FieldDefn(
-        _POLLINATOR_ABUNDANCE_FARM_FIELD_ID, ogr.OFTReal)
-    farm_pollinator_abundance_defn.SetWidth(25)
-    farm_pollinator_abundance_defn.SetPrecision(11)
-    target_layer.CreateField(farm_pollinator_abundance_defn)
+        farm_pollinator_abundance_defn = ogr.FieldDefn(
+            _POLLINATOR_ABUNDANCE_FARM_FIELD_ID, ogr.OFTReal)
+        farm_pollinator_abundance_defn.SetWidth(25)
+        farm_pollinator_abundance_defn.SetPrecision(11)
+        target_layer.CreateField(farm_pollinator_abundance_defn)
 
-    total_farm_yield_field_defn = ogr.FieldDefn(
-        _TOTAL_FARM_YIELD_FIELD_ID, ogr.OFTReal)
-    total_farm_yield_field_defn.SetWidth(25)
-    total_farm_yield_field_defn.SetPrecision(11)
-    target_layer.CreateField(total_farm_yield_field_defn)
+        total_farm_yield_field_defn = ogr.FieldDefn(
+            _TOTAL_FARM_YIELD_FIELD_ID, ogr.OFTReal)
+        total_farm_yield_field_defn.SetWidth(25)
+        total_farm_yield_field_defn.SetPrecision(11)
+        target_layer.CreateField(total_farm_yield_field_defn)
 
-    pol_proportion_farm_yield_field_defn = ogr.FieldDefn(
-        _POLLINATOR_PROPORTION_FARM_YIELD_FIELD_ID, ogr.OFTReal)
-    pol_proportion_farm_yield_field_defn.SetWidth(25)
-    pol_proportion_farm_yield_field_defn.SetPrecision(11)
-    target_layer.CreateField(pol_proportion_farm_yield_field_defn)
+        pol_proportion_farm_yield_field_defn = ogr.FieldDefn(
+            _POLLINATOR_PROPORTION_FARM_YIELD_FIELD_ID, ogr.OFTReal)
+        pol_proportion_farm_yield_field_defn.SetWidth(25)
+        pol_proportion_farm_yield_field_defn.SetPrecision(11)
+        target_layer.CreateField(pol_proportion_farm_yield_field_defn)
 
-    wild_pol_farm_yield_field_defn = ogr.FieldDefn(
-        _WILD_POLLINATOR_FARM_YIELD_FIELD_ID, ogr.OFTReal)
-    wild_pol_farm_yield_field_defn.SetWidth(25)
-    wild_pol_farm_yield_field_defn.SetPrecision(11)
-    target_layer.CreateField(wild_pol_farm_yield_field_defn)
+        wild_pol_farm_yield_field_defn = ogr.FieldDefn(
+            _WILD_POLLINATOR_FARM_YIELD_FIELD_ID, ogr.OFTReal)
+        wild_pol_farm_yield_field_defn.SetWidth(25)
+        wild_pol_farm_yield_field_defn.SetPrecision(11)
+        target_layer.CreateField(wild_pol_farm_yield_field_defn)
 
-    target_layer = None
-    target_vector.FlushCache()
-    target_vector = None
+        target_layer = None
+        target_vector.FlushCache()
+        target_vector = None
 
 
 def _parse_scenario_variables(args):

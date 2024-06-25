@@ -128,33 +128,34 @@ def _calculate_args_bounding_box(args, args_spec):
         if spatial_info:
             local_bb = spatial_info['bounding_box']
             projection_wkt = spatial_info['projection_wkt']
-            spatial_ref = osr.SpatialReference()
-            spatial_ref.ImportFromWkt(projection_wkt)
+            with utils.GDALUseExceptions():
+                spatial_ref = osr.SpatialReference()
+                spatial_ref.ImportFromWkt(projection_wkt)
 
-            try:
-                # means there's a GIS type with a well defined bounding box
-                # create transform, and reproject local bounding box to
-                # lat/lng
-                lat_lng_ref = osr.SpatialReference()
-                lat_lng_ref.ImportFromEPSG(4326)  # EPSG 4326 is lat/lng
-                to_lat_trans = utils.create_coordinate_transformer(
-                    spatial_ref, lat_lng_ref)
-                for point_index in [0, 2]:
-                    local_bb[point_index], local_bb[point_index + 1], _ = (
-                        to_lat_trans.TransformPoint(
-                            local_bb[point_index],
-                            local_bb[point_index+1]))
+                try:
+                    # means there's a GIS type with a well defined bounding box
+                    # create transform, and reproject local bounding box to
+                    # lat/lng
+                    lat_lng_ref = osr.SpatialReference()
+                    lat_lng_ref.ImportFromEPSG(4326)  # EPSG 4326 is lat/lng
+                    to_lat_trans = utils.create_coordinate_transformer(
+                        spatial_ref, lat_lng_ref)
+                    for point_index in [0, 2]:
+                        local_bb[point_index], local_bb[point_index + 1], _ = (
+                            to_lat_trans.TransformPoint(
+                                local_bb[point_index],
+                                local_bb[point_index+1]))
 
-                bb_intersection = _merge_bounding_boxes(
-                    local_bb, bb_intersection, 'intersection')
-                bb_union = _merge_bounding_boxes(
-                    local_bb, bb_union, 'union')
-            except Exception as transform_error:
-                # All kinds of exceptions from bad transforms or CSV files
-                # or dbf files could get us to this point, just don't
-                # bother with the local_bb at all
-                LOGGER.exception(
-                    f'Error when transforming coordinates: {transform_error}')
+                    bb_intersection = _merge_bounding_boxes(
+                        local_bb, bb_intersection, 'intersection')
+                    bb_union = _merge_bounding_boxes(
+                        local_bb, bb_union, 'union')
+                except Exception as transform_error:
+                    # All kinds of exceptions from bad transforms or CSV files
+                    # or dbf files could get us to this point, just don't
+                    # bother with the local_bb at all
+                    LOGGER.exception(
+                        f'Error when transforming coordinates: {transform_error}')
         else:
             LOGGER.debug(f'Arg {key} of type {args_spec["args"][key]["type"]} '
                           'excluded from bounding box calculation')

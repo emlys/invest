@@ -505,82 +505,83 @@ def _determine_valid_viewpoints(dem_path, structures_path):
     # Use interleaved coordinates (xmin, ymin, xmax, ymax)
     spatial_index = rtree.index.Index(interleaved=True)
 
-    structures_vector = gdal.OpenEx(structures_path, gdal.OF_VECTOR)
-    for structures_layer_index in range(structures_vector.GetLayerCount()):
-        structures_layer = structures_vector.GetLayer(structures_layer_index)
-        layer_name = structures_layer.GetName()
-        LOGGER.info('Layer %s has %s features', layer_name,
-                    structures_layer.GetFeatureCount())
+    with utils.GDALUseExceptions():
+        structures_vector = gdal.OpenEx(structures_path, gdal.OF_VECTOR)
+        for structures_layer_index in range(structures_vector.GetLayerCount()):
+            structures_layer = structures_vector.GetLayer(structures_layer_index)
+            layer_name = structures_layer.GetName()
+            LOGGER.info('Layer %s has %s features', layer_name,
+                        structures_layer.GetFeatureCount())
 
-        radius_fieldname = None
-        fieldnames = {}
-        for column in structures_layer.schema:
-            actual_fieldname = column.GetName()
-            cleaned_fieldname = actual_fieldname.upper().strip()
-            fieldnames[cleaned_fieldname] = actual_fieldname
-        possible_radius_fieldnames = set(
-            ['RADIUS', 'RADIUS2']).intersection(set(fieldnames.keys()))
-        if possible_radius_fieldnames:
-            radius_fieldname = fieldnames[possible_radius_fieldnames.pop()]
+            radius_fieldname = None
+            fieldnames = {}
+            for column in structures_layer.schema:
+                actual_fieldname = column.GetName()
+                cleaned_fieldname = actual_fieldname.upper().strip()
+                fieldnames[cleaned_fieldname] = actual_fieldname
+            possible_radius_fieldnames = set(
+                ['RADIUS', 'RADIUS2']).intersection(set(fieldnames.keys()))
+            if possible_radius_fieldnames:
+                radius_fieldname = fieldnames[possible_radius_fieldnames.pop()]
 
-        try:
-            height_fieldname = fieldnames['HEIGHT']
-            height_present = True
-        except KeyError:
-            height_present = False
+            try:
+                height_fieldname = fieldnames['HEIGHT']
+                height_present = True
+            except KeyError:
+                height_present = False
 
-        try:
-            weight_fieldname = fieldnames['WEIGHT']
-            weight_present = True
-        except KeyError:
-            weight_present = False
+            try:
+                weight_fieldname = fieldnames['WEIGHT']
+                weight_present = True
+            except KeyError:
+                weight_present = False
 
-        last_log_time = time.time()
-        n_features_touched = -1
-        for point in structures_layer:
-            n_features_touched += 1
-            if time.time() - last_log_time > 5.0:
-                LOGGER.info(
-                    ("Checking structures in layer %s, approx. "
-                     "%.2f%%complete."), layer_name,
-                    100.0 * (n_features_touched /
-                             structures_layer.GetFeatureCount()))
-                last_log_time = time.time()
+            last_log_time = time.time()
+            n_features_touched = -1
+            for point in structures_layer:
+                n_features_touched += 1
+                if time.time() - last_log_time > 5.0:
+                    LOGGER.info(
+                        ("Checking structures in layer %s, approx. "
+                         "%.2f%%complete."), layer_name,
+                        100.0 * (n_features_touched /
+                                 structures_layer.GetFeatureCount()))
+                    last_log_time = time.time()
 
-            # Coordinates in map units to pass to viewshed algorithm
-            geometry = point.GetGeometryRef()
-            if geometry.GetGeometryName() != 'POINT':
-                raise AssertionError(
-                    f"Feature {point.GetFID()} must be a POINT geometry, "
-                    f"not {geometry.GetGeometryName()}")
+                # Coordinates in map units to pass to viewshed algorithm
+                geometry = point.GetGeometryRef()
+                if geometry.GetGeometryName() != 'POINT':
+                    raise AssertionError(
+                        f"Feature {point.GetFID()} must be a POINT geometry, "
+                        f"not {geometry.GetGeometryName()}")
 
-            viewpoint = (geometry.GetX(), geometry.GetY())
+                viewpoint = (geometry.GetX(), geometry.GetY())
 
-            if (not bbox_minx <= viewpoint[0] <= bbox_maxx or
-                    not bbox_miny <= viewpoint[1] <= bbox_maxy):
-                LOGGER.info(
-                    ('Feature %s in layer %s is outside of the DEM bounding '
-                     'box. Skipping.'), point.GetFID(), layer_name)
-                continue
+                if (not bbox_minx <= viewpoint[0] <= bbox_maxx or
+                        not bbox_miny <= viewpoint[1] <= bbox_maxy):
+                    LOGGER.info(
+                        ('Feature %s in layer %s is outside of the DEM bounding '
+                         'box. Skipping.'), point.GetFID(), layer_name)
+                    continue
 
-            max_radius = None
-            if radius_fieldname:
-                max_radius = math.fabs(float(point.GetField(radius_fieldname)))
+                max_radius = None
+                if radius_fieldname:
+                    max_radius = math.fabs(float(point.GetField(radius_fieldname)))
 
-            height = 0.0
-            if height_present:
-                height = math.fabs(float(point.GetField(height_fieldname)))
+                height = 0.0
+                if height_present:
+                    height = math.fabs(float(point.GetField(height_fieldname)))
 
-            weight = 1.0
-            if weight_present:
-                weight = float(point.GetField(weight_fieldname))
+                weight = 1.0
+                if weight_present:
+                    weight = float(point.GetField(weight_fieldname))
 
-            spatial_index.insert(
-                point.GetFID(),
-                (viewpoint[0], viewpoint[1], viewpoint[0], viewpoint[1]),
-                {'max_radius': max_radius,
-                 'weight': weight,
-                 'height': height})
+                spatial_index.insert(
+                    point.GetFID(),
+                    (viewpoint[0], viewpoint[1], viewpoint[0], viewpoint[1]),
+                    {'max_radius': max_radius,
+                     'weight': weight,
+                     'height': height})
 
     # Now check that the viewpoint isn't over nodata in the DEM.
     valid_structures = {}
@@ -589,50 +590,52 @@ def _determine_valid_viewpoints(dem_path, structures_path):
     dem_origin_y = dem_gt[3]
     dem_pixelsize_x = dem_raster_info['pixel_size'][0]
     dem_pixelsize_y = dem_raster_info['pixel_size'][1]
-    dem_raster = gdal.OpenEx(dem_path, gdal.OF_RASTER)
-    dem_band = dem_raster.GetRasterBand(1)
-    for block_data in pygeoprocessing.iterblocks((dem_path, 1),
-                                                 offset_only=True):
-        # Using shapely.geometry.box here so that it'll handle the min/max for
-        # us and all we need to define here are the correct coordinates.
-        block_geom = shapely.geometry.box(
-            dem_origin_x + dem_pixelsize_x * block_data['xoff'],
-            dem_origin_y + dem_pixelsize_y * block_data['yoff'],
-            dem_origin_x + dem_pixelsize_x * (
-                block_data['xoff'] + block_data['win_xsize']),
-            dem_origin_y + dem_pixelsize_y * (
-                block_data['yoff'] + block_data['win_ysize']))
 
-        intersecting_points = list(spatial_index.intersection(
-            block_geom.bounds, objects=True))
-        if len(intersecting_points) == 0:
-            continue
+    with utils.GDALUseExceptions():
+        dem_raster = gdal.OpenEx(dem_path, gdal.OF_RASTER)
+        dem_band = dem_raster.GetRasterBand(1)
+        for block_data in pygeoprocessing.iterblocks((dem_path, 1),
+                                                     offset_only=True):
+            # Using shapely.geometry.box here so that it'll handle the min/max for
+            # us and all we need to define here are the correct coordinates.
+            block_geom = shapely.geometry.box(
+                dem_origin_x + dem_pixelsize_x * block_data['xoff'],
+                dem_origin_y + dem_pixelsize_y * block_data['yoff'],
+                dem_origin_x + dem_pixelsize_x * (
+                    block_data['xoff'] + block_data['win_xsize']),
+                dem_origin_y + dem_pixelsize_y * (
+                    block_data['yoff'] + block_data['win_ysize']))
 
-        dem_block = dem_band.ReadAsArray(**block_data)
-        for item in intersecting_points:
-            viewpoint = (item.bounds[0], item.bounds[2])
-            feature_id = item.id
-            metadata = item.object
-            ix_viewpoint = int(
-                (viewpoint[0] - dem_gt[0]) // dem_gt[1]) - block_data['xoff']
-            iy_viewpoint = int(
-                (viewpoint[1] - dem_gt[3]) // dem_gt[5]) - block_data['yoff']
-            if pygeoprocessing.array_equals_nodata(
-                    numpy.array(dem_block[iy_viewpoint][ix_viewpoint]),
-                    dem_nodata).any():
-                LOGGER.info(
-                    'Feature %s in layer %s is over nodata; skipping.',
-                    feature_id, layer_name)
+            intersecting_points = list(spatial_index.intersection(
+                block_geom.bounds, objects=True))
+            if len(intersecting_points) == 0:
                 continue
 
-            if viewpoint in valid_structures:
-                LOGGER.info(
-                    ('Feature %s in layer %s is a duplicate viewpoint. '
-                     'Skipping.'), point.GetFID(), layer_name)
-                continue
+            dem_block = dem_band.ReadAsArray(**block_data)
+            for item in intersecting_points:
+                viewpoint = (item.bounds[0], item.bounds[2])
+                feature_id = item.id
+                metadata = item.object
+                ix_viewpoint = int(
+                    (viewpoint[0] - dem_gt[0]) // dem_gt[1]) - block_data['xoff']
+                iy_viewpoint = int(
+                    (viewpoint[1] - dem_gt[3]) // dem_gt[5]) - block_data['yoff']
+                if pygeoprocessing.array_equals_nodata(
+                        numpy.array(dem_block[iy_viewpoint][ix_viewpoint]),
+                        dem_nodata).any():
+                    LOGGER.info(
+                        'Feature %s in layer %s is over nodata; skipping.',
+                        feature_id, layer_name)
+                    continue
 
-            # if we've made it here, the viewpoint is valid.
-            valid_structures[viewpoint] = metadata
+                if viewpoint in valid_structures:
+                    LOGGER.info(
+                        ('Feature %s in layer %s is a duplicate viewpoint. '
+                         'Skipping.'), point.GetFID(), layer_name)
+                    continue
+
+                # if we've made it here, the viewpoint is valid.
+                valid_structures[viewpoint] = metadata
 
     # Casting to a list so that taskgraph can pickle the result.
     return list(

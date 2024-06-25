@@ -1148,23 +1148,24 @@ def _copy_vector_or_raster(base_file_path, target_file_path):
         ValueError if the base file can't be opened by GDAL.
 
     """
-    # Open the file as raster first
-    source_dataset = gdal.OpenEx(base_file_path, gdal.OF_RASTER)
-    target_driver_name = _RASTER_DRIVER_NAME
-    if source_dataset is None:
-        # File didn't open as a raster; assume it's a vector
-        source_dataset = gdal.OpenEx(base_file_path, gdal.OF_VECTOR)
-        target_driver_name = _VECTOR_DRIVER_NAME
-
-        # Raise an exception if the file can't be opened by GDAL
+    with utils.GDALUseExceptions():
+        # Open the file as raster first
+        source_dataset = gdal.OpenEx(base_file_path, gdal.OF_RASTER)
+        target_driver_name = _RASTER_DRIVER_NAME
         if source_dataset is None:
-            raise ValueError(
-                'File %s is neither a GDAL-compatible raster nor vector.'
-                % base_file_path)
+            # File didn't open as a raster; assume it's a vector
+            source_dataset = gdal.OpenEx(base_file_path, gdal.OF_VECTOR)
+            target_driver_name = _VECTOR_DRIVER_NAME
 
-    driver = gdal.GetDriverByName(target_driver_name)
-    driver.CreateCopy(target_file_path, source_dataset)
-    source_dataset = None
+            # Raise an exception if the file can't be opened by GDAL
+            if source_dataset is None:
+                raise ValueError(
+                    'File %s is neither a GDAL-compatible raster nor vector.'
+                    % base_file_path)
+
+        driver = gdal.GetDriverByName(target_driver_name)
+        driver.CreateCopy(target_file_path, source_dataset)
+        source_dataset = None
 
 
 def _interpolate_vector_field_onto_raster(
@@ -1331,65 +1332,66 @@ def _add_target_fields_to_wave_vector(
         None
 
     """
-    _copy_vector_or_raster(base_wave_vector_path, target_wave_vector_path)
-    target_wave_vector = gdal.OpenEx(
-        target_wave_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    target_wave_layer = target_wave_vector.GetLayer(0)
+    with utils.GDALUseExceptions():
+        _copy_vector_or_raster(base_wave_vector_path, target_wave_vector_path)
+        target_wave_vector = gdal.OpenEx(
+            target_wave_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        target_wave_layer = target_wave_vector.GetLayer(0)
 
-    # Get the coordinates of points of wave, land, and grid vectors
-    wave_point_list = _get_points_geometries(base_wave_vector_path)
-    land_point_list = _get_points_geometries(base_land_vector_path)
-    grid_point_list = _get_points_geometries(base_grid_vector_path)
+        # Get the coordinates of points of wave, land, and grid vectors
+        wave_point_list = _get_points_geometries(base_wave_vector_path)
+        land_point_list = _get_points_geometries(base_land_vector_path)
+        grid_point_list = _get_points_geometries(base_grid_vector_path)
 
-    # Calculate the minimum distances between the relative point groups
-    LOGGER.info('Calculating Min Distances from wave to land and from land '
-                'to grid.')
-    wave_to_land_dist_list, wave_to_land_id_list = _calculate_min_distances(
-        wave_point_list, land_point_list)
-    land_to_grid_dist_list, _ = _calculate_min_distances(
-        land_point_list, grid_point_list)
+        # Calculate the minimum distances between the relative point groups
+        LOGGER.info('Calculating Min Distances from wave to land and from land '
+                    'to grid.')
+        wave_to_land_dist_list, wave_to_land_id_list = _calculate_min_distances(
+            wave_point_list, land_point_list)
+        land_to_grid_dist_list, _ = _calculate_min_distances(
+            land_point_list, grid_point_list)
 
-    # Add target fields to the wave vector to store results
-    for field in [_W2L_DIST_FIELD, _L2G_DIST_FIELD, _LAND_ID_FIELD,
-                  _NPV_25Y_FIELD, _CAPWE_ALL_FIELD, _UNIT_FIELD]:
-        field_defn = ogr.FieldDefn(field, ogr.OFTReal)
-        field_defn.SetWidth(24)
-        field_defn.SetPrecision(11)
-        target_wave_layer.CreateField(field_defn)
+        # Add target fields to the wave vector to store results
+        for field in [_W2L_DIST_FIELD, _L2G_DIST_FIELD, _LAND_ID_FIELD,
+                      _NPV_25Y_FIELD, _CAPWE_ALL_FIELD, _UNIT_FIELD]:
+            field_defn = ogr.FieldDefn(field, ogr.OFTReal)
+            field_defn.SetWidth(24)
+            field_defn.SetPrecision(11)
+            target_wave_layer.CreateField(field_defn)
 
-    # For each feature in the shapefile add the corresponding distance
-    # from wave_to_land_dist and land_to_grid_dist calculated above
-    target_wave_layer.ResetReading()
+        # For each feature in the shapefile add the corresponding distance
+        # from wave_to_land_dist and land_to_grid_dist calculated above
+        target_wave_layer.ResetReading()
 
-    LOGGER.info('Calculating and adding new fields to wave layer.')
-    for i, feat in enumerate(target_wave_layer):
-        # Get corresponding distances and land ID for the wave point
-        land_id = int(wave_to_land_id_list[i])
-        wave_to_land_dist = wave_to_land_dist_list[i]
-        land_to_grid_dist = land_to_grid_dist_list[land_id]
+        LOGGER.info('Calculating and adding new fields to wave layer.')
+        for i, feat in enumerate(target_wave_layer):
+            # Get corresponding distances and land ID for the wave point
+            land_id = int(wave_to_land_id_list[i])
+            wave_to_land_dist = wave_to_land_dist_list[i]
+            land_to_grid_dist = land_to_grid_dist_list[land_id]
 
-        # Set distance and land ID fields to the feature
-        feat.SetField(_W2L_DIST_FIELD, wave_to_land_dist)
-        feat.SetField(_L2G_DIST_FIELD, land_to_grid_dist)
-        feat.SetField(_LAND_ID_FIELD, land_id)
+            # Set distance and land ID fields to the feature
+            feat.SetField(_W2L_DIST_FIELD, wave_to_land_dist)
+            feat.SetField(_L2G_DIST_FIELD, land_to_grid_dist)
+            feat.SetField(_LAND_ID_FIELD, land_id)
 
-        # Get depth and captured wave energy for calculating NPV, total
-        # captured energy, and units
-        captured_wave_energy = feat.GetFieldAsDouble(_CAP_WE_FIELD)
-        depth = feat.GetFieldAsDouble(_DEPTH_FIELD)
-        npv_result, capwe_all_result = _get_npv_results(
-            captured_wave_energy, depth, number_of_machines,
-            wave_to_land_dist, land_to_grid_dist, machine_econ_dict)
+            # Get depth and captured wave energy for calculating NPV, total
+            # captured energy, and units
+            captured_wave_energy = feat.GetFieldAsDouble(_CAP_WE_FIELD)
+            depth = feat.GetFieldAsDouble(_DEPTH_FIELD)
+            npv_result, capwe_all_result = _get_npv_results(
+                captured_wave_energy, depth, number_of_machines,
+                wave_to_land_dist, land_to_grid_dist, machine_econ_dict)
 
-        feat.SetField(_NPV_25Y_FIELD, npv_result)
-        feat.SetField(_CAPWE_ALL_FIELD, capwe_all_result)
-        feat.SetField(_UNIT_FIELD, number_of_machines)
+            feat.SetField(_NPV_25Y_FIELD, npv_result)
+            feat.SetField(_CAPWE_ALL_FIELD, capwe_all_result)
+            feat.SetField(_UNIT_FIELD, number_of_machines)
 
-        target_wave_layer.SetFeature(feat)
-        feat = None
+            target_wave_layer.SetFeature(feat)
+            feat = None
 
-    target_wave_layer = None
-    target_wave_vector = None
+        target_wave_layer = None
+        target_wave_vector = None
 
 
 def _dict_to_point_vector(base_dict_data, target_vector_path, layer_name,
@@ -1414,64 +1416,65 @@ def _dict_to_point_vector(base_dict_data, target_vector_path, layer_name,
         None
 
     """
-    # If the target_vector_path exists delete it
-    if os.path.isfile(target_vector_path):
-        driver = ogr.GetDriverByName(_VECTOR_DRIVER_NAME)
-        driver.DeleteDataSource(target_vector_path)
+    with utils.GDALUseExceptions():
+        # If the target_vector_path exists delete it
+        if os.path.isfile(target_vector_path):
+            driver = ogr.GetDriverByName(_VECTOR_DRIVER_NAME)
+            driver.DeleteDataSource(target_vector_path)
 
-    base_sr = osr.SpatialReference()
-    base_sr.ImportFromWkt(base_sr_wkt)
-    target_sr = osr.SpatialReference()
-    target_sr.ImportFromWkt(target_sr_wkt)
-    # Get coordinate transformation from base spatial reference to target,
-    # in order to transform wave points to target_sr
-    coord_trans = utils.create_coordinate_transformer(base_sr, target_sr)
+        base_sr = osr.SpatialReference()
+        base_sr.ImportFromWkt(base_sr_wkt)
+        target_sr = osr.SpatialReference()
+        target_sr.ImportFromWkt(target_sr_wkt)
+        # Get coordinate transformation from base spatial reference to target,
+        # in order to transform wave points to target_sr
+        coord_trans = utils.create_coordinate_transformer(base_sr, target_sr)
 
-    LOGGER.info('Creating new vector')
-    output_driver = ogr.GetDriverByName(_VECTOR_DRIVER_NAME)
-    output_vector = output_driver.CreateDataSource(target_vector_path)
-    target_layer = output_vector.CreateLayer(str(layer_name), target_sr,
-                                             ogr.wkbPoint)
+        LOGGER.info('Creating new vector')
+        output_driver = ogr.GetDriverByName(_VECTOR_DRIVER_NAME)
+        output_vector = output_driver.CreateDataSource(target_vector_path)
+        target_layer = output_vector.CreateLayer(str(layer_name), target_sr,
+                                                 ogr.wkbPoint)
 
-    # Construct a dictionary of field names and their corresponding types
-    field_dict = {
-        'ID': ogr.OFTInteger,
-        'TYPE': ogr.OFTString,
-        'LAT': ogr.OFTReal,
-        'LONG': ogr.OFTReal,
-        'LOCATION': ogr.OFTString
-    }
+        # Construct a dictionary of field names and their corresponding types
+        field_dict = {
+            'ID': ogr.OFTInteger,
+            'TYPE': ogr.OFTString,
+            'LAT': ogr.OFTReal,
+            'LONG': ogr.OFTReal,
+            'LOCATION': ogr.OFTString
+        }
 
-    LOGGER.info('Creating fields for the vector')
-    for field_name in ['ID', 'TYPE', 'LAT', 'LONG', 'LOCATION']:
-        target_field = ogr.FieldDefn(field_name, field_dict[field_name])
-        target_layer.CreateField(target_field)
+        LOGGER.info('Creating fields for the vector')
+        for field_name in ['ID', 'TYPE', 'LAT', 'LONG', 'LOCATION']:
+            target_field = ogr.FieldDefn(field_name, field_dict[field_name])
+            target_layer.CreateField(target_field)
 
-    LOGGER.info('Entering iteration to create and set the features')
-    # For each inner dictionary (for each point) create a point
-    for point_dict in base_dict_data.values():
-        latitude = float(point_dict['lat'])
-        longitude = float(point_dict['long'])
-        point_dict['id'] = int(point_dict['id'])
-        # When projecting to WGS84, extents -180 to 180 are used for longitude.
-        # In case input longitude is from -360 to 0 convert
-        if longitude < -180:
-            longitude += 360
-        geom = ogr.Geometry(ogr.wkbPoint)
-        geom.AddPoint_2D(longitude, latitude)
-        geom.Transform(coord_trans)
+        LOGGER.info('Entering iteration to create and set the features')
+        # For each inner dictionary (for each point) create a point
+        for point_dict in base_dict_data.values():
+            latitude = float(point_dict['lat'])
+            longitude = float(point_dict['long'])
+            point_dict['id'] = int(point_dict['id'])
+            # When projecting to WGS84, extents -180 to 180 are used for longitude.
+            # In case input longitude is from -360 to 0 convert
+            if longitude < -180:
+                longitude += 360
+            geom = ogr.Geometry(ogr.wkbPoint)
+            geom.AddPoint_2D(longitude, latitude)
+            geom.Transform(coord_trans)
 
-        output_feature = ogr.Feature(target_layer.GetLayerDefn())
-        target_layer.CreateFeature(output_feature)
+            output_feature = ogr.Feature(target_layer.GetLayerDefn())
+            target_layer.CreateFeature(output_feature)
 
-        for field_name in point_dict:
-            output_feature.SetField(field_name.upper(), point_dict[field_name])
-        output_feature.SetGeometryDirectly(geom)
-        target_layer.SetFeature(output_feature)
-        output_feature = None
+            for field_name in point_dict:
+                output_feature.SetField(field_name.upper(), point_dict[field_name])
+            output_feature.SetGeometryDirectly(geom)
+            target_layer.SetFeature(output_feature)
+            output_feature = None
 
-    output_vector = None
-    LOGGER.info('Finished _dict_to_point_vector')
+        output_vector = None
+        LOGGER.info('Finished _dict_to_point_vector')
 
 
 def _get_points_geometries(base_vector_path):
@@ -1489,15 +1492,16 @@ def _get_points_geometries(base_vector_path):
 
     """
     points = []
-    base_vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
-    base_layer = base_vector.GetLayer(0)
-    for feat in base_layer:
-        x_location = float(feat.GetGeometryRef().GetX())
-        y_location = float(feat.GetGeometryRef().GetY())
-        points.append([x_location, y_location])
-        feat = None
-    base_layer = None
-    base_vector = None
+    with utils.GDALUseExceptions():
+        base_vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
+        base_layer = base_vector.GetLayer(0)
+        for feat in base_layer:
+            x_location = float(feat.GetGeometryRef().GetX())
+            y_location = float(feat.GetGeometryRef().GetY())
+            points.append([x_location, y_location])
+            feat = None
+        base_layer = None
+        base_vector = None
 
     return numpy.array(points)
 
@@ -1622,12 +1626,13 @@ def _get_vector_spatial_ref(base_vector_path):
         spat_ref: a spatial reference
 
     """
-    vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
-    layer = vector.GetLayer(0)
-    spat_ref = layer.GetSpatialRef()
-    layer = None
-    vector = None
-    return spat_ref
+    with utils.GDALUseExceptions():
+        vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
+        layer = vector.GetLayer(0)
+        spat_ref = layer.GetSpatialRef()
+        layer = None
+        vector = None
+        return spat_ref
 
 
 def _create_percentile_rasters(base_raster_path, target_raster_path,
@@ -1795,8 +1800,9 @@ def _clip_vector_by_vector(base_vector_path, clip_vector_path,
 
     """
     if os.path.isfile(target_clipped_vector_path):
-        driver = ogr.GetDriverByName(_VECTOR_DRIVER_NAME)
-        driver.DeleteDataSource(target_clipped_vector_path)
+        with utils.GDALUseExceptions():
+            driver = ogr.GetDriverByName(_VECTOR_DRIVER_NAME)
+            driver.DeleteDataSource(target_clipped_vector_path)
 
     # Create a temporary folder within work_dir for saving reprojected files
     temp_work_dir = tempfile.mkdtemp(dir=work_dir, prefix='reproject-')
@@ -1828,31 +1834,32 @@ def _clip_vector_by_vector(base_vector_path, clip_vector_path,
     reproject_clip_vector_path = reproject_vector(clip_vector_path,
                                                   target_sr_wkt, temp_work_dir)
 
-    base_vector = gdal.OpenEx(reproject_base_vector_path, gdal.OF_VECTOR)
-    base_layer = base_vector.GetLayer()
-    base_layer_defn = base_layer.GetLayerDefn()
+    with utils.GDALUseExceptions():
+        base_vector = gdal.OpenEx(reproject_base_vector_path, gdal.OF_VECTOR)
+        base_layer = base_vector.GetLayer()
+        base_layer_defn = base_layer.GetLayerDefn()
 
-    clip_vector = gdal.OpenEx(reproject_clip_vector_path, gdal.OF_VECTOR)
-    clip_layer = clip_vector.GetLayer()
+        clip_vector = gdal.OpenEx(reproject_clip_vector_path, gdal.OF_VECTOR)
+        clip_layer = clip_vector.GetLayer()
 
-    driver = ogr.GetDriverByName(_VECTOR_DRIVER_NAME)
-    target_vector = driver.CreateDataSource(target_clipped_vector_path)
-    target_layer = target_vector.CreateLayer(base_layer_defn.GetName(),
-                                             base_layer.GetSpatialRef())
-    base_layer.Clip(clip_layer, target_layer)
+        driver = ogr.GetDriverByName(_VECTOR_DRIVER_NAME)
+        target_vector = driver.CreateDataSource(target_clipped_vector_path)
+        target_layer = target_vector.CreateLayer(base_layer_defn.GetName(),
+                                                 base_layer.GetSpatialRef())
+        base_layer.Clip(clip_layer, target_layer)
 
-    # Add in a check to make sure the intersection didn't come back empty
-    if target_layer.GetFeatureCount() == 0:
-        raise IntersectionError(
-            "Intersection ERROR: found no intersection between base vector %s "
-            "and clip vector %s." % (base_vector_path, clip_vector_path))
+        # Add in a check to make sure the intersection didn't come back empty
+        if target_layer.GetFeatureCount() == 0:
+            raise IntersectionError(
+                "Intersection ERROR: found no intersection between base vector %s "
+                "and clip vector %s." % (base_vector_path, clip_vector_path))
 
-    base_layer = None
-    clip_layer = None
-    target_layer = None
-    base_vector = None
-    clip_vector = None
-    target_vector = None
+        base_layer = None
+        clip_layer = None
+        target_layer = None
+        base_vector = None
+        clip_vector = None
+        target_vector = None
 
     shutil.rmtree(temp_work_dir, ignore_errors=True)
 
@@ -2014,117 +2021,118 @@ def _index_raster_value_to_point_vector(
     """
     _copy_vector_or_raster(base_point_vector_path, target_point_vector_path)
 
-    target_vector = gdal.OpenEx(
-        target_point_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    target_layer = target_vector.GetLayer()
-    raster_gt = pygeoprocessing.get_raster_info(base_raster_path)[
-        'geotransform']
-    pixel_size_x, pixel_size_y, raster_min_x, raster_max_y = \
-        abs(raster_gt[1]), abs(raster_gt[5]), raster_gt[0], raster_gt[3]
+    with utils.GDALUseExceptions():
+        target_vector = gdal.OpenEx(
+            target_point_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        target_layer = target_vector.GetLayer()
+        raster_gt = pygeoprocessing.get_raster_info(base_raster_path)[
+            'geotransform']
+        pixel_size_x, pixel_size_y, raster_min_x, raster_max_y = \
+            abs(raster_gt[1]), abs(raster_gt[5]), raster_gt[0], raster_gt[3]
 
-    # Create a new field for the VECTOR attribute
-    field_defn = ogr.FieldDefn(field_name, ogr.OFTReal)
-    field_defn.SetWidth(24)
-    field_defn.SetPrecision(11)
+        # Create a new field for the VECTOR attribute
+        field_defn = ogr.FieldDefn(field_name, ogr.OFTReal)
+        field_defn.SetWidth(24)
+        field_defn.SetPrecision(11)
 
-    # Raise an exception if the field name already exists in the vector
-    exact_match = True
-    if target_layer.FindFieldIndex(field_name, exact_match) == -1:
-        target_layer.CreateField(field_defn)
-    else:
-        raise ValueError(
-            "'%s' field should not have existed in the wave data shapefiles. "
-            "Please make sure it's renamed or removed from the attribute table."
-            % field_name)
+        # Raise an exception if the field name already exists in the vector
+        exact_match = True
+        if target_layer.FindFieldIndex(field_name, exact_match) == -1:
+            target_layer.CreateField(field_defn)
+        else:
+            raise ValueError(
+                "'%s' field should not have existed in the wave data shapefiles. "
+                "Please make sure it's renamed or removed from the attribute table."
+                % field_name)
 
-    # Create coordinate transformation from vector to raster, to make sure the
-    # vector points are in the same projection as raster
-    raster_sr = osr.SpatialReference()
-    raster_sr.ImportFromWkt(
-        pygeoprocessing.get_raster_info(base_raster_path)['projection_wkt'])
-    vector_sr = osr.SpatialReference()
-    vector_sr.ImportFromWkt(
-        pygeoprocessing.get_vector_info(target_point_vector_path)[
-            'projection_wkt'])
-    vector_coord_trans = utils.create_coordinate_transformer(
-        vector_sr, raster_sr)
+        # Create coordinate transformation from vector to raster, to make sure the
+        # vector points are in the same projection as raster
+        raster_sr = osr.SpatialReference()
+        raster_sr.ImportFromWkt(
+            pygeoprocessing.get_raster_info(base_raster_path)['projection_wkt'])
+        vector_sr = osr.SpatialReference()
+        vector_sr.ImportFromWkt(
+            pygeoprocessing.get_vector_info(target_point_vector_path)[
+                'projection_wkt'])
+        vector_coord_trans = utils.create_coordinate_transformer(
+            vector_sr, raster_sr)
 
-    # Initialize an R-Tree indexing object with point geom from base_vector
-    def generator_function():
-        for feat in target_layer:
-            fid = feat.GetFID()
-            geom = feat.GetGeometryRef()
-            geom_x, geom_y = geom.GetX(), geom.GetY()
-            geom_trans_x, geom_trans_y, _ = vector_coord_trans.TransformPoint(
-                geom_x, geom_y)
-            yield (fid, (
-                geom_trans_x, geom_trans_x, geom_trans_y, geom_trans_y), None)
+        # Initialize an R-Tree indexing object with point geom from base_vector
+        def generator_function():
+            for feat in target_layer:
+                fid = feat.GetFID()
+                geom = feat.GetGeometryRef()
+                geom_x, geom_y = geom.GetX(), geom.GetY()
+                geom_trans_x, geom_trans_y, _ = vector_coord_trans.TransformPoint(
+                    geom_x, geom_y)
+                yield (fid, (
+                    geom_trans_x, geom_trans_x, geom_trans_y, geom_trans_y), None)
 
-    vector_idx = index.Index(generator_function(), interleaved=False)
+        vector_idx = index.Index(generator_function(), interleaved=False)
 
-    # For all the features (points) add the proper raster value
-    encountered_fids = set()
-    for block_info, block_matrix in pygeoprocessing.iterblocks(
-            (base_raster_path, 1)):
-        # Calculate block bounding box in decimal degrees
-        block_min_x = raster_min_x + block_info['xoff'] * pixel_size_x
-        block_max_x = raster_min_x + (
-            block_info['win_xsize'] + block_info['xoff']) * pixel_size_x
+        # For all the features (points) add the proper raster value
+        encountered_fids = set()
+        for block_info, block_matrix in pygeoprocessing.iterblocks(
+                (base_raster_path, 1)):
+            # Calculate block bounding box in decimal degrees
+            block_min_x = raster_min_x + block_info['xoff'] * pixel_size_x
+            block_max_x = raster_min_x + (
+                block_info['win_xsize'] + block_info['xoff']) * pixel_size_x
 
-        block_max_y = raster_max_y - block_info['yoff'] * pixel_size_y
-        block_min_y = raster_max_y - (
-            block_info['win_ysize'] + block_info['yoff']) * pixel_size_y
+            block_max_y = raster_max_y - block_info['yoff'] * pixel_size_y
+            block_min_y = raster_max_y - (
+                block_info['win_ysize'] + block_info['yoff']) * pixel_size_y
 
-        # Obtain a list of vector points that fall within the block
-        intersect_vectors = list(
-            vector_idx.intersection(
-                (block_min_x, block_max_x, block_min_y, block_max_y),
-                objects=True))
+            # Obtain a list of vector points that fall within the block
+            intersect_vectors = list(
+                vector_idx.intersection(
+                    (block_min_x, block_max_x, block_min_y, block_max_y),
+                    objects=True))
 
-        for vector in intersect_vectors:
-            vector_fid = vector.id
+            for vector in intersect_vectors:
+                vector_fid = vector.id
 
-            # Occasionally there will be points that intersect multiple block
-            # bounding boxes (like points that lie on the boundary of two
-            # blocks) and we don't want to double-count.
-            if vector_fid in encountered_fids:
-                continue
+                # Occasionally there will be points that intersect multiple block
+                # bounding boxes (like points that lie on the boundary of two
+                # blocks) and we don't want to double-count.
+                if vector_fid in encountered_fids:
+                    continue
 
-            vector_trans_x, vector_trans_y = vector.bbox[0], vector.bbox[1]
+                vector_trans_x, vector_trans_y = vector.bbox[0], vector.bbox[1]
 
-            # To get proper raster value we must index into the dem matrix
-            # by getting where the point is located in terms of the matrix
-            i = int((vector_trans_x - block_min_x) / pixel_size_x)
-            j = int((block_max_y - vector_trans_y) / pixel_size_y)
+                # To get proper raster value we must index into the dem matrix
+                # by getting where the point is located in terms of the matrix
+                i = int((vector_trans_x - block_min_x) / pixel_size_x)
+                j = int((block_max_y - vector_trans_y) / pixel_size_y)
 
-            try:
-                block_value = block_matrix[j][i]
-            except IndexError:
-                # It is possible for an index to be *just* on the edge of a
-                # block and exceed the block dimensions.  If this happens,
-                # pass on this point, as another block's bounding box should
-                # catch this point instead.
-                continue
+                try:
+                    block_value = block_matrix[j][i]
+                except IndexError:
+                    # It is possible for an index to be *just* on the edge of a
+                    # block and exceed the block dimensions.  If this happens,
+                    # pass on this point, as another block's bounding box should
+                    # catch this point instead.
+                    continue
 
-            # There are cases where the DEM may be too coarse and thus a
-            # wave energy point falls on land. If the raster value taken is
-            # greater than or equal to zero we need to delete that point as
-            # it should not be used in calculations
-            encountered_fids.add(vector_fid)
-            if block_value >= 0.0:
-                target_layer.DeleteFeature(vector_fid)
-            else:
-                feat = target_layer.GetFeature(vector_fid)
-                feat.SetField(field_name, float(block_value))
-                target_layer.SetFeature(feat)
-                feat = None
+                # There are cases where the DEM may be too coarse and thus a
+                # wave energy point falls on land. If the raster value taken is
+                # greater than or equal to zero we need to delete that point as
+                # it should not be used in calculations
+                encountered_fids.add(vector_fid)
+                if block_value >= 0.0:
+                    target_layer.DeleteFeature(vector_fid)
+                else:
+                    feat = target_layer.GetFeature(vector_fid)
+                    feat.SetField(field_name, float(block_value))
+                    target_layer.SetFeature(feat)
+                    feat = None
 
-    # It is not enough to just delete a feature from the layer. The
-    # database where the information is stored must be re-packed so that
-    # feature entry is properly removed
-    target_vector.ExecuteSQL('REPACK ' + target_layer.GetName())
-    target_layer = None
-    target_vector = None
+        # It is not enough to just delete a feature from the layer. The
+        # database where the information is stored must be re-packed so that
+        # feature entry is properly removed
+        target_vector.ExecuteSQL('REPACK ' + target_layer.GetName())
+        target_layer = None
+        target_vector = None
 
 
 def _energy_and_power_to_wave_vector(
@@ -2148,68 +2156,69 @@ def _energy_and_power_to_wave_vector(
     """
     _copy_vector_or_raster(base_wave_vector_path, target_wave_vector_path)
 
-    target_wave_vector = gdal.OpenEx(
-        target_wave_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    target_wave_layer = target_wave_vector.GetLayer()
-    # Create the Captured Energy and Wave Power fields for the shapefile
-    for field_name in [_CAP_WE_FIELD, _WAVE_POWER_FIELD]:
-        field_defn = ogr.FieldDefn(field_name, ogr.OFTReal)
-        field_defn.SetWidth(24)
-        field_defn.SetPrecision(11)
-        target_wave_layer.CreateField(field_defn)
+    with utils.GDALUseExceptions():
+        target_wave_vector = gdal.OpenEx(
+            target_wave_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        target_wave_layer = target_wave_vector.GetLayer()
+        # Create the Captured Energy and Wave Power fields for the shapefile
+        for field_name in [_CAP_WE_FIELD, _WAVE_POWER_FIELD]:
+            field_defn = ogr.FieldDefn(field_name, ogr.OFTReal)
+            field_defn.SetWidth(24)
+            field_defn.SetPrecision(11)
+            target_wave_layer.CreateField(field_defn)
 
-    # For all of the features (points) in the shapefile, get the corresponding
-    # point/value from the dictionary and set the _CAP_WE_FIELD field as
-    # the value from the dictionary
-    for feat in target_wave_layer:
-        # Calculate and set the Captured Wave Energy field
-        value_i = feat.GetField('I')
-        value_j = feat.GetField('J')
-        we_value = energy_cap[(value_i, value_j)]
+        # For all of the features (points) in the shapefile, get the corresponding
+        # point/value from the dictionary and set the _CAP_WE_FIELD field as
+        # the value from the dictionary
+        for feat in target_wave_layer:
+            # Calculate and set the Captured Wave Energy field
+            value_i = feat.GetField('I')
+            value_j = feat.GetField('J')
+            we_value = energy_cap[(value_i, value_j)]
 
-        feat.SetField(_CAP_WE_FIELD, we_value)
+            feat.SetField(_CAP_WE_FIELD, we_value)
 
-        # Calculate and set the Wave Power field
-        height = feat.GetFieldAsDouble(_HEIGHT_FIELD)  # in meters
-        period = feat.GetFieldAsDouble(_PERIOD_FIELD)
-        depth = feat.GetFieldAsInteger(_DEPTH_FIELD)
+            # Calculate and set the Wave Power field
+            height = feat.GetFieldAsDouble(_HEIGHT_FIELD)  # in meters
+            period = feat.GetFieldAsDouble(_PERIOD_FIELD)
+            depth = feat.GetFieldAsInteger(_DEPTH_FIELD)
 
-        depth = numpy.absolute(depth)
-        # wave frequency calculation (used to calculate wave number k)
-        tem = (2.0 * math.pi) / (period * _ALFA)
-        # wave number calculation (expressed as a function of
-        # wave frequency and water depth)
-        k = numpy.square(tem) / (_GRAV * numpy.sqrt(
-            numpy.tanh((numpy.square(tem)) * (depth / _GRAV))))
-        # Setting numpy overflow error to ignore because when numpy.sinh
-        # gets a really large number it pushes a warning, but Rich
-        # and Doug have agreed it's nothing we need to worry about.
-        numpy.seterr(over='ignore')
+            depth = numpy.absolute(depth)
+            # wave frequency calculation (used to calculate wave number k)
+            tem = (2.0 * math.pi) / (period * _ALFA)
+            # wave number calculation (expressed as a function of
+            # wave frequency and water depth)
+            k = numpy.square(tem) / (_GRAV * numpy.sqrt(
+                numpy.tanh((numpy.square(tem)) * (depth / _GRAV))))
+            # Setting numpy overflow error to ignore because when numpy.sinh
+            # gets a really large number it pushes a warning, but Rich
+            # and Doug have agreed it's nothing we need to worry about.
+            numpy.seterr(over='ignore')
 
-        # wave group velocity calculation (expressed as a
-        # function of wave energy period and water depth)
-        wave_group_velocity = (((1 + (
-            (2 * k * depth) / numpy.sinh(2 * k * depth))) * numpy.sqrt(
-                (_GRAV / k) * numpy.tanh(k * depth))) / 2)
+            # wave group velocity calculation (expressed as a
+            # function of wave energy period and water depth)
+            wave_group_velocity = (((1 + (
+                (2 * k * depth) / numpy.sinh(2 * k * depth))) * numpy.sqrt(
+                    (_GRAV / k) * numpy.tanh(k * depth))) / 2)
 
-        # Reset the overflow error to print future warnings
-        numpy.seterr(over='print')
+            # Reset the overflow error to print future warnings
+            numpy.seterr(over='print')
 
-        # Wave power calculation. Divide by 1000 to convert W/m to kW/m
-        # Note: _SWD: Sea water density constant (kg/m^3),
-        # _GRAV: Gravitational acceleration (m/s^2),
-        # height: in m, wave_group_velocity: in m/s
-        wave_pow = ((((_SWD * _GRAV) / 16) *
-                     (numpy.square(height)) * wave_group_velocity) / 1000)
+            # Wave power calculation. Divide by 1000 to convert W/m to kW/m
+            # Note: _SWD: Sea water density constant (kg/m^3),
+            # _GRAV: Gravitational acceleration (m/s^2),
+            # height: in m, wave_group_velocity: in m/s
+            wave_pow = ((((_SWD * _GRAV) / 16) *
+                         (numpy.square(height)) * wave_group_velocity) / 1000)
 
-        feat.SetField(_WAVE_POWER_FIELD, wave_pow)
+            feat.SetField(_WAVE_POWER_FIELD, wave_pow)
 
-        # Save the feature modifications to the layer.
-        target_wave_layer.SetFeature(feat)
-        feat = None
+            # Save the feature modifications to the layer.
+            target_wave_layer.SetFeature(feat)
+            feat = None
 
-    target_wave_layer = None
-    target_wave_vector = None
+        target_wave_layer = None
+        target_wave_vector = None
 
 
 def _count_pixels_groups(raster_path, group_values):
@@ -2255,26 +2264,27 @@ def _pixel_size_helper(base_vector_path, coord_trans, coord_trans_opposite,
             the units of what base vector is projected in
 
     """
-    vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
-    layer = vector.GetLayer(0)
+    with utils.GDALUseExceptions():
+        vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
+        layer = vector.GetLayer(0)
 
-    # Get a point in the clipped vector to determine output grid size
-    feat = layer.GetNextFeature()
-    geom = feat.GetGeometryRef()
-    reference_point_x = geom.GetX()
-    reference_point_y = geom.GetY()
+        # Get a point in the clipped vector to determine output grid size
+        feat = layer.GetNextFeature()
+        geom = feat.GetGeometryRef()
+        reference_point_x = geom.GetX()
+        reference_point_y = geom.GetY()
 
-    # Convert the point from meters to geom_x/long
-    reference_point_latlng = coord_trans_opposite.TransformPoint(
-        reference_point_x, reference_point_y)
+        # Convert the point from meters to geom_x/long
+        reference_point_latlng = coord_trans_opposite.TransformPoint(
+            reference_point_x, reference_point_y)
 
-    # Get the size of the pixels in meters, to be used for creating rasters
-    pixel_size_x, pixel_size_y = _pixel_size_based_on_coordinate_transform(
-        base_raster_path, coord_trans, reference_point_latlng)
+        # Get the size of the pixels in meters, to be used for creating rasters
+        pixel_size_x, pixel_size_y = _pixel_size_based_on_coordinate_transform(
+            base_raster_path, coord_trans, reference_point_latlng)
 
-    feat = None
-    layer = None
-    vector = None
+        feat = None
+        layer = None
+        vector = None
 
     return (pixel_size_x, pixel_size_y)
 
@@ -2340,23 +2350,24 @@ def _create_raster_attr_table(base_raster_path, attr_dict, column_name):
         None
 
     """
-    raster = gdal.OpenEx(base_raster_path, gdal.OF_RASTER | gdal.GA_Update)
-    band = raster.GetRasterBand(1)
-    attr_table = gdal.RasterAttributeTable()
-    attr_table.SetRowCount(len(attr_dict))
+    with utils.GDALUseExceptions():
+        raster = gdal.OpenEx(base_raster_path, gdal.OF_RASTER | gdal.GA_Update)
+        band = raster.GetRasterBand(1)
+        attr_table = gdal.RasterAttributeTable()
+        attr_table.SetRowCount(len(attr_dict))
 
-    # create columns
-    attr_table.CreateColumn('Value', gdal.GFT_Integer, gdal.GFU_MinMax)
-    attr_table.CreateColumn(column_name, gdal.GFT_String, gdal.GFU_Name)
+        # create columns
+        attr_table.CreateColumn('Value', gdal.GFT_Integer, gdal.GFU_MinMax)
+        attr_table.CreateColumn(column_name, gdal.GFT_String, gdal.GFU_Name)
 
-    row_count = 0
-    for key in sorted(attr_dict.keys()):
-        attr_table.SetValueAsInt(row_count, 0, int(key))
-        attr_table.SetValueAsString(row_count, 1, attr_dict[key])
-        row_count += 1
+        row_count = 0
+        for key in sorted(attr_dict.keys()):
+            attr_table.SetValueAsInt(row_count, 0, int(key))
+            attr_table.SetValueAsString(row_count, 1, attr_dict[key])
+            row_count += 1
 
-    band.SetDefaultRAT(attr_table)
-    raster = None
+        band.SetDefaultRAT(attr_table)
+        raster = None
 
 
 @validation.invest_validator

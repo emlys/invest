@@ -256,28 +256,29 @@ def _check_projection(srs, projected, projection_units):
         A string error message if an error was found. ``None`` otherwise.
 
     """
-    empty_srs = osr.SpatialReference()
-    if srs is None or srs.IsSame(empty_srs):
-        return MESSAGES['INVALID_PROJECTION']
+    with utils.GDALUseExceptions():
+        empty_srs = osr.SpatialReference()
+        if srs is None or srs.IsSame(empty_srs):
+            return MESSAGES['INVALID_PROJECTION']
 
-    if projected:
-        if not srs.IsProjected():
-            return MESSAGES['NOT_PROJECTED']
+        if projected:
+            if not srs.IsProjected():
+                return MESSAGES['NOT_PROJECTED']
 
-    if projection_units:
-        # pint uses underscores in multi-word units e.g. 'survey_foot'
-        # it is case-sensitive
-        layer_units_name = srs.GetLinearUnitsName().lower().replace(' ', '_')
-        try:
-            # this will parse common synonyms: m, meter, meters, metre, metres
-            layer_units = spec_utils.u.Unit(layer_units_name)
-            # Compare pint Unit objects
-            if projection_units != layer_units:
+        if projection_units:
+            # pint uses underscores in multi-word units e.g. 'survey_foot'
+            # it is case-sensitive
+            layer_units_name = srs.GetLinearUnitsName().lower().replace(' ', '_')
+            try:
+                # this will parse common synonyms: m, meter, meters, metre, metres
+                layer_units = spec_utils.u.Unit(layer_units_name)
+                # Compare pint Unit objects
+                if projection_units != layer_units:
+                    return MESSAGES['WRONG_PROJECTION_UNIT'].format(
+                        unit_a=projection_units, unit_b=layer_units_name)
+            except pint.errors.UndefinedUnitError:
                 return MESSAGES['WRONG_PROJECTION_UNIT'].format(
                     unit_a=projection_units, unit_b=layer_units_name)
-        except pint.errors.UndefinedUnitError:
-            return MESSAGES['WRONG_PROJECTION_UNIT'].format(
-                unit_a=projection_units, unit_b=layer_units_name)
 
     return None
 
@@ -297,30 +298,29 @@ def check_raster(filepath, projected=False, projection_units=None, **kwargs):
         A string error message if an error was found.  ``None`` otherwise.
 
     """
-    file_warning = check_file(filepath, permissions='r')
-    if file_warning:
-        return file_warning
+    with utils.GDALUseExceptions():
+        file_warning = check_file(filepath, permissions='r')
+        if file_warning:
+            return file_warning
 
-    gdal.PushErrorHandler('CPLQuietErrorHandler')
-    gdal_dataset = gdal.OpenEx(filepath, gdal.OF_RASTER)
-    gdal.PopErrorHandler()
+        try:
+            gdal_dataset = gdal.OpenEx(filepath, gdal.OF_RASTER)
+        except RuntimeError:
+            return MESSAGES['NOT_GDAL_RASTER']
+        # Check that an overview .ovr file wasn't opened.
+        if os.path.splitext(filepath)[1] == '.ovr':
+            return MESSAGES['OVR_FILE']
 
-    if gdal_dataset is None:
-        return MESSAGES['NOT_GDAL_RASTER']
-    # Check that an overview .ovr file wasn't opened.
-    if os.path.splitext(filepath)[1] == '.ovr':
-        return MESSAGES['OVR_FILE']
+        srs = osr.SpatialReference()
+        srs.ImportFromWkt(gdal_dataset.GetProjection())
 
-    srs = osr.SpatialReference()
-    srs.ImportFromWkt(gdal_dataset.GetProjection())
+        projection_warning = _check_projection(srs, projected, projection_units)
+        if projection_warning:
+            gdal_dataset = None
+            return projection_warning
 
-    projection_warning = _check_projection(srs, projected, projection_units)
-    if projection_warning:
         gdal_dataset = None
-        return projection_warning
-
-    gdal_dataset = None
-    return None
+        return None
 
 
 def load_fields_from_vector(filepath, layer_id=0):
@@ -337,11 +337,12 @@ def load_fields_from_vector(filepath, layer_id=0):
     if not os.path.exists(filepath):
         raise ValueError('File not found: %s' % filepath)
 
-    vector = gdal.OpenEx(filepath, gdal.OF_VECTOR)
-    layer = vector.GetLayer(layer_id)
-    fieldnames = [defn.GetName() for defn in layer.schema]
-    layer = None
-    vector = None
+    with utils.GDALUseExceptions():
+        vector = gdal.OpenEx(filepath, gdal.OF_VECTOR)
+        layer = vector.GetLayer(layer_id)
+        fieldnames = [defn.GetName() for defn in layer.schema]
+        layer = None
+        vector = None
     return fieldnames
 
 
@@ -371,57 +372,56 @@ def check_vector(filepath, geometries, fields=None, projected=False,
         A string error message if an error was found.  ``None`` otherwise.
 
     """
-    file_warning = check_file(filepath, permissions='r')
-    if file_warning:
-        return file_warning
+    with utils.GDALUseExceptions():
+        file_warning = check_file(filepath, permissions='r')
+        if file_warning:
+            return file_warning
 
-    gdal.PushErrorHandler('CPLQuietErrorHandler')
-    gdal_dataset = gdal.OpenEx(filepath, gdal.OF_VECTOR)
-    gdal.PopErrorHandler()
+        try:
+            gdal_dataset = gdal.OpenEx(filepath, gdal.OF_VECTOR)
+        except RuntimeError:
+            return MESSAGES['NOT_GDAL_VECTOR']
 
-    geom_map = {
-        'POINT': [ogr.wkbPoint, ogr.wkbPointM, ogr.wkbPointZM,
-                  ogr.wkbPoint25D],
-        'LINESTRING': [ogr.wkbLineString, ogr.wkbLineStringM,
-                       ogr.wkbLineStringZM, ogr.wkbLineString25D],
-        'POLYGON': [ogr.wkbPolygon, ogr.wkbPolygonM,
-                    ogr.wkbPolygonZM, ogr.wkbPolygon25D],
-        'MULTIPOINT': [ogr.wkbMultiPoint, ogr.wkbMultiPointM,
-                       ogr.wkbMultiPointZM, ogr.wkbMultiPoint25D],
-        'MULTILINESTRING': [ogr.wkbMultiLineString, ogr.wkbMultiLineStringM,
-                            ogr.wkbMultiLineStringZM,
-                            ogr.wkbMultiLineString25D],
-        'MULTIPOLYGON': [ogr.wkbMultiPolygon, ogr.wkbMultiPolygonM,
-                         ogr.wkbMultiPolygonZM, ogr.wkbMultiPolygon25D]
-    }
+        geom_map = {
+            'POINT': [ogr.wkbPoint, ogr.wkbPointM, ogr.wkbPointZM,
+                      ogr.wkbPoint25D],
+            'LINESTRING': [ogr.wkbLineString, ogr.wkbLineStringM,
+                           ogr.wkbLineStringZM, ogr.wkbLineString25D],
+            'POLYGON': [ogr.wkbPolygon, ogr.wkbPolygonM,
+                        ogr.wkbPolygonZM, ogr.wkbPolygon25D],
+            'MULTIPOINT': [ogr.wkbMultiPoint, ogr.wkbMultiPointM,
+                           ogr.wkbMultiPointZM, ogr.wkbMultiPoint25D],
+            'MULTILINESTRING': [ogr.wkbMultiLineString, ogr.wkbMultiLineStringM,
+                                ogr.wkbMultiLineStringZM,
+                                ogr.wkbMultiLineString25D],
+            'MULTIPOLYGON': [ogr.wkbMultiPolygon, ogr.wkbMultiPolygonM,
+                             ogr.wkbMultiPolygonZM, ogr.wkbMultiPolygon25D]
+        }
 
-    allowed_geom_types = []
-    for geom in geometries:
-        allowed_geom_types += geom_map[geom]
+        allowed_geom_types = []
+        for geom in geometries:
+            allowed_geom_types += geom_map[geom]
 
-    if gdal_dataset is None:
-        return MESSAGES['NOT_GDAL_VECTOR']
+        # NOTE: this only checks the layer geometry type, not the types of the
+        # actual geometries (layer.GetGeometryTypes()). This is probably equivalent
+        # in most cases, and it's more efficient than checking every geometry, but
+        # we might need to change this in the future if it becomes a problem.
+        # Currently not supporting ogr.wkbUnknown which allows mixed types.
+        layer = gdal_dataset.GetLayer()
+        if layer.GetGeomType() not in allowed_geom_types:
+            return MESSAGES['WRONG_GEOM_TYPE'].format(allowed=geometries)
 
-    # NOTE: this only checks the layer geometry type, not the types of the
-    # actual geometries (layer.GetGeometryTypes()). This is probably equivalent
-    # in most cases, and it's more efficient than checking every geometry, but
-    # we might need to change this in the future if it becomes a problem.
-    # Currently not supporting ogr.wkbUnknown which allows mixed types.
-    layer = gdal_dataset.GetLayer()
-    if layer.GetGeomType() not in allowed_geom_types:
-        return MESSAGES['WRONG_GEOM_TYPE'].format(allowed=geometries)
+        if fields:
+            field_patterns = get_headers_to_validate(fields)
+            fieldnames = [defn.GetName() for defn in layer.schema]
+            required_field_warning = check_headers(
+                field_patterns, fieldnames, 'field')
+            if required_field_warning:
+                return required_field_warning
 
-    if fields:
-        field_patterns = get_headers_to_validate(fields)
-        fieldnames = [defn.GetName() for defn in layer.schema]
-        required_field_warning = check_headers(
-            field_patterns, fieldnames, 'field')
-        if required_field_warning:
-            return required_field_warning
-
-    srs = layer.GetSpatialRef()
-    projection_warning = _check_projection(srs, projected, projection_units)
-    return projection_warning
+        srs = layer.GetSpatialRef()
+        projection_warning = _check_projection(srs, projected, projection_units)
+        return projection_warning
 
 
 def check_raster_or_vector(filepath, **kwargs):
@@ -787,9 +787,10 @@ def check_spatial_overlap(spatial_filepaths_list,
         A string error message if an error is found.  ``None`` otherwise.
 
     """
-    wgs84_srs = osr.SpatialReference()
-    wgs84_srs.ImportFromEPSG(4326)
-    wgs84_wkt = wgs84_srs.ExportToWkt()
+    with utils.GDALUseExceptions():
+        wgs84_srs = osr.SpatialReference()
+        wgs84_srs.ImportFromEPSG(4326)
+        wgs84_wkt = wgs84_srs.ExportToWkt()
 
     bounding_boxes = []
     checked_file_list = []

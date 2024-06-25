@@ -260,216 +260,219 @@ class RecModel(object):
             "PUD" field which contains the metric per polygon.
 
         """
-        aoi_vector = gdal.OpenEx(aoi_path, gdal.OF_VECTOR)
-        # append a _pud to the aoi filename
-        out_aoi_pud_path = os.path.join(workspace_path, out_vector_filename)
+        with utils.GDALUseExceptions():
+            aoi_vector = gdal.OpenEx(aoi_path, gdal.OF_VECTOR)
+            # append a _pud to the aoi filename
+            out_aoi_pud_path = os.path.join(workspace_path, out_vector_filename)
 
-        # start the workers now, because they have to load a quadtree and
-        # it will take some time
-        poly_test_queue = multiprocessing.Queue()
-        pud_poly_feature_queue = multiprocessing.Queue(4)
-        n_polytest_processes = multiprocessing.cpu_count()
+            # start the workers now, because they have to load a quadtree and
+            # it will take some time
+            poly_test_queue = multiprocessing.Queue()
+            pud_poly_feature_queue = multiprocessing.Queue(4)
+            n_polytest_processes = multiprocessing.cpu_count()
 
-        with open(self.qt_pickle_filename, 'rb') as qt_pickle:
-            global_qt = pickle.load(qt_pickle)
-        aoi_layer = aoi_vector.GetLayer()
-        aoi_extent = aoi_layer.GetExtent()
-        aoi_ref = aoi_layer.GetSpatialRef()
+            with open(self.qt_pickle_filename, 'rb') as qt_pickle:
+                global_qt = pickle.load(qt_pickle)
+            aoi_layer = aoi_vector.GetLayer()
+            aoi_extent = aoi_layer.GetExtent()
+            aoi_ref = aoi_layer.GetSpatialRef()
 
-        # coordinate transformation to convert AOI points to and from lat/lng
-        lat_lng_ref = osr.SpatialReference()
-        lat_lng_ref.ImportFromEPSG(4326)  # EPSG 4326 is lat/lng
+            # coordinate transformation to convert AOI points to and from lat/lng
+            lat_lng_ref = osr.SpatialReference()
+            lat_lng_ref.ImportFromEPSG(4326)  # EPSG 4326 is lat/lng
 
-        to_lat_trans = utils.create_coordinate_transformer(aoi_ref, lat_lng_ref)
-        from_lat_trans = utils.create_coordinate_transformer(lat_lng_ref, aoi_ref)
+            to_lat_trans = utils.create_coordinate_transformer(aoi_ref, lat_lng_ref)
+            from_lat_trans = utils.create_coordinate_transformer(lat_lng_ref, aoi_ref)
 
-        # calculate x_min transformed by comparing the x coordinate at both
-        # the top and bottom of the aoi extent and taking the minimum
-        x_min_y_min, _, _ = to_lat_trans.TransformPoint(
-            aoi_extent[0], aoi_extent[2])
-        x_min_y_max, _, _ = to_lat_trans.TransformPoint(
-            aoi_extent[0], aoi_extent[3])
-        x_min = min(x_min_y_min, x_min_y_max)
+            # calculate x_min transformed by comparing the x coordinate at both
+            # the top and bottom of the aoi extent and taking the minimum
+            x_min_y_min, _, _ = to_lat_trans.TransformPoint(
+                aoi_extent[0], aoi_extent[2])
+            x_min_y_max, _, _ = to_lat_trans.TransformPoint(
+                aoi_extent[0], aoi_extent[3])
+            x_min = min(x_min_y_min, x_min_y_max)
 
-        # calculate x_max transformed by comparing the x coordinate at both
-        # the top and bottom of the aoi extent and taking the maximum
-        x_max_y_min, _, _ = to_lat_trans.TransformPoint(
-            aoi_extent[1], aoi_extent[2])
-        x_max_y_max, _, _ = to_lat_trans.TransformPoint(
-            aoi_extent[1], aoi_extent[3])
-        x_max = max(x_max_y_min, x_max_y_max)
+            # calculate x_max transformed by comparing the x coordinate at both
+            # the top and bottom of the aoi extent and taking the maximum
+            x_max_y_min, _, _ = to_lat_trans.TransformPoint(
+                aoi_extent[1], aoi_extent[2])
+            x_max_y_max, _, _ = to_lat_trans.TransformPoint(
+                aoi_extent[1], aoi_extent[3])
+            x_max = max(x_max_y_min, x_max_y_max)
 
-        # calculate y_min transformed by comparing the y coordinate at both
-        # the top and bottom of the aoi extent and taking the minimum
-        _, y_min_x_min, _ = to_lat_trans.TransformPoint(
-            aoi_extent[0], aoi_extent[2])
-        _, y_min_x_max, _ = to_lat_trans.TransformPoint(
-            aoi_extent[1], aoi_extent[2])
-        y_min = min(y_min_x_min, y_min_x_max)
+            # calculate y_min transformed by comparing the y coordinate at both
+            # the top and bottom of the aoi extent and taking the minimum
+            _, y_min_x_min, _ = to_lat_trans.TransformPoint(
+                aoi_extent[0], aoi_extent[2])
+            _, y_min_x_max, _ = to_lat_trans.TransformPoint(
+                aoi_extent[1], aoi_extent[2])
+            y_min = min(y_min_x_min, y_min_x_max)
 
-        # calculate y_max transformed by comparing the y coordinate at both
-        # the top and bottom of the aoi extent and taking the maximum
-        _, y_max_x_min, _ = to_lat_trans.TransformPoint(
-            aoi_extent[0], aoi_extent[3])
-        _, y_max_x_max, _ = to_lat_trans.TransformPoint(
-            aoi_extent[1], aoi_extent[3])
-        y_max = max(y_max_x_min, y_max_x_max)
+            # calculate y_max transformed by comparing the y coordinate at both
+            # the top and bottom of the aoi extent and taking the maximum
+            _, y_max_x_min, _ = to_lat_trans.TransformPoint(
+                aoi_extent[0], aoi_extent[3])
+            _, y_max_x_max, _ = to_lat_trans.TransformPoint(
+                aoi_extent[1], aoi_extent[3])
+            y_max = max(y_max_x_min, y_max_x_max)
 
-        global_b_box = [x_min, y_min, x_max, y_max]
+            global_b_box = [x_min, y_min, x_max, y_max]
 
-        local_b_box = [
-            aoi_extent[0], aoi_extent[2], aoi_extent[1], aoi_extent[3]]
+            local_b_box = [
+                aoi_extent[0], aoi_extent[2], aoi_extent[1], aoi_extent[3]]
 
-        LOGGER.info(
-            'querying global quadtree against %s', str(global_b_box))
-        local_points = global_qt.get_intersecting_points_in_bounding_box(
-            global_b_box)
-        LOGGER.info('found %d points', len(local_points))
+            LOGGER.info(
+                'querying global quadtree against %s', str(global_b_box))
+            local_points = global_qt.get_intersecting_points_in_bounding_box(
+                global_b_box)
+            LOGGER.info('found %d points', len(local_points))
 
-        local_qt_cache_dir = os.path.join(workspace_path, 'local_qt')
-        local_qt_pickle_filename = os.path.join(
-            local_qt_cache_dir, 'local_qt.pickle')
-        os.mkdir(local_qt_cache_dir)
+            local_qt_cache_dir = os.path.join(workspace_path, 'local_qt')
+            local_qt_pickle_filename = os.path.join(
+                local_qt_cache_dir, 'local_qt.pickle')
+            os.mkdir(local_qt_cache_dir)
 
-        LOGGER.info('building local quadtree in bounds %s', str(local_b_box))
-        local_qt = out_of_core_quadtree.OutOfCoreQuadTree(
-            local_b_box, LOCAL_MAX_POINTS_PER_NODE, LOCAL_DEPTH,
-            local_qt_cache_dir, pickle_filename=local_qt_pickle_filename)
+            LOGGER.info('building local quadtree in bounds %s', str(local_b_box))
+            local_qt = out_of_core_quadtree.OutOfCoreQuadTree(
+                local_b_box, LOCAL_MAX_POINTS_PER_NODE, LOCAL_DEPTH,
+                local_qt_cache_dir, pickle_filename=local_qt_pickle_filename)
 
-        LOGGER.info(
-            'building local quadtree with %d points', len(local_points))
-        last_time = time.time()
-        time_elapsed = None
-        for point_list_slice_index in range(
-                0, len(local_points), POINTS_TO_ADD_PER_STEP):
-            time_elapsed = time.time() - last_time
-            last_time = recmodel_client.delay_op(
-                last_time, LOGGER_TIME_DELAY, lambda: LOGGER.info(
-                    '%d out of %d points added to local_qt so far, and '
-                    ' n_nodes in qt %d in %.2fs', local_qt.n_points(),
-                    len(local_points), local_qt.n_nodes(), time_elapsed))
-
-            projected_point_list = local_points[
-                point_list_slice_index:
-                point_list_slice_index+POINTS_TO_ADD_PER_STEP]
-            for point_index in range(
-                    min(len(projected_point_list), POINTS_TO_ADD_PER_STEP)):
-                current_point = projected_point_list[point_index]
-                # convert to python float types rather than numpy.float32
-                lng_coord = float(current_point[2])
-                lat_coord = float(current_point[3])
-                x_coord, y_coord, _ = from_lat_trans.TransformPoint(
-                    lng_coord, lat_coord)
-                projected_point_list[point_index] = (
-                    current_point[0], current_point[1], x_coord, y_coord)
-
-            local_qt.add_points(
-                projected_point_list, 0, len(projected_point_list))
-        LOGGER.info('saving local qt to %s', local_qt_pickle_filename)
-        local_qt.flush()
-
-        local_quad_tree_shapefile_name = os.path.join(
-            local_qt_cache_dir, 'local_qt.shp')
-
-        build_quadtree_shape(
-            local_quad_tree_shapefile_name, local_qt, aoi_ref)
-
-        # Start several testing processes
-        polytest_process_list = []
-        for _ in range(n_polytest_processes):
-            polytest_process = multiprocessing.Process(
-                target=_calc_poly_pud, args=(
-                    local_qt_pickle_filename, aoi_path, date_range,
-                    poly_test_queue, pud_poly_feature_queue))
-            polytest_process.daemon = True
-            polytest_process.start()
-            polytest_process_list.append(polytest_process)
-
-        # Copy the input shapefile into the designated output folder
-        LOGGER.info('Creating a copy of the input shapefile')
-        driver = gdal.GetDriverByName('ESRI Shapefile')
-        pud_aoi_vector = driver.CreateCopy(out_aoi_pud_path, aoi_vector)
-        pud_aoi_layer = pud_aoi_vector.GetLayer()
-
-        aoi_layer = None
-        gdal.Dataset.__swig_destroy__(aoi_vector)
-        aoi_vector = None
-
-        pud_id_suffix_list = [
-            'YR_AVG', 'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG',
-            'SEP', 'OCT', 'NOV', 'DEC']
-        for field_suffix in pud_id_suffix_list:
-            field_id = 'PUD_%s' % field_suffix
-            # delete the field if it already exists
-            field_index = pud_aoi_layer.FindFieldIndex(str(field_id), 1)
-            if field_index >= 0:
-                pud_aoi_layer.DeleteField(field_index)
-            field_defn = ogr.FieldDefn(field_id, ogr.OFTReal)
-            field_defn.SetWidth(24)
-            field_defn.SetPrecision(11)
-            pud_aoi_layer.CreateField(field_defn)
-
-        last_time = time.time()
-        LOGGER.info('testing polygons against quadtree')
-
-        # Load up the test queue with polygons
-        for poly_feat in pud_aoi_layer:
-            poly_test_queue.put(poly_feat.GetFID())
-
-        # Fill the queue with STOPs for each process
-        for _ in range(n_polytest_processes):
-            poly_test_queue.put('STOP')
-
-        # Read the result until we've seen n_processes_alive
-        n_processes_alive = n_polytest_processes
-        n_poly_tested = 0
-
-        monthly_table_path = os.path.join(workspace_path, 'monthly_table.csv')
-        date_range_year = [
-            date.tolist().timetuple().tm_year for date in date_range]
-        table_headers = [
-            '%s-%s' % (year, month) for year in range(
-                int(date_range_year[0]), int(date_range_year[1])+1)
-            for month in range(1, 13)]
-        with open(monthly_table_path, 'w') as monthly_table:
-            monthly_table.write('poly_id,' + ','.join(table_headers) + '\n')
-
-            while True:
-                result_tuple = pud_poly_feature_queue.get()
-                n_poly_tested += 1
-                if result_tuple == 'STOP':
-                    n_processes_alive -= 1
-                    if n_processes_alive == 0:
-                        break
-                    continue
+            LOGGER.info(
+                'building local quadtree with %d points', len(local_points))
+            last_time = time.time()
+            time_elapsed = None
+            for point_list_slice_index in range(
+                    0, len(local_points), POINTS_TO_ADD_PER_STEP):
+                time_elapsed = time.time() - last_time
                 last_time = recmodel_client.delay_op(
                     last_time, LOGGER_TIME_DELAY, lambda: LOGGER.info(
-                        '%.2f%% of polygons tested', 100 * float(n_poly_tested) /
-                        pud_aoi_layer.GetFeatureCount()))
-                poly_id, pud_list, pud_monthly_set = result_tuple
-                poly_feat = pud_aoi_layer.GetFeature(poly_id)
-                for pud_index, pud_id in enumerate(pud_id_suffix_list):
-                    poly_feat.SetField('PUD_%s' % pud_id, pud_list[pud_index])
-                pud_aoi_layer.SetFeature(poly_feat)
+                        '%d out of %d points added to local_qt so far, and '
+                        ' n_nodes in qt %d in %.2fs', local_qt.n_points(),
+                        len(local_points), local_qt.n_nodes(), time_elapsed))
 
-                line = '%s,' % poly_id
-                line += (
-                    ",".join(['%s' % len(pud_monthly_set[header])
-                              for header in table_headers]))
-                line += '\n'  # final newline
-                monthly_table.write(line)
+                projected_point_list = local_points[
+                    point_list_slice_index:
+                    point_list_slice_index+POINTS_TO_ADD_PER_STEP]
+                for point_index in range(
+                        min(len(projected_point_list), POINTS_TO_ADD_PER_STEP)):
+                    current_point = projected_point_list[point_index]
+                    # convert to python float types rather than numpy.float32
+                    lng_coord = float(current_point[2])
+                    lat_coord = float(current_point[3])
+                    x_coord, y_coord, _ = from_lat_trans.TransformPoint(
+                        lng_coord, lat_coord)
+                    projected_point_list[point_index] = (
+                        current_point[0], current_point[1], x_coord, y_coord)
 
-        LOGGER.info('done with polygon test, syncing to disk')
-        pud_aoi_layer = None
-        pud_aoi_vector.FlushCache()
-        gdal.Dataset.__swig_destroy__(pud_aoi_vector)
-        pud_aoi_vector = None
+                local_qt.add_points(
+                    projected_point_list, 0, len(projected_point_list))
+            LOGGER.info('saving local qt to %s', local_qt_pickle_filename)
+            local_qt.flush()
 
-        for polytest_process in polytest_process_list:
-            polytest_process.join()
+            local_quad_tree_shapefile_name = os.path.join(
+                local_qt_cache_dir, 'local_qt.shp')
 
-        LOGGER.info('returning out shapefile path')
-        return out_aoi_pud_path, monthly_table_path
+            build_quadtree_shape(
+                local_quad_tree_shapefile_name, local_qt, aoi_ref)
+
+            # Start several testing processes
+            polytest_process_list = []
+            for _ in range(n_polytest_processes):
+                polytest_process = multiprocessing.Process(
+                    target=_calc_poly_pud, args=(
+                        local_qt_pickle_filename, aoi_path, date_range,
+                        poly_test_queue, pud_poly_feature_queue))
+                polytest_process.daemon = True
+                polytest_process.start()
+                polytest_process_list.append(polytest_process)
+
+            # Copy the input shapefile into the designated output folder
+            LOGGER.info('Creating a copy of the input shapefile')
+            driver = gdal.GetDriverByName('ESRI Shapefile')
+            pud_aoi_vector = driver.CreateCopy(out_aoi_pud_path, aoi_vector)
+            pud_aoi_layer = pud_aoi_vector.GetLayer()
+
+            aoi_layer = None
+            gdal.Dataset.__swig_destroy__(aoi_vector)
+            aoi_vector = None
+
+            pud_id_suffix_list = [
+                'YR_AVG', 'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG',
+                'SEP', 'OCT', 'NOV', 'DEC']
+            for field_suffix in pud_id_suffix_list:
+                field_id = 'PUD_%s' % field_suffix
+                # delete the field if it already exists
+                field_index = pud_aoi_layer.FindFieldIndex(str(field_id), 1)
+                if field_index >= 0:
+                    pud_aoi_layer.DeleteField(field_index)
+                field_defn = ogr.FieldDefn(field_id, ogr.OFTReal)
+                field_defn.SetWidth(24)
+                field_defn.SetPrecision(11)
+                pud_aoi_layer.CreateField(field_defn)
+
+            last_time = time.time()
+            LOGGER.info('testing polygons against quadtree')
+
+            # Load up the test queue with polygons
+            for poly_feat in pud_aoi_layer:
+                poly_test_queue.put(poly_feat.GetFID())
+
+            # Fill the queue with STOPs for each process
+            for _ in range(n_polytest_processes):
+                poly_test_queue.put('STOP')
+
+            # Read the result until we've seen n_processes_alive
+            n_processes_alive = n_polytest_processes
+            n_poly_tested = 0
+
+            monthly_table_path = os.path.join(workspace_path, 'monthly_table.csv')
+            date_range_year = [
+                date.tolist().timetuple().tm_year for date in date_range]
+            table_headers = [
+                '%s-%s' % (year, month) for year in range(
+                    int(date_range_year[0]), int(date_range_year[1])+1)
+                for month in range(1, 13)]
+            with open(monthly_table_path, 'w') as monthly_table:
+                monthly_table.write('poly_id,' + ','.join(table_headers) + '\n')
+
+                while True:
+                    result_tuple = pud_poly_feature_queue.get()
+                    n_poly_tested += 1
+                    if result_tuple == 'STOP':
+                        n_processes_alive -= 1
+                        if n_processes_alive == 0:
+                            break
+                        continue
+                    last_time = recmodel_client.delay_op(
+                        last_time, LOGGER_TIME_DELAY, lambda: LOGGER.info(
+                            '%.2f%% of polygons tested',
+                            100 * float(n_poly_tested) /
+                            pud_aoi_layer.GetFeatureCount()))
+                    poly_id, pud_list, pud_monthly_set = result_tuple
+                    poly_feat = pud_aoi_layer.GetFeature(poly_id)
+                    for pud_index, pud_id in enumerate(pud_id_suffix_list):
+                        poly_feat.SetField(
+                            'PUD_%s' % pud_id, pud_list[pud_index])
+                    pud_aoi_layer.SetFeature(poly_feat)
+
+                    line = '%s,' % poly_id
+                    line += (
+                        ",".join(['%s' % len(pud_monthly_set[header])
+                                  for header in table_headers]))
+                    line += '\n'  # final newline
+                    monthly_table.write(line)
+
+            LOGGER.info('done with polygon test, syncing to disk')
+            pud_aoi_layer = None
+            pud_aoi_vector.FlushCache()
+            gdal.Dataset.__swig_destroy__(pud_aoi_vector)
+            pud_aoi_vector = None
+
+            for polytest_process in polytest_process_list:
+                polytest_process.join()
+
+            LOGGER.info('returning out shapefile path')
+            return out_aoi_pud_path, monthly_table_path
 
 
 def _parse_input_csv(
@@ -653,10 +656,11 @@ def construct_userday_quadtree(
         quad_tree_shapefile_name = os.path.join(
             cache_dir, 'quad_tree_shape.shp')
 
-        lat_lng_ref = osr.SpatialReference()
-        lat_lng_ref.ImportFromEPSG(4326)  # EPSG 4326 is lat/lng
-        LOGGER.info("building quadtree shapefile overview")
-        build_quadtree_shape(quad_tree_shapefile_name, ooc_qt, lat_lng_ref)
+        with utils.GDALUseExceptions():
+            lat_lng_ref = osr.SpatialReference()
+            lat_lng_ref.ImportFromEPSG(4326)  # EPSG 4326 is lat/lng
+            LOGGER.info("building quadtree shapefile overview")
+            build_quadtree_shape(quad_tree_shapefile_name, ooc_qt, lat_lng_ref)
 
     populate_thread.join()
     parse_input_csv_process.join()
@@ -680,18 +684,19 @@ def build_quadtree_shape(
         None
     """
     LOGGER.info('updating quadtree shape at %s', quad_tree_shapefile_path)
-    driver = ogr.GetDriverByName('ESRI Shapefile')
+    with utils.GDALUseExceptions():
+        driver = ogr.GetDriverByName('ESRI Shapefile')
 
-    if os.path.isfile(quad_tree_shapefile_path):
-        os.remove(quad_tree_shapefile_path)
-    datasource = driver.CreateDataSource(quad_tree_shapefile_path)
+        if os.path.isfile(quad_tree_shapefile_path):
+            os.remove(quad_tree_shapefile_path)
+        datasource = driver.CreateDataSource(quad_tree_shapefile_path)
 
-    polygon_layer = datasource.CreateLayer(
-        'quad_tree_shape', spatial_reference, ogr.wkbPolygon)
+        polygon_layer = datasource.CreateLayer(
+            'quad_tree_shape', spatial_reference, ogr.wkbPolygon)
 
-    # Add a field to identify how deep the node is
-    polygon_layer.CreateField(ogr.FieldDefn('n_points', ogr.OFTInteger))
-    polygon_layer.CreateField(ogr.FieldDefn('bb_box', ogr.OFTString))
+        # Add a field to identify how deep the node is
+        polygon_layer.CreateField(ogr.FieldDefn('n_points', ogr.OFTInteger))
+        polygon_layer.CreateField(ogr.FieldDefn('bb_box', ogr.OFTString))
     quadtree.build_node_shapes(polygon_layer)
 
 
@@ -721,8 +726,8 @@ def _calc_poly_pud(
         local_qt = pickle.load(qt_pickle)
     LOGGER.info('local qt load took %.2fs', time.time() - start_time)
 
-    aoi_vector = gdal.OpenEx(aoi_path, gdal.OF_VECTOR)
-    if aoi_vector:
+    with utils.GDALUseExceptions():
+        aoi_vector = gdal.OpenEx(aoi_path, gdal.OF_VECTOR)
         aoi_layer = aoi_vector.GetLayer()
 
         for poly_id in iter(poly_test_queue.get, 'STOP'):
@@ -770,10 +775,10 @@ def _calc_poly_pud(
                     len(monthly_pud_set) / float(n_years))
 
             pud_poly_feature_queue.put((poly_id, pud_averages, pud_monthly_set))
-    pud_poly_feature_queue.put('STOP')
-    aoi_layer = None
-    gdal.Dataset.__swig_destroy__(aoi_vector)
-    aoi_vector = None
+        pud_poly_feature_queue.put('STOP')
+        aoi_layer = None
+        gdal.Dataset.__swig_destroy__(aoi_vector)
+        aoi_vector = None
 
 
 def execute(args):

@@ -1364,179 +1364,180 @@ def _calculate_npv_levelized_rasters(
         _TARGET_DATA_TYPE, [_TARGET_NODATA])
 
     # Open raster bands for writing
-    npv_raster = gdal.OpenEx(
-        target_npv_raster_path, gdal.OF_RASTER | gdal.GA_Update)
-    npv_band = npv_raster.GetRasterBand(1)
-    levelized_raster = gdal.OpenEx(
-        target_levelized_raster_path, gdal.OF_RASTER | gdal.GA_Update)
-    levelized_band = levelized_raster.GetRasterBand(1)
+    with utils.GDALUseExceptions():
+        npv_raster = gdal.OpenEx(
+            target_npv_raster_path, gdal.OF_RASTER | gdal.GA_Update)
+        npv_band = npv_raster.GetRasterBand(1)
+        levelized_raster = gdal.OpenEx(
+            target_levelized_raster_path, gdal.OF_RASTER | gdal.GA_Update)
+        levelized_band = levelized_raster.GetRasterBand(1)
 
-    # Get constants from parameters_dict to make it more readable
-    # The length of infield cable in km
-    infield_length = parameters_dict['infield_cable_length']
-    # The cost of infield cable in currency units per km
-    infield_cost = parameters_dict['infield_cable_cost']
-    # The cost of the foundation in currency units
-    foundation_cost = parameters_dict['foundation_cost']
-    # The cost of each turbine unit in currency units
-    unit_cost = parameters_dict['turbine_cost']
-    # The installation cost as a decimal
-    install_cost = parameters_dict['installation_cost']
-    # The miscellaneous costs as a decimal factor of capex_arr
-    misc_capex_cost = parameters_dict['miscellaneous_capex_cost']
-    # The operations and maintenance costs as a decimal factor of capex_arr
-    op_maint_cost = parameters_dict['operation_maintenance_cost']
-    # The discount rate as a decimal
-    discount_rate = parameters_dict['discount_rate']
-    # The cost to decommission the farm as a decimal factor of capex_arr
-    decom = parameters_dict['decommission_cost']
-    # The mega watt value for the turbines in MW
-    mega_watt = parameters_dict['turbine_rated_pwr']
-    # The distance at which AC switches over to DC power
-    circuit_break = parameters_dict['ac_dc_distance_break']
-    # The coefficients for the AC/DC megawatt and cable cost from the CAP
-    # function
-    mw_coef_ac = parameters_dict['mw_coef_ac']
-    mw_coef_dc = parameters_dict['mw_coef_dc']
-    cable_coef_ac = parameters_dict['cable_coef_ac']
-    cable_coef_dc = parameters_dict['cable_coef_dc']
+        # Get constants from parameters_dict to make it more readable
+        # The length of infield cable in km
+        infield_length = parameters_dict['infield_cable_length']
+        # The cost of infield cable in currency units per km
+        infield_cost = parameters_dict['infield_cable_cost']
+        # The cost of the foundation in currency units
+        foundation_cost = parameters_dict['foundation_cost']
+        # The cost of each turbine unit in currency units
+        unit_cost = parameters_dict['turbine_cost']
+        # The installation cost as a decimal
+        install_cost = parameters_dict['installation_cost']
+        # The miscellaneous costs as a decimal factor of capex_arr
+        misc_capex_cost = parameters_dict['miscellaneous_capex_cost']
+        # The operations and maintenance costs as a decimal factor of capex_arr
+        op_maint_cost = parameters_dict['operation_maintenance_cost']
+        # The discount rate as a decimal
+        discount_rate = parameters_dict['discount_rate']
+        # The cost to decommission the farm as a decimal factor of capex_arr
+        decom = parameters_dict['decommission_cost']
+        # The mega watt value for the turbines in MW
+        mega_watt = parameters_dict['turbine_rated_pwr']
+        # The distance at which AC switches over to DC power
+        circuit_break = parameters_dict['ac_dc_distance_break']
+        # The coefficients for the AC/DC megawatt and cable cost from the CAP
+        # function
+        mw_coef_ac = parameters_dict['mw_coef_ac']
+        mw_coef_dc = parameters_dict['mw_coef_dc']
+        cable_coef_ac = parameters_dict['cable_coef_ac']
+        cable_coef_dc = parameters_dict['cable_coef_dc']
 
-    # The total mega watt capacity of the wind farm where mega watt is the
-    # turbines rated power
-    number_of_turbines = int(parameters_dict['number_of_turbines'])
-    total_mega_watt = mega_watt * number_of_turbines
+        # The total mega watt capacity of the wind farm where mega watt is the
+        # turbines rated power
+        number_of_turbines = int(parameters_dict['number_of_turbines'])
+        total_mega_watt = mega_watt * number_of_turbines
 
-    # Total infield cable cost
-    infield_cable_cost = infield_length * infield_cost * number_of_turbines
-    LOGGER.debug('infield_cable_cost : %s', infield_cable_cost)
+        # Total infield cable cost
+        infield_cable_cost = infield_length * infield_cost * number_of_turbines
+        LOGGER.debug('infield_cable_cost : %s', infield_cable_cost)
 
-    # Total foundation cost
-    total_foundation_cost = (foundation_cost + unit_cost) * number_of_turbines
-    LOGGER.debug('total_foundation_cost : %s', total_foundation_cost)
+        # Total foundation cost
+        total_foundation_cost = (foundation_cost + unit_cost) * number_of_turbines
+        LOGGER.debug('total_foundation_cost : %s', total_foundation_cost)
 
-    # Nominal Capital Cost (CAP) minus the cost of cable which needs distances
-    cap_less_dist = infield_cable_cost + total_foundation_cost
-    LOGGER.debug('cap_less_dist : %s', cap_less_dist)
+        # Nominal Capital Cost (CAP) minus the cost of cable which needs distances
+        cap_less_dist = infield_cable_cost + total_foundation_cost
+        LOGGER.debug('cap_less_dist : %s', cap_less_dist)
 
-    # Discount rate plus one to get that constant
-    disc_const = discount_rate + 1
-    LOGGER.debug('discount_rate : %s', disc_const)
+        # Discount rate plus one to get that constant
+        disc_const = discount_rate + 1
+        LOGGER.debug('discount_rate : %s', disc_const)
 
-    # Discount constant raised to the total time, a constant found in the NPV
-    # calculation (1+i)^T
-    disc_time = disc_const**parameters_dict['time_period']
-    LOGGER.debug('disc_time : %s', disc_time)
+        # Discount constant raised to the total time, a constant found in the NPV
+        # calculation (1+i)^T
+        disc_time = disc_const**parameters_dict['time_period']
+        LOGGER.debug('disc_time : %s', disc_time)
 
-    for (harvest_block_info, harvest_block_data), (_, dist_block_data) in zip(
-            pygeoprocessing.iterblocks((base_harvested_raster_path, 1)),
-            pygeoprocessing.iterblocks((base_dist_raster_path, 1))):
+        for (harvest_block_info, harvest_block_data), (_, dist_block_data) in zip(
+                pygeoprocessing.iterblocks((base_harvested_raster_path, 1)),
+                pygeoprocessing.iterblocks((base_dist_raster_path, 1))):
 
-        target_arr_shape = harvest_block_data.shape
-        target_nodata_mask = pygeoprocessing.array_equals_nodata(
-            harvest_block_data, _TARGET_NODATA)
+            target_arr_shape = harvest_block_data.shape
+            target_nodata_mask = pygeoprocessing.array_equals_nodata(
+                harvest_block_data, _TARGET_NODATA)
 
-        # Total cable distance converted to kilometers
-        cable_dist_arr = dist_block_data / 1000
+            # Total cable distance converted to kilometers
+            cable_dist_arr = dist_block_data / 1000
 
-        # The energy value converted from MWhr/yr (Mega Watt hours as output
-        # from CK's biophysical model equations) to kWhr/yr for the
-        # valuation model
-        energy_val_arr = harvest_block_data * 1000
+            # The energy value converted from MWhr/yr (Mega Watt hours as output
+            # from CK's biophysical model equations) to kWhr/yr for the
+            # valuation model
+            energy_val_arr = harvest_block_data * 1000
 
-        # Calculate cable cost. The break at 'circuit_break' indicates the
-        # difference in using AC and DC current systems
-        circuit_mask = (cable_dist_arr <= circuit_break)
-        cable_cost_arr = numpy.full(target_arr_shape, 0, dtype=numpy.float32)
+            # Calculate cable cost. The break at 'circuit_break' indicates the
+            # difference in using AC and DC current systems
+            circuit_mask = (cable_dist_arr <= circuit_break)
+            cable_cost_arr = numpy.full(target_arr_shape, 0, dtype=numpy.float32)
 
-        # Calculate AC cable cost
-        cable_cost_arr[circuit_mask] = cable_dist_arr[
-            circuit_mask] * cable_coef_ac + (mw_coef_ac * total_mega_watt)
-        # Calculate DC cable cost
-        cable_cost_arr[~circuit_mask] = cable_dist_arr[
-            ~circuit_mask] * cable_coef_dc + (mw_coef_dc * total_mega_watt)
-        # Mask out nodata values
-        cable_cost_arr[target_nodata_mask] = _TARGET_NODATA
+            # Calculate AC cable cost
+            cable_cost_arr[circuit_mask] = cable_dist_arr[
+                circuit_mask] * cable_coef_ac + (mw_coef_ac * total_mega_watt)
+            # Calculate DC cable cost
+            cable_cost_arr[~circuit_mask] = cable_dist_arr[
+                ~circuit_mask] * cable_coef_dc + (mw_coef_dc * total_mega_watt)
+            # Mask out nodata values
+            cable_cost_arr[target_nodata_mask] = _TARGET_NODATA
 
-        # Compute the total CAP
-        cap_arr = cap_less_dist + cable_cost_arr
+            # Compute the total CAP
+            cap_arr = cap_less_dist + cable_cost_arr
 
-        # Nominal total capital costs including installation and
-        # miscellaneous costs (capex_arr)
-        capex_arr = cap_arr / (1 - install_cost - misc_capex_cost)
+            # Nominal total capital costs including installation and
+            # miscellaneous costs (capex_arr)
+            capex_arr = cap_arr / (1 - install_cost - misc_capex_cost)
 
-        # The ongoing cost of the farm
-        ongoing_capex_arr = op_maint_cost * capex_arr
+            # The ongoing cost of the farm
+            ongoing_capex_arr = op_maint_cost * capex_arr
 
-        # The cost to decommission the farm
-        decommish_capex_arr = decom * capex_arr / disc_time
+            # The cost to decommission the farm
+            decommish_capex_arr = decom * capex_arr / disc_time
 
-        # Initialize the summation of the revenue less the ongoing costs,
-        # adjusted for discount rate
-        npv_arr = numpy.full(
-            target_arr_shape, 0, dtype=numpy.float32)
+            # Initialize the summation of the revenue less the ongoing costs,
+            # adjusted for discount rate
+            npv_arr = numpy.full(
+                target_arr_shape, 0, dtype=numpy.float32)
 
-        # Initialize the numerator summation part of the levelized cost
-        levelized_num_arr = numpy.full(
-            target_arr_shape, 0, dtype=numpy.float32)
+            # Initialize the numerator summation part of the levelized cost
+            levelized_num_arr = numpy.full(
+                target_arr_shape, 0, dtype=numpy.float32)
 
-        # Initialize and calculate the denominator summation value for
-        # levelized cost of energy at year 0
-        levelized_denom_arr = numpy.full(
-            target_arr_shape, 0, dtype=numpy.float32)
-        levelized_denom_arr = energy_val_arr / disc_const**0
+            # Initialize and calculate the denominator summation value for
+            # levelized cost of energy at year 0
+            levelized_denom_arr = numpy.full(
+                target_arr_shape, 0, dtype=numpy.float32)
+            levelized_denom_arr = energy_val_arr / disc_const**0
 
-        # Calculate the total NPV and the levelized cost over the lifespan of
-        # the wind farm. Starting at year 1, because year 0 yields no revenue
-        for year in range(1, len(price_list)):
-            # currency units per kilowatt-hour of that year
-            currency_per_kwh = price_list[year]
+            # Calculate the total NPV and the levelized cost over the lifespan of
+            # the wind farm. Starting at year 1, because year 0 yields no revenue
+            for year in range(1, len(price_list)):
+                # currency units per kilowatt-hour of that year
+                currency_per_kwh = price_list[year]
 
-            # The revenue for the wind farm. The energy_val_arr is in kWh/yr
-            rev_arr = energy_val_arr * currency_per_kwh
+                # The revenue for the wind farm. The energy_val_arr is in kWh/yr
+                rev_arr = energy_val_arr * currency_per_kwh
 
-            # Calculate the net present value (NPV), the summation of the net
-            # revenue from power generation, adjusted for discount rate
-            npv_arr = (
-                npv_arr + (rev_arr - ongoing_capex_arr) / disc_const**year)
+                # Calculate the net present value (NPV), the summation of the net
+                # revenue from power generation, adjusted for discount rate
+                npv_arr = (
+                    npv_arr + (rev_arr - ongoing_capex_arr) / disc_const**year)
 
-            # Calculate the cumulative numerator summation value
-            levelized_num_arr = levelized_num_arr + (
-                (ongoing_capex_arr / disc_const**year))
+                # Calculate the cumulative numerator summation value
+                levelized_num_arr = levelized_num_arr + (
+                    (ongoing_capex_arr / disc_const**year))
 
-            # Calculate the cumulative denominator summation value
-            levelized_denom_arr = levelized_denom_arr + (
-                energy_val_arr / disc_const**year)
+                # Calculate the cumulative denominator summation value
+                levelized_denom_arr = levelized_denom_arr + (
+                    energy_val_arr / disc_const**year)
 
-        # Calculate the final NPV by subtracting other costs from the NPV
-        npv_arr[target_nodata_mask] = _TARGET_NODATA
-        npv_arr[~target_nodata_mask] = (
-            npv_arr[~target_nodata_mask] -
-            decommish_capex_arr[~target_nodata_mask] -
-            capex_arr[~target_nodata_mask])
+            # Calculate the final NPV by subtracting other costs from the NPV
+            npv_arr[target_nodata_mask] = _TARGET_NODATA
+            npv_arr[~target_nodata_mask] = (
+                npv_arr[~target_nodata_mask] -
+                decommish_capex_arr[~target_nodata_mask] -
+                capex_arr[~target_nodata_mask])
 
-        # Calculate the levelized cost of energy
-        levelized_arr = (
-            (levelized_num_arr + decommish_capex_arr + capex_arr) /
-            levelized_denom_arr)
-        levelized_arr[target_nodata_mask] = _TARGET_NODATA
+            # Calculate the levelized cost of energy
+            levelized_arr = (
+                (levelized_num_arr + decommish_capex_arr + capex_arr) /
+                levelized_denom_arr)
+            levelized_arr[target_nodata_mask] = _TARGET_NODATA
 
-        npv_band.WriteArray(npv_arr,
-                            xoff=harvest_block_info['xoff'],
-                            yoff=harvest_block_info['yoff'])
-        npv_band.FlushCache()
+            npv_band.WriteArray(npv_arr,
+                                xoff=harvest_block_info['xoff'],
+                                yoff=harvest_block_info['yoff'])
+            npv_band.FlushCache()
 
-        levelized_band.WriteArray(levelized_arr,
-                                  xoff=harvest_block_info['xoff'],
-                                  yoff=harvest_block_info['yoff'])
-        levelized_band.FlushCache()
+            levelized_band.WriteArray(levelized_arr,
+                                      xoff=harvest_block_info['xoff'],
+                                      yoff=harvest_block_info['yoff'])
+            levelized_band.FlushCache()
 
-    npv_band = None
-    npv_raster.FlushCache()
-    npv_raster = None
+        npv_band = None
+        npv_raster.FlushCache()
+        npv_raster = None
 
-    levelized_band = None
-    levelized_raster.FlushCache()
-    levelized_raster = None
+        levelized_band = None
+        levelized_raster.FlushCache()
+        levelized_raster = None
 
 
 def _get_feature_count(base_vector_path):
@@ -1550,11 +1551,12 @@ def _get_feature_count(base_vector_path):
         feature_count (float): the feature count in the base vector.
 
     """
-    vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
-    layer = vector.GetLayer()
-    feature_count = layer.GetFeatureCount()
-    layer = None
-    vector = None
+    with utils.GDALUseExceptions():
+        vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
+        layer = vector.GetLayer()
+        feature_count = layer.GetFeatureCount()
+        layer = None
+        vector = None
 
     return feature_count
 
@@ -1758,55 +1760,56 @@ def _calculate_land_to_grid_distance(
     # Copy the point vector
     _, driver_name = _get_file_ext_and_driver_name(
         target_land_vector_path)
-    base_land_vector = ogr.Open(base_land_vector_path, gdal.OF_VECTOR)
-    driver = ogr.GetDriverByName(driver_name)
-    driver.CopyDataSource(base_land_vector, target_land_vector_path)
-    base_land_vector = None
+    with utils.GDALUseExceptions():
+        base_land_vector = ogr.Open(base_land_vector_path, gdal.OF_VECTOR)
+        driver = ogr.GetDriverByName(driver_name)
+        driver.CopyDataSource(base_land_vector, target_land_vector_path)
+        base_land_vector = None
 
-    target_land_vector = gdal.OpenEx(
-        target_land_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    base_grid_vector = gdal.OpenEx(
-        base_grid_vector_path, gdal.OF_VECTOR | gdal.GA_ReadOnly)
+        target_land_vector = gdal.OpenEx(
+            target_land_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        base_grid_vector = gdal.OpenEx(
+            base_grid_vector_path, gdal.OF_VECTOR | gdal.GA_ReadOnly)
 
-    base_grid_layer = base_grid_vector.GetLayer()
-    # List to store the grid point geometries as shapely objects
-    grid_point_list = []
+        base_grid_layer = base_grid_vector.GetLayer()
+        # List to store the grid point geometries as shapely objects
+        grid_point_list = []
 
-    LOGGER.info('Loading the polygons into Shapely')
-    for grid_point_feat in base_grid_layer:
-        # Get the geometry of the grid point in WKT format
-        grid_point_wkt = grid_point_feat.GetGeometryRef().ExportToWkt()
-        # Load the geometry into shapely making it a shapely object
-        shapely_grid_point = shapely.wkt.loads(grid_point_wkt)
-        # Add the shapely point geometry to a list
-        grid_point_list.append(shapely_grid_point)
+        LOGGER.info('Loading the polygons into Shapely')
+        for grid_point_feat in base_grid_layer:
+            # Get the geometry of the grid point in WKT format
+            grid_point_wkt = grid_point_feat.GetGeometryRef().ExportToWkt()
+            # Load the geometry into shapely making it a shapely object
+            shapely_grid_point = shapely.wkt.loads(grid_point_wkt)
+            # Add the shapely point geometry to a list
+            grid_point_list.append(shapely_grid_point)
 
-    # Take the union over the list of points to get one point collection object
-    LOGGER.info('Get the collection of polygon geometries by taking the union')
-    grid_point_collection = shapely.ops.unary_union(grid_point_list)
+        # Take the union over the list of points to get one point collection object
+        LOGGER.info('Get the collection of polygon geometries by taking the union')
+        grid_point_collection = shapely.ops.unary_union(grid_point_list)
 
-    target_land_layer = target_land_vector.GetLayer()
-    # Create a new distance field based on the name given
-    dist_field_defn = ogr.FieldDefn(dist_field_name, ogr.OFTReal)
-    target_land_layer.CreateField(dist_field_defn)
+        target_land_layer = target_land_vector.GetLayer()
+        # Create a new distance field based on the name given
+        dist_field_defn = ogr.FieldDefn(dist_field_name, ogr.OFTReal)
+        target_land_layer.CreateField(dist_field_defn)
 
-    LOGGER.info('Loading the points into shapely')
-    for land_point_feat in target_land_layer:
-        # Get the geometry of the point in WKT format
-        land_point_wkt = land_point_feat.GetGeometryRef().ExportToWkt()
-        # Load the geometry into shapely making it a shapely object
-        shapely_land_point = shapely.wkt.loads(land_point_wkt)
-        # Get the distance in meters and convert to km
-        land_to_grid_dist = shapely_land_point.distance(
-            grid_point_collection) / 1000
-        # Add the distance value to the new field and set to the feature
-        land_point_feat.SetField(dist_field_name, land_to_grid_dist)
-        target_land_layer.SetFeature(land_point_feat)
+        LOGGER.info('Loading the points into shapely')
+        for land_point_feat in target_land_layer:
+            # Get the geometry of the point in WKT format
+            land_point_wkt = land_point_feat.GetGeometryRef().ExportToWkt()
+            # Load the geometry into shapely making it a shapely object
+            shapely_land_point = shapely.wkt.loads(land_point_wkt)
+            # Get the distance in meters and convert to km
+            land_to_grid_dist = shapely_land_point.distance(
+                grid_point_collection) / 1000
+            # Add the distance value to the new field and set to the feature
+            land_point_feat.SetField(dist_field_name, land_to_grid_dist)
+            target_land_layer.SetFeature(land_point_feat)
 
-    target_land_layer = None
-    target_land_vector = None
-    base_grid_layer = None
-    base_grid_vector = None
+        target_land_layer = None
+        target_land_vector = None
+        base_grid_layer = None
+        base_grid_vector = None
 
     LOGGER.info('Finished _calculate_land_to_grid_distance.')
 
@@ -1893,15 +1896,16 @@ def _create_distance_raster(base_raster_path, base_vector_path,
         sampling_distance=pixel_xy_scale)
 
     # Set the nodata value of output raster to _TARGET_NODATA
-    target_dist_raster = gdal.OpenEx(
-        target_dist_raster_path, gdal.OF_RASTER | gdal.GA_Update)
-    for band in range(1, target_dist_raster.RasterCount+1):
-        target_band = target_dist_raster.GetRasterBand(band)
-        target_band.SetNoDataValue(_TARGET_NODATA)
-        target_band.FlushCache()
-        target_band = None
-    target_dist_raster.FlushCache()
-    target_dist_raster = None
+    with utils.GDALUseExceptions():
+        target_dist_raster = gdal.OpenEx(
+            target_dist_raster_path, gdal.OF_RASTER | gdal.GA_Update)
+        for band in range(1, target_dist_raster.RasterCount+1):
+            target_band = target_dist_raster.GetRasterBand(band)
+            target_band.SetNoDataValue(_TARGET_NODATA)
+            target_band.FlushCache()
+            target_band = None
+        target_dist_raster.FlushCache()
+        target_dist_raster = None
 
     shutil.rmtree(temp_dir, ignore_errors=True)
     LOGGER.info("Finished _create_distance_raster")
@@ -2091,62 +2095,63 @@ def _dictionary_to_point_vector(
     """
     # If the target_vector_path exists delete it
     _, driver_name = _get_file_ext_and_driver_name(target_vector_path)
-    output_driver = ogr.GetDriverByName(driver_name)
-    if os.path.exists(target_vector_path):
-        output_driver.DeleteDataSource(target_vector_path)
+    with utils.GDALUseExceptions():
+        output_driver = ogr.GetDriverByName(driver_name)
+        if os.path.exists(target_vector_path):
+            output_driver.DeleteDataSource(target_vector_path)
 
-    target_vector = output_driver.CreateDataSource(target_vector_path)
+        target_vector = output_driver.CreateDataSource(target_vector_path)
 
-    # Set the spatial reference to WGS84 (lat/long)
-    source_sr = osr.SpatialReference()
-    source_sr.SetWellKnownGeogCS("WGS84")
+        # Set the spatial reference to WGS84 (lat/long)
+        source_sr = osr.SpatialReference()
+        source_sr.SetWellKnownGeogCS("WGS84")
 
-    output_layer = target_vector.CreateLayer(layer_name, source_sr,
-                                             ogr.wkbPoint)
+        output_layer = target_vector.CreateLayer(layer_name, source_sr,
+                                                 ogr.wkbPoint)
 
-    # Outer unique keys
-    outer_keys = list(base_dict_data.keys())
+        # Outer unique keys
+        outer_keys = list(base_dict_data.keys())
 
-    # Construct a list of fields to add from the keys of the inner dictionary
-    field_list = list(base_dict_data[outer_keys[0]])
+        # Construct a list of fields to add from the keys of the inner dictionary
+        field_list = list(base_dict_data[outer_keys[0]])
 
-    # Create a dictionary to store what variable types the fields are
-    type_dict = {}
-    for field in field_list:
-        field_type = None
-        # Get a value from the field
-        val = base_dict_data[outer_keys[0]][field]
-        # Check to see if the value is a str of characters or a number. This
-        # will determine the type of field created in the shapefile
-        if isinstance(val, str):
-            type_dict[field] = 'str'
-            field_type = ogr.OFTString
-        else:
-            type_dict[field] = 'number'
-            field_type = ogr.OFTReal
-        output_field = ogr.FieldDefn(field, field_type)
-        output_layer.CreateField(output_field)
+        # Create a dictionary to store what variable types the fields are
+        type_dict = {}
+        for field in field_list:
+            field_type = None
+            # Get a value from the field
+            val = base_dict_data[outer_keys[0]][field]
+            # Check to see if the value is a str of characters or a number. This
+            # will determine the type of field created in the shapefile
+            if isinstance(val, str):
+                type_dict[field] = 'str'
+                field_type = ogr.OFTString
+            else:
+                type_dict[field] = 'number'
+                field_type = ogr.OFTReal
+            output_field = ogr.FieldDefn(field, field_type)
+            output_layer.CreateField(output_field)
 
-    # For each inner dictionary (for each point) create a point and set its
-    # fields
-    for point_dict in base_dict_data.values():
-        latitude = point_dict['lati']
-        longitude = point_dict['long']
+        # For each inner dictionary (for each point) create a point and set its
+        # fields
+        for point_dict in base_dict_data.values():
+            latitude = point_dict['lati']
+            longitude = point_dict['long']
 
-        geom = ogr.Geometry(ogr.wkbPoint)
-        geom.AddPoint_2D(longitude, latitude)
+            geom = ogr.Geometry(ogr.wkbPoint)
+            geom.AddPoint_2D(longitude, latitude)
 
-        output_feature = ogr.Feature(output_layer.GetLayerDefn())
+            output_feature = ogr.Feature(output_layer.GetLayerDefn())
 
-        for field_name in point_dict:
-            field_index = output_feature.GetFieldIndex(field_name)
-            output_feature.SetField(field_index, point_dict[field_name])
+            for field_name in point_dict:
+                field_index = output_feature.GetFieldIndex(field_name)
+                output_feature.SetField(field_index, point_dict[field_name])
 
-        output_feature.SetGeometryDirectly(geom)
-        output_layer.CreateFeature(output_feature)
-        output_feature = None
+            output_feature.SetGeometryDirectly(geom)
+            output_layer.CreateFeature(output_feature)
+            output_feature = None
 
-    output_layer.SyncToDisk()
+        output_layer.SyncToDisk()
 
 
 def _get_suitable_projection_params(
@@ -2177,68 +2182,69 @@ def _get_suitable_projection_params(
     base_raster_info = pygeoprocessing.get_raster_info(base_raster_path)
     aoi_vector_info = pygeoprocessing.get_vector_info(aoi_vector_path)
 
-    base_raster_srs = osr.SpatialReference()
-    base_raster_srs.ImportFromWkt(base_raster_info['projection_wkt'])
+    with utils.GDALUseExceptions():
+        base_raster_srs = osr.SpatialReference()
+        base_raster_srs.ImportFromWkt(base_raster_info['projection_wkt'])
 
-    if not base_raster_srs.IsProjected():
-        wgs84_sr = osr.SpatialReference()
-        wgs84_sr.ImportFromEPSG(4326)
-        aoi_wgs84_bounding_box = pygeoprocessing.transform_bounding_box(
-            aoi_vector_info['bounding_box'], aoi_vector_info['projection_wkt'],
-            wgs84_sr.ExportToWkt())
+        if not base_raster_srs.IsProjected():
+            wgs84_sr = osr.SpatialReference()
+            wgs84_sr.ImportFromEPSG(4326)
+            aoi_wgs84_bounding_box = pygeoprocessing.transform_bounding_box(
+                aoi_vector_info['bounding_box'], aoi_vector_info['projection_wkt'],
+                wgs84_sr.ExportToWkt())
 
-        base_raster_bounding_box = pygeoprocessing.transform_bounding_box(
-            base_raster_info['bounding_box'],
-            base_raster_info['projection_wkt'], wgs84_sr.ExportToWkt())
+            base_raster_bounding_box = pygeoprocessing.transform_bounding_box(
+                base_raster_info['bounding_box'],
+                base_raster_info['projection_wkt'], wgs84_sr.ExportToWkt())
 
-        target_bounding_box_wgs84 = pygeoprocessing.merge_bounding_box_list(
-            [aoi_wgs84_bounding_box, base_raster_bounding_box], 'intersection')
+            target_bounding_box_wgs84 = pygeoprocessing.merge_bounding_box_list(
+                [aoi_wgs84_bounding_box, base_raster_bounding_box], 'intersection')
 
-        # Get the suitable UTM code
-        centroid_x = (
-            target_bounding_box_wgs84[2] + target_bounding_box_wgs84[0]) / 2
-        centroid_y = (
-            target_bounding_box_wgs84[3] + target_bounding_box_wgs84[1]) / 2
+            # Get the suitable UTM code
+            centroid_x = (
+                target_bounding_box_wgs84[2] + target_bounding_box_wgs84[0]) / 2
+            centroid_y = (
+                target_bounding_box_wgs84[3] + target_bounding_box_wgs84[1]) / 2
 
-        # Get target pixel size in square meters used for resizing the base
-        # raster later on
-        target_pixel_size = _convert_degree_pixel_size_to_square_meters(
-            base_raster_info['pixel_size'], centroid_y)
+            # Get target pixel size in square meters used for resizing the base
+            # raster later on
+            target_pixel_size = _convert_degree_pixel_size_to_square_meters(
+                base_raster_info['pixel_size'], centroid_y)
 
-        utm_code = (math.floor((centroid_x + 180) / 6) % 60) + 1
-        lat_code = 6 if centroid_y > 0 else 7
-        epsg_code = int('32%d%02d' % (lat_code, utm_code))
-        target_srs = osr.SpatialReference()
-        target_srs.ImportFromEPSG(epsg_code)
+            utm_code = (math.floor((centroid_x + 180) / 6) % 60) + 1
+            lat_code = 6 if centroid_y > 0 else 7
+            epsg_code = int('32%d%02d' % (lat_code, utm_code))
+            target_srs = osr.SpatialReference()
+            target_srs.ImportFromEPSG(epsg_code)
 
-        # Transform the merged unprojected bounding box of base raster and clip
-        # vector from WGS84 to the target UTM projection
-        target_bounding_box = pygeoprocessing.transform_bounding_box(
-            target_bounding_box_wgs84, wgs84_sr.ExportToWkt(),
-            target_srs.ExportToWkt())
+            # Transform the merged unprojected bounding box of base raster and clip
+            # vector from WGS84 to the target UTM projection
+            target_bounding_box = pygeoprocessing.transform_bounding_box(
+                target_bounding_box_wgs84, wgs84_sr.ExportToWkt(),
+                target_srs.ExportToWkt())
 
-        target_sr_wkt = target_srs.ExportToWkt()
-    else:
-        # If the base raster is already projected, transform the bounding
-        # box from base raster and aoi vector bounding boxes
-        target_sr_wkt = base_raster_info['projection_wkt']
+            target_sr_wkt = target_srs.ExportToWkt()
+        else:
+            # If the base raster is already projected, transform the bounding
+            # box from base raster and aoi vector bounding boxes
+            target_sr_wkt = base_raster_info['projection_wkt']
 
-        aoi_bounding_box = pygeoprocessing.transform_bounding_box(
-            aoi_vector_info['bounding_box'], aoi_vector_info['projection_wkt'],
-            target_sr_wkt)
+            aoi_bounding_box = pygeoprocessing.transform_bounding_box(
+                aoi_vector_info['bounding_box'], aoi_vector_info['projection_wkt'],
+                target_sr_wkt)
 
-        target_bounding_box = pygeoprocessing.merge_bounding_box_list(
-            [aoi_bounding_box, base_raster_info['bounding_box']],
-            'intersection')
+            target_bounding_box = pygeoprocessing.merge_bounding_box_list(
+                [aoi_bounding_box, base_raster_info['bounding_box']],
+                'intersection')
 
-        # Get the minimum square pixel size
-        min_pixel_size = numpy.min(numpy.absolute(base_raster_info['pixel_size']))
-        target_pixel_size = (min_pixel_size, -min_pixel_size)
+            # Get the minimum square pixel size
+            min_pixel_size = numpy.min(numpy.absolute(base_raster_info['pixel_size']))
+            target_pixel_size = (min_pixel_size, -min_pixel_size)
 
-    with open(target_pickle_path, 'wb') as pickle_file:
-        pickle.dump(
-            (target_sr_wkt, target_pixel_size, target_bounding_box),
-            pickle_file)
+        with open(target_pickle_path, 'wb') as pickle_file:
+            pickle.dump(
+                (target_sr_wkt, target_pixel_size, target_bounding_box),
+                pickle_file)
 
 
 def _clip_to_projection_with_square_pixels(
@@ -2348,81 +2354,82 @@ def _wind_data_to_point_vector(wind_data_pickle_path,
     # Get driver based on file extension
     _, driver_name = _get_file_ext_and_driver_name(target_vector_path)
 
-    # If the target_vector_path exists delete it
-    if os.path.isfile(target_vector_path):
-        driver = ogr.GetDriverByName(driver_name)
-        driver.DeleteDataSource(target_vector_path)
+    with utils.GDALUseExceptions():
+        # If the target_vector_path exists delete it
+        if os.path.isfile(target_vector_path):
+            driver = ogr.GetDriverByName(driver_name)
+            driver.DeleteDataSource(target_vector_path)
 
-    target_driver = ogr.GetDriverByName(driver_name)
-    target_vector = target_driver.CreateDataSource(target_vector_path)
-    target_sr = osr.SpatialReference()
-    target_sr.SetWellKnownGeogCS("WGS84")
+        target_driver = ogr.GetDriverByName(driver_name)
+        target_vector = target_driver.CreateDataSource(target_vector_path)
+        target_sr = osr.SpatialReference()
+        target_sr.SetWellKnownGeogCS("WGS84")
 
-    need_geotranform = False
-    if ref_projection_wkt:
-        ref_sr = osr.SpatialReference(wkt=ref_projection_wkt)
-        if ref_sr.IsProjected:
-            # Get coordinate transformation between two projections
-            coord_trans = utils.create_coordinate_transformer(
-                target_sr, ref_sr)
-            need_geotranform = True
-    else:
         need_geotranform = False
-
-    if need_geotranform:
-        target_layer = target_vector.CreateLayer(
-            layer_name, ref_sr, ogr.wkbPoint)
-    else:
-        target_layer = target_vector.CreateLayer(
-            layer_name, target_sr, ogr.wkbPoint)
-
-    # Construct a list of fields to add from the keys of the inner dictionary
-    field_list = list(wind_data[list(wind_data.keys())[0]])
-
-    # For the two fields that we computed and added to the dictionary, move
-    # them to the last
-    for field in [_DENSITY_FIELD_NAME, _HARVESTED_FIELD_NAME]:
-        if field in field_list:
-            field_list.remove(field)
-            field_list.append(field)
-
-    LOGGER.debug('field_list : %s', field_list)
-
-    LOGGER.info('Creating fields for the target vector')
-    for field in field_list:
-        target_field = ogr.FieldDefn(field, ogr.OFTReal)
-        target_layer.CreateField(target_field)
-
-    LOGGER.info('Entering iteration to create and set the features')
-    # For each inner dictionary (for each point) create a point
-    for point_dict in wind_data.values():
-        geom = ogr.Geometry(ogr.wkbPoint)
-        latitude = point_dict['LATI']
-        longitude = point_dict['LONG']
-        # When projecting to WGS84, extents -180 to 180 are used for
-        # longitude. In case input longitude is from -360 to 0 convert
-        if longitude < -180:
-            longitude += 360
-        if need_geotranform:
-            point_x, point_y, _ = coord_trans.TransformPoint(
-                longitude, latitude)
-            geom.AddPoint(point_x, point_y)
+        if ref_projection_wkt:
+            ref_sr = osr.SpatialReference(wkt=ref_projection_wkt)
+            if ref_sr.IsProjected:
+                # Get coordinate transformation between two projections
+                coord_trans = utils.create_coordinate_transformer(
+                    target_sr, ref_sr)
+                need_geotranform = True
         else:
-            geom.AddPoint_2D(longitude, latitude)
+            need_geotranform = False
 
-        target_feature = ogr.Feature(target_layer.GetLayerDefn())
-        target_layer.CreateFeature(target_feature)
+        if need_geotranform:
+            target_layer = target_vector.CreateLayer(
+                layer_name, ref_sr, ogr.wkbPoint)
+        else:
+            target_layer = target_vector.CreateLayer(
+                layer_name, target_sr, ogr.wkbPoint)
 
-        for field_name in point_dict:
-            field_index = target_feature.GetFieldIndex(field_name)
-            target_feature.SetField(field_index, point_dict[field_name])
+        # Construct a list of fields to add from the keys of the inner dictionary
+        field_list = list(wind_data[list(wind_data.keys())[0]])
 
-        target_feature.SetGeometryDirectly(geom)
-        target_layer.SetFeature(target_feature)
-        target_feature = None
+        # For the two fields that we computed and added to the dictionary, move
+        # them to the last
+        for field in [_DENSITY_FIELD_NAME, _HARVESTED_FIELD_NAME]:
+            if field in field_list:
+                field_list.remove(field)
+                field_list.append(field)
 
-    LOGGER.info('Finished _wind_data_to_point_vector')
-    target_vector = None
+        LOGGER.debug('field_list : %s', field_list)
+
+        LOGGER.info('Creating fields for the target vector')
+        for field in field_list:
+            target_field = ogr.FieldDefn(field, ogr.OFTReal)
+            target_layer.CreateField(target_field)
+
+        LOGGER.info('Entering iteration to create and set the features')
+        # For each inner dictionary (for each point) create a point
+        for point_dict in wind_data.values():
+            geom = ogr.Geometry(ogr.wkbPoint)
+            latitude = point_dict['LATI']
+            longitude = point_dict['LONG']
+            # When projecting to WGS84, extents -180 to 180 are used for
+            # longitude. In case input longitude is from -360 to 0 convert
+            if longitude < -180:
+                longitude += 360
+            if need_geotranform:
+                point_x, point_y, _ = coord_trans.TransformPoint(
+                    longitude, latitude)
+                geom.AddPoint(point_x, point_y)
+            else:
+                geom.AddPoint_2D(longitude, latitude)
+
+            target_feature = ogr.Feature(target_layer.GetLayerDefn())
+            target_layer.CreateFeature(target_feature)
+
+            for field_name in point_dict:
+                field_index = target_feature.GetFieldIndex(field_name)
+                target_feature.SetField(field_index, point_dict[field_name])
+
+            target_feature.SetGeometryDirectly(geom)
+            target_layer.SetFeature(target_feature)
+            target_feature = None
+
+        LOGGER.info('Finished _wind_data_to_point_vector')
+        target_vector = None
 
 
 def _clip_and_reproject_vector(base_vector_path, clip_vector_path,
@@ -2517,35 +2524,36 @@ def _clip_vector_by_vector(
         clip_vector_path = reprojected_clip_vector_path
 
     # Get layer and geometry informations from base vector path
-    base_vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
-    base_layer = base_vector.GetLayer()
-    base_layer_defn = base_layer.GetLayerDefn()
-    base_geom_type = base_layer.GetGeomType()
+    with utils.GDALUseExceptions():
+        base_vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
+        base_layer = base_vector.GetLayer()
+        base_layer_defn = base_layer.GetLayerDefn()
+        base_geom_type = base_layer.GetGeomType()
 
-    clip_vector = gdal.OpenEx(clip_vector_path, gdal.OF_VECTOR)
-    clip_layer = clip_vector.GetLayer()
+        clip_vector = gdal.OpenEx(clip_vector_path, gdal.OF_VECTOR)
+        clip_layer = clip_vector.GetLayer()
 
-    target_driver = gdal.GetDriverByName(driver_name)
-    target_vector = target_driver.Create(
-        target_vector_path, 0, 0, 0, gdal.GDT_Unknown)
-    target_layer = target_vector.CreateLayer(
-        base_layer_defn.GetName(), base_layer.GetSpatialRef(), base_geom_type)
-    base_layer.Clip(clip_layer, target_layer)
+        target_driver = gdal.GetDriverByName(driver_name)
+        target_vector = target_driver.Create(
+            target_vector_path, 0, 0, 0, gdal.GDT_Unknown)
+        target_layer = target_vector.CreateLayer(
+            base_layer_defn.GetName(), base_layer.GetSpatialRef(), base_geom_type)
+        base_layer.Clip(clip_layer, target_layer)
 
-    empty_clip = False
-    # Check if the feature count is less than 1, indicating the two vectors
-    # did not intersect. This will raise a ValueError below. GetFeatureCount
-    # can return -1 if the count is not known or too expensive to compute.
-    if target_layer.GetFeatureCount() <= 0:
-        empty_clip = True
+        empty_clip = False
+        # Check if the feature count is less than 1, indicating the two vectors
+        # did not intersect. This will raise a ValueError below. GetFeatureCount
+        # can return -1 if the count is not known or too expensive to compute.
+        if target_layer.GetFeatureCount() <= 0:
+            empty_clip = True
 
-    # Allow function to clean up resources
-    target_layer = None
-    target_vector = None
-    clip_vector = None
-    clip_vector = None
-    base_layer = None
-    base_vector = None
+        # Allow function to clean up resources
+        target_layer = None
+        target_vector = None
+        clip_vector = None
+        clip_vector = None
+        base_layer = None
+        base_vector = None
 
     if base_sr_wkt != target_sr_wkt:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -2584,73 +2592,74 @@ def _calculate_distances_land_grid(base_point_vector_path, base_raster_path,
     LOGGER.info('Starting _calculate_distances_land_grid.')
     temp_dir = tempfile.mkdtemp(dir=work_dir, prefix='calc-dist-land')
 
-    # Open the point shapefile and get the layer
-    base_point_vector = gdal.OpenEx(base_point_vector_path, gdal.OF_VECTOR)
-    base_point_layer = base_point_vector.GetLayer()
-    # A list to hold the land to grid distances in order for each point
-    # features 'L2G' field
-    l2g_dist = []
-    # A list to hold the individual distance transform path's in order
-    land_point_dist_raster_path_list = []
+    with utils.GDALUseExceptions():
+        # Open the point shapefile and get the layer
+        base_point_vector = gdal.OpenEx(base_point_vector_path, gdal.OF_VECTOR)
+        base_point_layer = base_point_vector.GetLayer()
+        # A list to hold the land to grid distances in order for each point
+        # features 'L2G' field
+        l2g_dist = []
+        # A list to hold the individual distance transform path's in order
+        land_point_dist_raster_path_list = []
 
-    # Get the original layer definition which holds needed attribute values
-    base_layer_defn = base_point_layer.GetLayerDefn()
-    file_ext, driver_name = _get_file_ext_and_driver_name(
-        base_point_vector_path)
-    output_driver = ogr.GetDriverByName(driver_name)
-    single_feature_vector_path = os.path.join(
-        temp_dir, 'single_feature' + file_ext)
-    target_vector = output_driver.CreateDataSource(single_feature_vector_path)
+        # Get the original layer definition which holds needed attribute values
+        base_layer_defn = base_point_layer.GetLayerDefn()
+        file_ext, driver_name = _get_file_ext_and_driver_name(
+            base_point_vector_path)
+        output_driver = ogr.GetDriverByName(driver_name)
+        single_feature_vector_path = os.path.join(
+            temp_dir, 'single_feature' + file_ext)
+        target_vector = output_driver.CreateDataSource(single_feature_vector_path)
 
-    # Create the new layer for target_vector using same name and
-    # geometry type from base_vector as well as spatial reference
-    target_layer = target_vector.CreateLayer(base_layer_defn.GetName(),
-                                             base_point_layer.GetSpatialRef(),
-                                             base_layer_defn.GetGeomType())
+        # Create the new layer for target_vector using same name and
+        # geometry type from base_vector as well as spatial reference
+        target_layer = target_vector.CreateLayer(base_layer_defn.GetName(),
+                                                 base_point_layer.GetSpatialRef(),
+                                                 base_layer_defn.GetGeomType())
 
-    # Get the number of fields in original_layer
-    base_field_count = base_layer_defn.GetFieldCount()
+        # Get the number of fields in original_layer
+        base_field_count = base_layer_defn.GetFieldCount()
 
-    # For every field, create a duplicate field and add it to the new
-    # shapefiles layer
-    for fld_index in range(base_field_count):
-        base_field = base_layer_defn.GetFieldDefn(fld_index)
-        target_field = ogr.FieldDefn(base_field.GetName(),
-                                     base_field.GetType())
-        # NOT setting the WIDTH or PRECISION because that seems to be
-        # unneeded and causes interesting OGR conflicts
-        target_layer.CreateField(target_field)
+        # For every field, create a duplicate field and add it to the new
+        # shapefiles layer
+        for fld_index in range(base_field_count):
+            base_field = base_layer_defn.GetFieldDefn(fld_index)
+            target_field = ogr.FieldDefn(base_field.GetName(),
+                                         base_field.GetType())
+            # NOT setting the WIDTH or PRECISION because that seems to be
+            # unneeded and causes interesting OGR conflicts
+            target_layer.CreateField(target_field)
 
-    # Create a new shapefile with only one feature to burn onto a raster
-    # in order to get the distance transform based on that one feature
-    for feature_index, point_feature in enumerate(base_point_layer):
-        # Get the point features land to grid value and add it to the list
-        field_index = point_feature.GetFieldIndex('L2G')
-        l2g_dist.append(float(point_feature.GetField(field_index)))
+        # Create a new shapefile with only one feature to burn onto a raster
+        # in order to get the distance transform based on that one feature
+        for feature_index, point_feature in enumerate(base_point_layer):
+            # Get the point features land to grid value and add it to the list
+            field_index = point_feature.GetFieldIndex('L2G')
+            l2g_dist.append(float(point_feature.GetField(field_index)))
 
-        # Copy original_datasource's feature and set as new shapes feature
-        output_feature = ogr.Feature(feature_def=target_layer.GetLayerDefn())
+            # Copy original_datasource's feature and set as new shapes feature
+            output_feature = ogr.Feature(feature_def=target_layer.GetLayerDefn())
 
-        # Since the original feature is of interest add its fields and
-        # Values to the new feature from the intersecting geometries
-        # The False in SetFrom() signifies that the fields must match
-        # exactly
-        output_feature.SetFrom(point_feature, False)
-        target_layer.CreateFeature(output_feature)
-        target_vector.SyncToDisk()
-        target_layer.DeleteFeature(point_feature.GetFID())
+            # Since the original feature is of interest add its fields and
+            # Values to the new feature from the intersecting geometries
+            # The False in SetFrom() signifies that the fields must match
+            # exactly
+            output_feature.SetFrom(point_feature, False)
+            target_layer.CreateFeature(output_feature)
+            target_vector.SyncToDisk()
+            target_layer.DeleteFeature(point_feature.GetFID())
 
-        dist_raster_path = os.path.join(temp_dir,
-                                        'dist_%s.tif' % feature_index)
-        _create_distance_raster(base_raster_path, single_feature_vector_path,
-                                dist_raster_path, work_dir)
-        # Add each features distance transform result to list
-        land_point_dist_raster_path_list.append(dist_raster_path)
+            dist_raster_path = os.path.join(temp_dir,
+                                            'dist_%s.tif' % feature_index)
+            _create_distance_raster(base_raster_path, single_feature_vector_path,
+                                    dist_raster_path, work_dir)
+            # Add each features distance transform result to list
+            land_point_dist_raster_path_list.append(dist_raster_path)
 
-    target_layer = None
-    target_vector = None
-    base_point_layer = None
-    base_point_vector = None
+        target_layer = None
+        target_vector = None
+        base_point_layer = None
+        base_point_vector = None
     l2g_dist_array = numpy.array(l2g_dist)
 
     def _min_land_ocean_dist(*grid_distances):

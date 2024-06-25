@@ -529,17 +529,18 @@ def execute(args):
         valuation_df = validation.get_validated_dataframe(
             args['valuation_table_path'],
             **MODEL_SPEC['args']['valuation_table_path'])
-        watershed_vector = gdal.OpenEx(
-            args['watersheds_path'], gdal.OF_VECTOR)
-        watershed_layer = watershed_vector.GetLayer()
-        missing_ws_ids = []
-        for watershed_feature in watershed_layer:
-            watershed_ws_id = watershed_feature.GetField('ws_id')
-            if watershed_ws_id not in valuation_df.index:
-                missing_ws_ids.append(watershed_ws_id)
-        watershed_feature = None
-        watershed_layer = None
-        watershed_vector = None
+        with utils.GDALUseExceptions():
+            watershed_vector = gdal.OpenEx(
+                args['watersheds_path'], gdal.OF_VECTOR)
+            watershed_layer = watershed_vector.GetLayer()
+            missing_ws_ids = []
+            for watershed_feature in watershed_layer:
+                watershed_ws_id = watershed_feature.GetField('ws_id')
+                if watershed_ws_id not in valuation_df.index:
+                    missing_ws_ids.append(watershed_ws_id)
+            watershed_feature = None
+            watershed_layer = None
+            watershed_vector = None
         if missing_ws_ids:
             raise ValueError(
                 'The following `ws_id`s exist in the watershed vector file '
@@ -882,10 +883,11 @@ def copy_vector(base_vector_path, target_vector_path):
     Returns:
         None
     """
-    esri_shapefile_driver = gdal.GetDriverByName('ESRI Shapefile')
-    base_dataset = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
-    esri_shapefile_driver.CreateCopy(target_vector_path, base_dataset)
-    base_dataset = None
+    with utils.GDALUseExceptions():
+        esri_shapefile_driver = gdal.GetDriverByName('ESRI Shapefile')
+        base_dataset = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
+        esri_shapefile_driver.CreateCopy(target_vector_path, base_dataset)
+        base_dataset = None
 
 
 def write_output_vector_attributes(target_vector_path, ws_id_name,
@@ -958,9 +960,10 @@ def convert_vector_to_csv(base_vector_path, target_csv_path):
         None
 
     """
-    watershed_vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
-    csv_driver = gdal.GetDriverByName('CSV')
-    _ = csv_driver.CreateCopy(target_csv_path, watershed_vector)
+    with utils.GDALUseExceptions():
+        watershed_vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
+        csv_driver = gdal.GetDriverByName('CSV')
+        _ = csv_driver.CreateCopy(target_csv_path, watershed_vector)
 
 
 def zonal_stats_tofile(base_vector_path, raster_path, target_stats_pickle):
@@ -1092,57 +1095,58 @@ def compute_watershed_valuation(watershed_results_vector_path, val_df):
         None.
 
     """
-    ws_ds = gdal.OpenEx(
-        watershed_results_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    ws_layer = ws_ds.GetLayer()
+    with utils.GDALUseExceptions():
+        ws_ds = gdal.OpenEx(
+            watershed_results_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        ws_layer = ws_ds.GetLayer()
 
-    # The field names for the new attributes
-    energy_field = 'hp_energy'
-    npv_field = 'hp_val'
+        # The field names for the new attributes
+        energy_field = 'hp_energy'
+        npv_field = 'hp_val'
 
-    # Add the new fields to the shapefile
-    for new_field in [energy_field, npv_field]:
-        field_defn = ogr.FieldDefn(new_field, ogr.OFTReal)
-        field_defn.SetWidth(24)
-        field_defn.SetPrecision(11)
-        ws_layer.CreateField(field_defn)
+        # Add the new fields to the shapefile
+        for new_field in [energy_field, npv_field]:
+            field_defn = ogr.FieldDefn(new_field, ogr.OFTReal)
+            field_defn.SetWidth(24)
+            field_defn.SetPrecision(11)
+            ws_layer.CreateField(field_defn)
 
-    ws_layer.ResetReading()
-    # Iterate over the number of features (polygons)
-    for ws_feat in ws_layer:
-        # Get the watershed ID to index into the valuation parameter dictionary
-        # Since we only allow valuation on watersheds (not subwatersheds)
-        # it's okay to hardcode 'ws_id' here.
-        ws_id = ws_feat.GetField('ws_id')
-        # Get the rsupply volume for the watershed
-        rsupply_vl = ws_feat.GetField('rsupply_vl')
+        ws_layer.ResetReading()
+        # Iterate over the number of features (polygons)
+        for ws_feat in ws_layer:
+            # Get the watershed ID to index into the valuation parameter dictionary
+            # Since we only allow valuation on watersheds (not subwatersheds)
+            # it's okay to hardcode 'ws_id' here.
+            ws_id = ws_feat.GetField('ws_id')
+            # Get the rsupply volume for the watershed
+            rsupply_vl = ws_feat.GetField('rsupply_vl')
 
-        # there won't be a rsupply_vl value if the polygon feature only
-        # covers nodata raster values, so check before doing math.
-        if rsupply_vl is not None:
-            # Compute hydropower energy production (KWH)
-            # This is from the equation given in the Users' Guide
-            energy = (
-                val_df['efficiency'][ws_id] * val_df['fraction'][ws_id] *
-                val_df['height'][ws_id] * rsupply_vl * 0.00272)
+            # there won't be a rsupply_vl value if the polygon feature only
+            # covers nodata raster values, so check before doing math.
+            if rsupply_vl is not None:
+                # Compute hydropower energy production (KWH)
+                # This is from the equation given in the Users' Guide
+                energy = (
+                    val_df['efficiency'][ws_id] * val_df['fraction'][ws_id] *
+                    val_df['height'][ws_id] * rsupply_vl * 0.00272)
 
-            dsum = 0
-            # Divide by 100 because it is input at a percent and we need
-            # decimal value
-            disc = val_df['discount'][ws_id] / 100
-            # To calculate the summation of the discount rate term over the life
-            # span of the dam we can use a geometric series
-            ratio = 1 / (1 + disc)
-            if ratio != 1:
-                dsum = (1 - math.pow(ratio, val_df['time_span'][ws_id])) / (1 - ratio)
+                dsum = 0
+                # Divide by 100 because it is input at a percent and we need
+                # decimal value
+                disc = val_df['discount'][ws_id] / 100
+                # To calculate the summation of the discount rate term over the life
+                # span of the dam we can use a geometric series
+                ratio = 1 / (1 + disc)
+                if ratio != 1:
+                    dsum = (1 - math.pow(ratio, val_df['time_span'][ws_id])) / (1 - ratio)
 
-            npv = ((val_df['kw_price'][ws_id] * energy) - val_df['cost'][ws_id]) * dsum
+                npv = ((val_df['kw_price'][ws_id] * energy) - val_df['cost'][ws_id]) * dsum
 
-            # Get the volume field index and add value
-            ws_feat.SetField(energy_field, energy)
-            ws_feat.SetField(npv_field, npv)
+                # Get the volume field index and add value
+                ws_feat.SetField(energy_field, energy)
+                ws_feat.SetField(npv_field, npv)
 
-            ws_layer.SetFeature(ws_feat)
+                ws_layer.SetFeature(ws_feat)
 
 
 def compute_rsupply_volume(watershed_results_vector_path):
@@ -1159,44 +1163,45 @@ def compute_rsupply_volume(watershed_results_vector_path):
         None.
 
     """
-    ws_ds = gdal.OpenEx(
-        watershed_results_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    ws_layer = ws_ds.GetLayer()
+    with utils.GDALUseExceptions():
+        ws_ds = gdal.OpenEx(
+            watershed_results_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        ws_layer = ws_ds.GetLayer()
 
-    # The field names for the new attributes
-    rsupply_vol_name = 'rsupply_vl'
-    rsupply_mn_name = 'rsupply_mn'
+        # The field names for the new attributes
+        rsupply_vol_name = 'rsupply_vl'
+        rsupply_mn_name = 'rsupply_mn'
 
-    # Add the new fields to the shapefile
-    for new_field in [rsupply_vol_name, rsupply_mn_name]:
-        field_defn = ogr.FieldDefn(new_field, ogr.OFTReal)
-        field_defn.SetWidth(24)
-        field_defn.SetPrecision(11)
-        ws_layer.CreateField(field_defn)
+        # Add the new fields to the shapefile
+        for new_field in [rsupply_vol_name, rsupply_mn_name]:
+            field_defn = ogr.FieldDefn(new_field, ogr.OFTReal)
+            field_defn.SetWidth(24)
+            field_defn.SetPrecision(11)
+            ws_layer.CreateField(field_defn)
 
-    ws_layer.ResetReading()
-    # Iterate over the number of features (polygons)
-    for ws_feat in ws_layer:
-        # Get mean and volume water yield values
-        wyield_mn = ws_feat.GetField('wyield_mn')
-        wyield = ws_feat.GetField('wyield_vol')
+        ws_layer.ResetReading()
+        # Iterate over the number of features (polygons)
+        for ws_feat in ws_layer:
+            # Get mean and volume water yield values
+            wyield_mn = ws_feat.GetField('wyield_mn')
+            wyield = ws_feat.GetField('wyield_vol')
 
-        # Get water demand/consumption values
-        consump_vol = ws_feat.GetField('consum_vol')
-        consump_mn = ws_feat.GetField('consum_mn')
+            # Get water demand/consumption values
+            consump_vol = ws_feat.GetField('consum_vol')
+            consump_mn = ws_feat.GetField('consum_mn')
 
-        # Calculate realized supply
-        # these values won't exist if the polygon feature only
-        # covers nodata raster values, so check before doing math.
-        if wyield_mn is not None and consump_mn is not None:
-            rsupply_vol = wyield - consump_vol
-            rsupply_mn = wyield_mn - consump_mn
+            # Calculate realized supply
+            # these values won't exist if the polygon feature only
+            # covers nodata raster values, so check before doing math.
+            if wyield_mn is not None and consump_mn is not None:
+                rsupply_vol = wyield - consump_vol
+                rsupply_mn = wyield_mn - consump_mn
 
-            # Set values for the new rsupply fields
-            ws_feat.SetField(rsupply_vol_name, rsupply_vol)
-            ws_feat.SetField(rsupply_mn_name, rsupply_mn)
+                # Set values for the new rsupply fields
+                ws_feat.SetField(rsupply_vol_name, rsupply_vol)
+                ws_feat.SetField(rsupply_mn_name, rsupply_mn)
 
-            ws_layer.SetFeature(ws_feat)
+                ws_layer.SetFeature(ws_feat)
 
 
 def compute_water_yield_volume(watershed_results_vector_path):
@@ -1214,34 +1219,35 @@ def compute_water_yield_volume(watershed_results_vector_path):
         None.
 
     """
-    shape = gdal.OpenEx(
-        watershed_results_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    layer = shape.GetLayer()
+    with utils.GDALUseExceptions():
+        shape = gdal.OpenEx(
+            watershed_results_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        layer = shape.GetLayer()
 
-    # The field names for the new attributes
-    vol_name = 'wyield_vol'
+        # The field names for the new attributes
+        vol_name = 'wyield_vol'
 
-    # Add the new field to the shapefile
-    field_defn = ogr.FieldDefn(vol_name, ogr.OFTReal)
-    field_defn.SetWidth(24)
-    field_defn.SetPrecision(11)
-    layer.CreateField(field_defn)
+        # Add the new field to the shapefile
+        field_defn = ogr.FieldDefn(vol_name, ogr.OFTReal)
+        field_defn.SetWidth(24)
+        field_defn.SetPrecision(11)
+        layer.CreateField(field_defn)
 
-    layer.ResetReading()
-    # Iterate over the number of features (polygons) and compute volume
-    for feat in layer:
-        wyield_mn = feat.GetField('wyield_mn')
-        # there won't be a wyield_mn value if the polygon feature only
-        # covers nodata raster values, so check before doing math.
-        if wyield_mn is not None:
-            geom = feat.GetGeometryRef()
-            # Calculate water yield volume,
-            # 1000 is for converting the mm of wyield to meters
-            vol = wyield_mn * geom.Area() / 1000
-            # Get the volume field index and add value
-            feat.SetField(vol_name, vol)
+        layer.ResetReading()
+        # Iterate over the number of features (polygons) and compute volume
+        for feat in layer:
+            wyield_mn = feat.GetField('wyield_mn')
+            # there won't be a wyield_mn value if the polygon feature only
+            # covers nodata raster values, so check before doing math.
+            if wyield_mn is not None:
+                geom = feat.GetGeometryRef()
+                # Calculate water yield volume,
+                # 1000 is for converting the mm of wyield to meters
+                vol = wyield_mn * geom.Area() / 1000
+                # Get the volume field index and add value
+                feat.SetField(vol_name, vol)
 
-            layer.SetFeature(feat)
+                layer.SetFeature(feat)
 
 
 def _add_zonal_stats_dict_to_shape(
@@ -1264,35 +1270,36 @@ def _add_zonal_stats_dict_to_shape(
         None
 
     """
-    vector = gdal.OpenEx(
-        watershed_results_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    layer = vector.GetLayer()
+    with utils.GDALUseExceptions():
+        vector = gdal.OpenEx(
+            watershed_results_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        layer = vector.GetLayer()
 
-    # Create the new field
-    field_defn = ogr.FieldDefn(field_name, ogr.OFTReal)
-    field_defn.SetWidth(24)
-    field_defn.SetPrecision(11)
-    layer.CreateField(field_defn)
+        # Create the new field
+        field_defn = ogr.FieldDefn(field_name, ogr.OFTReal)
+        field_defn.SetWidth(24)
+        field_defn.SetPrecision(11)
+        layer.CreateField(field_defn)
 
-    # Get the number of features (polygons) and iterate through each
-    layer.ResetReading()
-    for feature in layer:
-        feature_fid = feature.GetFID()
+        # Get the number of features (polygons) and iterate through each
+        layer.ResetReading()
+        for feature in layer:
+            feature_fid = feature.GetFID()
 
-        # Using the unique feature ID, index into the
-        # dictionary to get the corresponding value
-        # only write a value if zonal stats found valid pixels in the polygon:
-        if stats_map[feature_fid]['count'] > 0:
-            if aggregate_field_id == 'mean':
-                field_val = float(
-                    stats_map[feature_fid]['sum']) / stats_map[feature_fid]['count']
-            else:
-                field_val = float(stats_map[feature_fid][aggregate_field_id])
+            # Using the unique feature ID, index into the
+            # dictionary to get the corresponding value
+            # only write a value if zonal stats found valid pixels in the polygon:
+            if stats_map[feature_fid]['count'] > 0:
+                if aggregate_field_id == 'mean':
+                    field_val = float(
+                        stats_map[feature_fid]['sum']) / stats_map[feature_fid]['count']
+                else:
+                    field_val = float(stats_map[feature_fid][aggregate_field_id])
 
-            # Set the value for the new field
-            feature.SetField(field_name, field_val)
+                # Set the value for the new field
+                feature.SetField(field_name, field_val)
 
-            layer.SetFeature(feature)
+                layer.SetFeature(feature)
 
 
 @validation.invest_validator

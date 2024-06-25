@@ -1013,7 +1013,7 @@ def execute(args):
     task_graph.join()
 
     LOGGER.info('Writing summaries to output shapefile')
-    _add_fields_to_shapefile(
+    utils.add_fields_to_vector(
         field_pickle_map, f_reg['watershed_results_ndr_path'])
 
     LOGGER.info(r'NDR complete!')
@@ -1120,27 +1120,28 @@ def _add_fields_to_shapefile(field_pickle_map, target_vector_path):
     Returns:
         None.
     """
-    target_vector = gdal.OpenEx(
-        target_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    target_layer = target_vector.GetLayer()
-    field_summaries = {}
-    for field_name, pickle_file_name in field_pickle_map.items():
-        field_def = ogr.FieldDefn(field_name, ogr.OFTReal)
-        field_def.SetWidth(24)
-        field_def.SetPrecision(11)
-        target_layer.CreateField(field_def)
-        with open(pickle_file_name, 'rb') as pickle_file:
-            field_summaries[field_name] = pickle.load(pickle_file)
+    with utils.GDALUseExceptions():
+        target_vector = gdal.OpenEx(
+            target_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        target_layer = target_vector.GetLayer()
+        field_summaries = {}
+        for field_name, pickle_file_name in field_pickle_map.items():
+            field_def = ogr.FieldDefn(field_name, ogr.OFTReal)
+            field_def.SetWidth(24)
+            field_def.SetPrecision(11)
+            target_layer.CreateField(field_def)
+            with open(pickle_file_name, 'rb') as pickle_file:
+                field_summaries[field_name] = pickle.load(pickle_file)
 
-    for feature in target_layer:
-        fid = feature.GetFID()
-        for field_name in field_pickle_map:
-            feature.SetField(
-                field_name, float(field_summaries[field_name][fid]['sum']))
-        # Save back to datasource
-        target_layer.SetFeature(feature)
-    target_layer = None
-    target_vector = None
+        for feature in target_layer:
+            fid = feature.GetFID()
+            for field_name in field_pickle_map:
+                feature.SetField(
+                    field_name, float(field_summaries[field_name][fid]['sum']))
+            # Save back to datasource
+            target_layer.SetFeature(feature)
+        target_layer = None
+        target_vector = None
 
 
 @validation.invest_validator
@@ -1392,11 +1393,12 @@ def calculate_ic(d_up_path, d_dn_path, target_ic_path):
 def _calculate_ndr(
         effective_retention_path, ic_factor_path, k_param, target_ndr_path):
     """Calculate NDR as a function of Equation 4 in the user's guide."""
-    ic_factor_raster = gdal.OpenEx(ic_factor_path, gdal.OF_RASTER)
-    ic_factor_band = ic_factor_raster.GetRasterBand(1)
-    ic_min, ic_max, _, _ = ic_factor_band.GetStatistics(0, 1)
-    ic_factor_band = None
-    ic_factor_raster = None
+    with utils.GDALUseExceptions():
+        ic_factor_raster = gdal.OpenEx(ic_factor_path, gdal.OF_RASTER)
+        ic_factor_band = ic_factor_raster.GetRasterBand(1)
+        ic_min, ic_max, _, _ = ic_factor_band.GetStatistics(0, 1)
+        ic_factor_band = None
+        ic_factor_raster = None
     ic_0_param = (ic_min + ic_max) / 2
 
     pygeoprocessing.raster_map(

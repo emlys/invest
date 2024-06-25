@@ -552,69 +552,70 @@ def _write_summary_vector(
     Returns:
         ``None``
     """
-    source_aoi_vector = gdal.OpenEx(source_aoi_vector_path, gdal.OF_VECTOR)
-    source_aoi_layer = source_aoi_vector.GetLayer()
-    source_geom_type = source_aoi_layer.GetGeomType()
-    source_srs_wkt = pygeoprocessing.get_vector_info(
-        source_aoi_vector_path)['projection_wkt']
-    source_srs = osr.SpatialReference()
-    source_srs.ImportFromWkt(source_srs_wkt)
+    with utils.GDALUseExceptions():
+        source_aoi_vector = gdal.OpenEx(source_aoi_vector_path, gdal.OF_VECTOR)
+        source_aoi_layer = source_aoi_vector.GetLayer()
+        source_geom_type = source_aoi_layer.GetGeomType()
+        source_srs_wkt = pygeoprocessing.get_vector_info(
+            source_aoi_vector_path)['projection_wkt']
+        source_srs = osr.SpatialReference()
+        source_srs.ImportFromWkt(source_srs_wkt)
 
-    esri_driver = gdal.GetDriverByName('ESRI Shapefile')
-    target_watershed_vector = esri_driver.Create(
-        target_vector_path, 0, 0, 0, gdal.GDT_Unknown)
-    layer_name = os.path.splitext(os.path.basename(
-        target_vector_path))[0]
-    LOGGER.debug(f"creating layer {layer_name}")
-    target_watershed_layer = target_watershed_vector.CreateLayer(
-        layer_name, source_srs, source_geom_type)
+        esri_driver = gdal.GetDriverByName('ESRI Shapefile')
+        target_watershed_vector = esri_driver.Create(
+            target_vector_path, 0, 0, 0, gdal.GDT_Unknown)
+        layer_name = os.path.splitext(os.path.basename(
+            target_vector_path))[0]
+        LOGGER.debug(f"creating layer {layer_name}")
+        target_watershed_layer = target_watershed_vector.CreateLayer(
+            layer_name, source_srs, source_geom_type)
 
-    target_fields = ['rnf_rt_idx', 'rnf_rt_m3', 'flood_vol']
-    if damage_per_aoi_stats is not None:
-        target_fields += ['aff_bld', 'serv_blt']
-
-    for field_name in target_fields:
-        field_def = ogr.FieldDefn(field_name, ogr.OFTReal)
-        field_def.SetWidth(36)
-        field_def.SetPrecision(11)
-        target_watershed_layer.CreateField(field_def)
-
-    target_layer_defn = target_watershed_layer.GetLayerDefn()
-    for base_feature in source_aoi_layer:
-        feature_id = base_feature.GetFID()
-        target_feature = ogr.Feature(target_layer_defn)
-        base_geom_ref = base_feature.GetGeometryRef()
-        target_feature.SetGeometry(base_geom_ref.Clone())
-        base_geom_ref = None
-
-        pixel_count = runoff_ret_stats[feature_id]['count']
-        if pixel_count > 0:
-            mean_value = (
-                runoff_ret_stats[feature_id]['sum'] / float(pixel_count))
-            target_feature.SetField('rnf_rt_idx', float(mean_value))
-
-        target_feature.SetField(
-            'rnf_rt_m3', float(
-                runoff_ret_vol_stats[feature_id]['sum']))
-
+        target_fields = ['rnf_rt_idx', 'rnf_rt_m3', 'flood_vol']
         if damage_per_aoi_stats is not None:
-            pixel_count = runoff_ret_vol_stats[feature_id]['count']
+            target_fields += ['aff_bld', 'serv_blt']
+
+        for field_name in target_fields:
+            field_def = ogr.FieldDefn(field_name, ogr.OFTReal)
+            field_def.SetWidth(36)
+            field_def.SetPrecision(11)
+            target_watershed_layer.CreateField(field_def)
+
+        target_layer_defn = target_watershed_layer.GetLayerDefn()
+        for base_feature in source_aoi_layer:
+            feature_id = base_feature.GetFID()
+            target_feature = ogr.Feature(target_layer_defn)
+            base_geom_ref = base_feature.GetGeometryRef()
+            target_feature.SetGeometry(base_geom_ref.Clone())
+            base_geom_ref = None
+
+            pixel_count = runoff_ret_stats[feature_id]['count']
             if pixel_count > 0:
-                damage_sum = damage_per_aoi_stats[feature_id]
-                target_feature.SetField('aff_bld', damage_sum)
+                mean_value = (
+                    runoff_ret_stats[feature_id]['sum'] / float(pixel_count))
+                target_feature.SetField('rnf_rt_idx', float(mean_value))
 
-                # This is the service_built equation.
-                target_feature.SetField(
-                    'serv_blt', (
-                        damage_sum * runoff_ret_vol_stats[feature_id]['sum']))
+            target_feature.SetField(
+                'rnf_rt_m3', float(
+                    runoff_ret_vol_stats[feature_id]['sum']))
 
-        target_feature.SetField(
-            'flood_vol', float(flood_volume_stats[feature_id]['sum']))
+            if damage_per_aoi_stats is not None:
+                pixel_count = runoff_ret_vol_stats[feature_id]['count']
+                if pixel_count > 0:
+                    damage_sum = damage_per_aoi_stats[feature_id]
+                    target_feature.SetField('aff_bld', damage_sum)
 
-        target_watershed_layer.CreateFeature(target_feature)
-    target_watershed_layer.SyncToDisk()
-    target_watershed_layer = None
-    target_watershed_vector = None
+                    # This is the service_built equation.
+                    target_feature.SetField(
+                        'serv_blt', (
+                            damage_sum * runoff_ret_vol_stats[feature_id]['sum']))
+
+            target_feature.SetField(
+                'flood_vol', float(flood_volume_stats[feature_id]['sum']))
+
+            target_watershed_layer.CreateFeature(target_feature)
+        target_watershed_layer.SyncToDisk()
+        target_watershed_layer = None
+        target_watershed_vector = None
 
 
 def _calculate_damage_to_infrastructure_in_aoi(
@@ -637,72 +638,73 @@ def _calculate_damage_to_infrastructure_in_aoi(
         A ``dict`` mapping the FID of geometries in ``aoi_vector_path`` with
         the ``float`` total damage to infrastructure in that AOI/watershed.
     """
-    infrastructure_vector = gdal.OpenEx(structures_vector_path, gdal.OF_VECTOR)
-    infrastructure_layer = infrastructure_vector.GetLayer()
+    with utils.GDALUseExceptions():
+        infrastructure_vector = gdal.OpenEx(structures_vector_path, gdal.OF_VECTOR)
+        infrastructure_layer = infrastructure_vector.GetLayer()
 
-    damage_type_map = validation.get_validated_dataframe(
-        structures_damage_table,
-        **MODEL_SPEC['args']['infrastructure_damage_loss_table_path']
-    )['damage'].to_dict()
+        damage_type_map = validation.get_validated_dataframe(
+            structures_damage_table,
+            **MODEL_SPEC['args']['infrastructure_damage_loss_table_path']
+        )['damage'].to_dict()
 
-    infrastructure_layer_defn = infrastructure_layer.GetLayerDefn()
-    type_index = -1
-    for field_defn in infrastructure_layer.schema:
-        field_name = field_defn.GetName()
-        if field_name.lower() == 'type':
-            type_index = infrastructure_layer_defn.GetFieldIndex(field_name)
-            break
+        infrastructure_layer_defn = infrastructure_layer.GetLayerDefn()
+        type_index = -1
+        for field_defn in infrastructure_layer.schema:
+            field_name = field_defn.GetName()
+            if field_name.lower() == 'type':
+                type_index = infrastructure_layer_defn.GetFieldIndex(field_name)
+                break
 
-    if type_index == -1:
-        raise ValueError(
-            f"Could not find field 'Type' in {structures_vector_path}")
+        if type_index == -1:
+            raise ValueError(
+                f"Could not find field 'Type' in {structures_vector_path}")
 
-    structures_index = rtree.index.Index(interleaved=True)
-    for infrastructure_feature in infrastructure_layer:
-        infrastructure_geometry = infrastructure_feature.GetGeometryRef()
+        structures_index = rtree.index.Index(interleaved=True)
+        for infrastructure_feature in infrastructure_layer:
+            infrastructure_geometry = infrastructure_feature.GetGeometryRef()
 
-        # We've had a case on the forums where a user provided an
-        # infrastructure vector with either invalid or missing geometries. This
-        # allows us to handle these in the model run itself.
-        if not infrastructure_geometry:
-            LOGGER.debug(
-                f'Infrastructure feature {infrastructure_feature.GetFID()} has '
-                'no geometry; skipping.')
-            continue
+            # We've had a case on the forums where a user provided an
+            # infrastructure vector with either invalid or missing geometries. This
+            # allows us to handle these in the model run itself.
+            if not infrastructure_geometry:
+                LOGGER.debug(
+                    f'Infrastructure feature {infrastructure_feature.GetFID()} has '
+                    'no geometry; skipping.')
+                continue
 
-        shapely_geometry = shapely.wkb.loads(
-            bytes(infrastructure_geometry.ExportToWkb()))
+            shapely_geometry = shapely.wkb.loads(
+                bytes(infrastructure_geometry.ExportToWkb()))
 
-        structures_index.insert(
-            infrastructure_feature.GetFID(), shapely_geometry.bounds)
+            structures_index.insert(
+                infrastructure_feature.GetFID(), shapely_geometry.bounds)
 
-    aoi_vector = gdal.OpenEx(aoi_vector_path, gdal.OF_VECTOR)
-    aoi_layer = aoi_vector.GetLayer()
+        aoi_vector = gdal.OpenEx(aoi_vector_path, gdal.OF_VECTOR)
+        aoi_layer = aoi_vector.GetLayer()
 
-    aoi_damage = {}
-    for aoi_feature in aoi_layer:
-        aoi_geometry = aoi_feature.GetGeometryRef()
-        aoi_geometry_shapely = shapely.wkb.loads(
-            bytes(aoi_geometry.ExportToWkb()))
-        aoi_geometry_prep = shapely.prepared.prep(aoi_geometry_shapely)
+        aoi_damage = {}
+        for aoi_feature in aoi_layer:
+            aoi_geometry = aoi_feature.GetGeometryRef()
+            aoi_geometry_shapely = shapely.wkb.loads(
+                bytes(aoi_geometry.ExportToWkb()))
+            aoi_geometry_prep = shapely.prepared.prep(aoi_geometry_shapely)
 
-        total_damage = 0
-        for infrastructure_fid in structures_index.intersection(
-                aoi_geometry_shapely.bounds):
-            infrastructure_feature = infrastructure_layer.GetFeature(
-                infrastructure_fid)
-            infrastructure_geometry = shapely.wkb.loads(
-                bytes(infrastructure_feature.GetGeometryRef().ExportToWkb()))
-            if aoi_geometry_prep.intersects(infrastructure_geometry):
-                intersection_geometry = aoi_geometry_shapely.intersection(
-                    infrastructure_geometry)
-                damage_type = int(infrastructure_feature.GetField(type_index))
-                total_damage += (
-                    intersection_geometry.area * damage_type_map[damage_type])
+            total_damage = 0
+            for infrastructure_fid in structures_index.intersection(
+                    aoi_geometry_shapely.bounds):
+                infrastructure_feature = infrastructure_layer.GetFeature(
+                    infrastructure_fid)
+                infrastructure_geometry = shapely.wkb.loads(
+                    bytes(infrastructure_feature.GetGeometryRef().ExportToWkb()))
+                if aoi_geometry_prep.intersects(infrastructure_geometry):
+                    intersection_geometry = aoi_geometry_shapely.intersection(
+                        infrastructure_geometry)
+                    damage_type = int(infrastructure_feature.GetField(type_index))
+                    total_damage += (
+                        intersection_geometry.area * damage_type_map[damage_type])
 
-        aoi_damage[aoi_feature.GetFID()] = total_damage
+            aoi_damage[aoi_feature.GetFID()] = total_damage
 
-    return aoi_damage
+        return aoi_damage
 
 
 def _flood_vol_op(

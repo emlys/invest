@@ -35,10 +35,11 @@ _TARGET_GDAL_TYPE_BYTE = gdal.GDT_Byte
 _TARGET_NODATA_FLOAT32 = float(numpy.finfo(numpy.float32).min)
 _TARGET_NODATA_BYTE = 255  # for unsigned 8-bit int
 
-# ESPG code for warping rasters to WGS84 coordinate system.
-_WGS84_SRS = osr.SpatialReference()
-_WGS84_SRS.ImportFromEPSG(4326)
-_WGS84_WKT = _WGS84_SRS.ExportToWkt()
+with utils.GDALUseExceptions():
+    # ESPG code for warping rasters to WGS84 coordinate system.
+    _WGS84_SRS = osr.SpatialReference()
+    _WGS84_SRS.ImportFromEPSG(4326)
+    _WGS84_WKT = _WGS84_SRS.ExportToWkt()
 
 # Resampling method for rasters.
 _RESAMPLE_METHOD = 'near'
@@ -1198,41 +1199,42 @@ def _polygonize(source_raster_path, mask_raster_path,
     """
     LOGGER.info(f'Polygonizing {source_raster_path} --> '
                 f'{target_polygonized_vector} using mask {mask_raster_path}')
-    raster = gdal.OpenEx(source_raster_path, gdal.OF_RASTER)
-    band = raster.GetRasterBand(1)
+    with utils.GDALUseExceptions():
+        raster = gdal.OpenEx(source_raster_path, gdal.OF_RASTER)
+        band = raster.GetRasterBand(1)
 
-    mask_raster = gdal.OpenEx(mask_raster_path, gdal.OF_RASTER)
-    mask_band = mask_raster.GetRasterBand(1)
+        mask_raster = gdal.OpenEx(mask_raster_path, gdal.OF_RASTER)
+        mask_band = mask_raster.GetRasterBand(1)
 
-    raster_srs = osr.SpatialReference()
-    raster_srs.ImportFromWkt(raster.GetProjectionRef())
+        raster_srs = osr.SpatialReference()
+        raster_srs.ImportFromWkt(raster.GetProjectionRef())
 
-    driver = gdal.GetDriverByName('GPKG')
-    vector = driver.Create(
-        target_polygonized_vector, 0, 0, 0, gdal.GDT_Unknown)
-    layer = vector.CreateLayer(layer_name, raster_srs, ogr.wkbPolygon)
+        driver = gdal.GetDriverByName('GPKG')
+        vector = driver.Create(
+            target_polygonized_vector, 0, 0, 0, gdal.GDT_Unknown)
+        layer = vector.CreateLayer(layer_name, raster_srs, ogr.wkbPolygon)
 
-    # Create an integer field that contains values from the raster
-    field_defn = ogr.FieldDefn(str(field_name), ogr.OFTInteger)
-    field_defn.SetWidth(3)
-    field_defn.SetPrecision(0)
-    layer.CreateField(field_defn)
+        # Create an integer field that contains values from the raster
+        field_defn = ogr.FieldDefn(str(field_name), ogr.OFTInteger)
+        field_defn.SetWidth(3)
+        field_defn.SetPrecision(0)
+        layer.CreateField(field_defn)
 
-    raster_srs = osr.SpatialReference()
-    raster_srs.ImportFromWkt(raster.GetProjectionRef())
+        raster_srs = osr.SpatialReference()
+        raster_srs.ImportFromWkt(raster.GetProjectionRef())
 
-    layer.StartTransaction()
-    # 0 represents field index 0, into which pixel values will be written.
-    gdal.Polygonize(band, mask_band, layer, 0)
-    layer.CommitTransaction()
+        layer.StartTransaction()
+        # 0 represents field index 0, into which pixel values will be written.
+        gdal.Polygonize(band, mask_band, layer, 0)
+        layer.CommitTransaction()
 
-    layer = None
-    vector = None
-    driver = None
-    band = None
-    raster = None
-    mask_band = None
-    mask_raster = None
+        layer = None
+        vector = None
+        driver = None
+        band = None
+        raster = None
+        mask_band = None
+        mask_raster = None
 
 
 def _create_summary_statistics_file(
@@ -1278,23 +1280,24 @@ def _create_summary_statistics_file(
     Returns:
         ``None``
     """
-    subregions_vector = gdal.OpenEx(subregions_vector_path)
-    subregions_layer = subregions_vector.GetLayer()
-    name_field = None
-    for field_defn in subregions_layer.schema:
-        source_fieldname = field_defn.GetName()
-        if source_fieldname.lower() == 'name':
-            name_field = source_fieldname
-            break
-    subregion_fid_to_name = {}
-    for feature in subregions_layer:
-        if name_field is None:
-            subregion_name = 'Total Region'
-        else:
-            subregion_name = feature.GetField(name_field)
-        subregion_fid_to_name[feature.GetFID()] = subregion_name
-    subregions_layer = None
-    subregions_vector = None
+    with utils.GDALUseExceptions():
+        subregions_vector = gdal.OpenEx(subregions_vector_path)
+        subregions_layer = subregions_vector.GetLayer()
+        name_field = None
+        for field_defn in subregions_layer.schema:
+            source_fieldname = field_defn.GetName()
+            if source_fieldname.lower() == 'name':
+                name_field = source_fieldname
+                break
+        subregion_fid_to_name = {}
+        for feature in subregions_layer:
+            if name_field is None:
+                subregion_name = 'Total Region'
+            else:
+                subregion_name = feature.GetField(name_field)
+            subregion_fid_to_name[feature.GetFID()] = subregion_name
+        subregions_layer = None
+        subregions_vector = None
 
     pairwise_data = {}
     habitats = set()
@@ -1552,30 +1555,31 @@ def _align(raster_path_map, vector_path_map, target_pixel_size,
         for source_vector_path, target_raster_path in vector_path_map.items():
             # if there's a 'rating' column, then we're rasterizing a vector
             # attribute that represents a positive floating-point value.
-            vector = gdal.OpenEx(source_vector_path, gdal.OF_VECTOR)
-            layer = vector.GetLayer()
-            raster_type = _TARGET_GDAL_TYPE_BYTE
-            nodata_value = _TARGET_NODATA_BYTE
-            burn_values = [1]
-            rasterize_option_list = []
+            with utils.GDALUseExceptions():
+                vector = gdal.OpenEx(source_vector_path, gdal.OF_VECTOR)
+                layer = vector.GetLayer()
+                raster_type = _TARGET_GDAL_TYPE_BYTE
+                nodata_value = _TARGET_NODATA_BYTE
+                burn_values = [1]
+                rasterize_option_list = []
 
-            # Only rasterize with ALL_TOUCHED=TRUE if we know it should be
-            # rasterized as such (habitats/stressors)
-            if source_vector_path in all_touched_vectors:
-                rasterize_option_list.append('ALL_TOUCHED=TRUE')
+                # Only rasterize with ALL_TOUCHED=TRUE if we know it should be
+                # rasterized as such (habitats/stressors)
+                if source_vector_path in all_touched_vectors:
+                    rasterize_option_list.append('ALL_TOUCHED=TRUE')
 
-            for field in layer.schema:
-                fieldname = field.GetName()
-                if fieldname.lower() == 'rating':
-                    rasterize_option_list.append(
-                        f'ATTRIBUTE={fieldname}')
-                    raster_type = _TARGET_GDAL_TYPE_FLOAT32
-                    nodata_value = _TARGET_NODATA_FLOAT32
-                    burn_values = None
-                    break
+                for field in layer.schema:
+                    fieldname = field.GetName()
+                    if fieldname.lower() == 'rating':
+                        rasterize_option_list.append(
+                            f'ATTRIBUTE={fieldname}')
+                        raster_type = _TARGET_GDAL_TYPE_FLOAT32
+                        nodata_value = _TARGET_NODATA_FLOAT32
+                        burn_values = None
+                        break
 
-            layer = None
-            vector = None
+                layer = None
+                vector = None
 
             pygeoprocessing.create_raster_from_bounding_box(
                 target_raster_path=target_raster_path,
@@ -1619,57 +1623,58 @@ def _simplify(source_vector_path, tolerance, target_vector_path,
         preserve_columns = []
     preserve_columns = set(name.lower() for name in preserve_columns)
 
-    source_vector = gdal.OpenEx(source_vector_path)
-    source_layer = source_vector.GetLayer()
+    with utils.GDALUseExceptions():
+        source_vector = gdal.OpenEx(source_vector_path)
+        source_layer = source_vector.GetLayer()
 
-    target_driver = gdal.GetDriverByName('GPKG')
-    target_vector = target_driver.Create(
-        target_vector_path, 0, 0, 0, gdal.GDT_Unknown)
-    target_layer_name = os.path.splitext(
-        os.path.basename(target_vector_path))[0]
+        target_driver = gdal.GetDriverByName('GPKG')
+        target_vector = target_driver.Create(
+            target_vector_path, 0, 0, 0, gdal.GDT_Unknown)
+        target_layer_name = os.path.splitext(
+            os.path.basename(target_vector_path))[0]
 
-    # Using wkbUnknown is important here because a user can provide a single
-    # vector with multiple geometry types.  GPKG can handle whatever geom types
-    # we want it to use, but it will only be a conformant GPKG if and only if
-    # we set the layer type to ogr.wkbUnknown.  Otherwise, the GPKG standard
-    # would expect that all geometries in a layer match the geom type of the
-    # layer and GDAL will raise a warning if that's not the case.
-    target_layer = target_vector.CreateLayer(
-        target_layer_name, source_layer.GetSpatialRef(), ogr.wkbUnknown)
+        # Using wkbUnknown is important here because a user can provide a single
+        # vector with multiple geometry types.  GPKG can handle whatever geom types
+        # we want it to use, but it will only be a conformant GPKG if and only if
+        # we set the layer type to ogr.wkbUnknown.  Otherwise, the GPKG standard
+        # would expect that all geometries in a layer match the geom type of the
+        # layer and GDAL will raise a warning if that's not the case.
+        target_layer = target_vector.CreateLayer(
+            target_layer_name, source_layer.GetSpatialRef(), ogr.wkbUnknown)
 
-    for field in source_layer.schema:
-        if field.GetName().lower() in preserve_columns:
-            new_definition = ogr.FieldDefn(field.GetName(), field.GetType())
-            target_layer.CreateField(new_definition)
+        for field in source_layer.schema:
+            if field.GetName().lower() in preserve_columns:
+                new_definition = ogr.FieldDefn(field.GetName(), field.GetType())
+                target_layer.CreateField(new_definition)
 
-    target_layer_defn = target_layer.GetLayerDefn()
-    target_layer.StartTransaction()
+        target_layer_defn = target_layer.GetLayerDefn()
+        target_layer.StartTransaction()
 
-    for source_feature in source_layer:
-        target_feature = ogr.Feature(target_layer_defn)
-        source_geom = source_feature.GetGeometryRef()
-        simplified_geom = source_geom.SimplifyPreserveTopology(tolerance)
-        if simplified_geom is not None:
-            target_geom = simplified_geom
-        else:
-            # If the simplification didn't work for whatever reason, fall back
-            # to the original geometry.
-            LOGGER.debug(
-                f"Simplification of {os.path.basename(source_vector_path)} "
-                f"feature FID:{source_feature.GetFID()} failed; falling back "
-                "to original geometry")
-            target_geom = source_geom
+        for source_feature in source_layer:
+            target_feature = ogr.Feature(target_layer_defn)
+            source_geom = source_feature.GetGeometryRef()
+            simplified_geom = source_geom.SimplifyPreserveTopology(tolerance)
+            if simplified_geom is not None:
+                target_geom = simplified_geom
+            else:
+                # If the simplification didn't work for whatever reason, fall back
+                # to the original geometry.
+                LOGGER.debug(
+                    f"Simplification of {os.path.basename(source_vector_path)} "
+                    f"feature FID:{source_feature.GetFID()} failed; falling back "
+                    "to original geometry")
+                target_geom = source_geom
 
-        for fieldname in [field.GetName() for field in target_layer.schema]:
-            target_feature.SetField(
-                fieldname, source_feature.GetField(fieldname))
+            for fieldname in [field.GetName() for field in target_layer.schema]:
+                target_feature.SetField(
+                    fieldname, source_feature.GetField(fieldname))
 
-        target_feature.SetGeometry(target_geom)
-        target_layer.CreateFeature(target_feature)
+            target_feature.SetGeometry(target_geom)
+            target_layer.CreateFeature(target_feature)
 
-    target_layer.CommitTransaction()
-    target_layer = None
-    target_vector = None
+        target_layer.CommitTransaction()
+        target_layer = None
+        target_vector = None
 
 
 def _prep_input_criterion_raster(
@@ -2038,13 +2043,7 @@ def _calculate_decayed_distance(stressor_raster_path, decay_type,
         stressor_raster_path)['pixel_size'][0])
     buffer_distance_in_pixels = buffer_distance / pixel_size
 
-    target_edt_raster = gdal.OpenEx(target_edt_path, gdal.GA_Update)
-    target_edt_band = target_edt_raster.GetRasterBand(1)
-    edt_nodata = target_edt_band.GetNoDataValue()
-    for block_info in pygeoprocessing.iterblocks((target_edt_path, 1),
-                                                 offset_only=True):
-        source_edt_block = target_edt_band.ReadAsArray(**block_info)
-
+    def decayed_edt_op(source_edt_block):
         # The pygeoprocessing target datatype for EDT is a float32
         decayed_edt = numpy.full(source_edt_block.shape, 0,
                                  dtype=numpy.float32)
@@ -2076,13 +2075,15 @@ def _calculate_decayed_distance(stressor_raster_path, decay_type,
 
         # Reset any nodata pixels that were in the original EDT block.
         decayed_edt[nodata_pixels] = edt_nodata
+        return decayed_edt
 
-        target_edt_band.WriteArray(decayed_edt,
-                                   xoff=block_info['xoff'],
-                                   yoff=block_info['yoff'])
-
-    target_edt_band = None
-    target_edt_raster = None
+    pygeoprocessing.raster_calculator(
+        [(target_edt_path, 1)],
+        decayed_edt_op,
+        target_edt_path,
+        _TARGET_GDAL_TYPE_FLOAT32,
+        _TARGET_NODATA_FLOAT32
+    )
 
 
 def _calc_criteria(attributes_list, habitat_mask_raster_path,
@@ -2118,94 +2119,95 @@ def _calc_criteria(attributes_list, habitat_mask_raster_path,
         habitat_mask_raster_path, target_criterion_path,
         _TARGET_GDAL_TYPE_FLOAT32, [_TARGET_NODATA_FLOAT32])
 
-    habitat_mask_raster = gdal.OpenEx(habitat_mask_raster_path)
-    habitat_band = habitat_mask_raster.GetRasterBand(1)
+    with utils.GDALUseExceptions():
+        habitat_mask_raster = gdal.OpenEx(habitat_mask_raster_path)
+        habitat_band = habitat_mask_raster.GetRasterBand(1)
 
-    target_criterion_raster = gdal.OpenEx(target_criterion_path,
-                                          gdal.GA_Update)
-    target_criterion_band = target_criterion_raster.GetRasterBand(1)
+        target_criterion_raster = gdal.OpenEx(target_criterion_path,
+                                              gdal.GA_Update)
+        target_criterion_band = target_criterion_raster.GetRasterBand(1)
 
-    if decayed_edt_raster_path:
-        decayed_edt_raster = gdal.OpenEx(
-            decayed_edt_raster_path, gdal.GA_Update)
-        decayed_edt_band = decayed_edt_raster.GetRasterBand(1)
-
-    for block_info in pygeoprocessing.iterblocks((habitat_mask_raster_path, 1),
-                                                 offset_only=True):
-        habitat_mask = habitat_band.ReadAsArray(**block_info)
-        valid_mask = (habitat_mask == 1)
-
-        criterion_score = numpy.full(
-            habitat_mask.shape, _TARGET_NODATA_FLOAT32, dtype=numpy.float32)
-        numerator = numpy.zeros(habitat_mask.shape, dtype=numpy.float32)
-        denominator = numpy.zeros(habitat_mask.shape, dtype=numpy.float32)
-        for attribute_dict in attributes_list:
-            # A rating of 0 means that the criterion should be ignored.
-            # RATING may be either a number or a raster.
-            try:
-                rating = float(attribute_dict['rating'])
-                if rating == 0:
-                    continue
-            except ValueError:
-                # When rating is a string filepath, it represents a raster.
-                try:
-                    # Opening a raster is fairly inexpensive, so it should be
-                    # fine to re-open the raster on each block iteration.
-                    rating_raster = gdal.OpenEx(attribute_dict['rating'])
-                    rating_band = rating_raster.GetRasterBand(1)
-                    rating_nodata = rating_band.GetNoDataValue()
-                    rating = rating_band.ReadAsArray(**block_info)[valid_mask]
-
-                    # Any habitat pixels with a nodata rating (no rating
-                    # specified by the user) should be
-                    # interpreted as having a rating of 0.
-                    rating[pygeoprocessing.array_equals_nodata(
-                        rating, rating_nodata)] = 0
-                finally:
-                    rating_band = None
-                    rating_raster = None
-            data_quality = attribute_dict['dq']
-            weight = attribute_dict['weight']
-
-            # The (data_quality + weight) denominator running sum is
-            # re-calculated for each block.  While this is inefficient,
-            # ``dq`` and ``weight`` are always scalars and so the wasted CPU
-            # time is pretty trivial, even on large habitat/stressor matrices.
-            # Plus, it's way easier to read and more maintainable to just have
-            # everything be recalculated.
-            numerator[valid_mask] += (rating / (data_quality * weight))
-            denominator[valid_mask] += (1 / (data_quality * weight))
-
-        # This is not clearly documented in the UG, but in the source code of
-        # previous (3.3.1, 3.10.2) versions of HRA, the numerator is multiplied
-        # by the stressor's weighted distance raster.
-        # This will give highest values to pixels that overlap stressors and
-        # decaying values further away from the overlapping pixels.
         if decayed_edt_raster_path:
-            numerator[valid_mask] *= decayed_edt_band.ReadAsArray(
-                **block_info)[valid_mask]
+            decayed_edt_raster = gdal.OpenEx(
+                decayed_edt_raster_path, gdal.GA_Update)
+            decayed_edt_band = decayed_edt_raster.GetRasterBand(1)
 
-        # It is possible for the user to skip all pairwise calculations by
-        # setting the rating to 0 for every habitat/stressor combination.
-        # Doing so will leave the denominator at 0, resulting in a numpy
-        # divide-by-zero warning and +/- inf pixel values.
-        # JD is making the call to instead write out a raster filled with 0
-        # everywhere it is valid.
-        if numpy.sum(denominator[valid_mask]) == 0:
-            criterion_score[valid_mask] = 0
-        else:
-            # This is the normal calculation when the user has defined at least
-            # one rating for a habitat/stressor pair.
-            criterion_score[valid_mask] = (
-                numerator[valid_mask] / denominator[valid_mask])
+        for block_info in pygeoprocessing.iterblocks((habitat_mask_raster_path, 1),
+                                                     offset_only=True):
+            habitat_mask = habitat_band.ReadAsArray(**block_info)
+            valid_mask = (habitat_mask == 1)
 
-        target_criterion_band.WriteArray(criterion_score,
-                                         xoff=block_info['xoff'],
-                                         yoff=block_info['yoff'])
-    decayed_edt_band = None
-    decayed_edt_raster = None
-    target_criterion_band = None
-    target_criterion_raster = None
+            criterion_score = numpy.full(
+                habitat_mask.shape, _TARGET_NODATA_FLOAT32, dtype=numpy.float32)
+            numerator = numpy.zeros(habitat_mask.shape, dtype=numpy.float32)
+            denominator = numpy.zeros(habitat_mask.shape, dtype=numpy.float32)
+            for attribute_dict in attributes_list:
+                # A rating of 0 means that the criterion should be ignored.
+                # RATING may be either a number or a raster.
+                try:
+                    rating = float(attribute_dict['rating'])
+                    if rating == 0:
+                        continue
+                except ValueError:
+                    # When rating is a string filepath, it represents a raster.
+                    try:
+                        # Opening a raster is fairly inexpensive, so it should be
+                        # fine to re-open the raster on each block iteration.
+                        rating_raster = gdal.OpenEx(attribute_dict['rating'])
+                        rating_band = rating_raster.GetRasterBand(1)
+                        rating_nodata = rating_band.GetNoDataValue()
+                        rating = rating_band.ReadAsArray(**block_info)[valid_mask]
+
+                        # Any habitat pixels with a nodata rating (no rating
+                        # specified by the user) should be
+                        # interpreted as having a rating of 0.
+                        rating[pygeoprocessing.array_equals_nodata(
+                            rating, rating_nodata)] = 0
+                    finally:
+                        rating_band = None
+                        rating_raster = None
+                data_quality = attribute_dict['dq']
+                weight = attribute_dict['weight']
+
+                # The (data_quality + weight) denominator running sum is
+                # re-calculated for each block.  While this is inefficient,
+                # ``dq`` and ``weight`` are always scalars and so the wasted CPU
+                # time is pretty trivial, even on large habitat/stressor matrices.
+                # Plus, it's way easier to read and more maintainable to just have
+                # everything be recalculated.
+                numerator[valid_mask] += (rating / (data_quality * weight))
+                denominator[valid_mask] += (1 / (data_quality * weight))
+
+            # This is not clearly documented in the UG, but in the source code of
+            # previous (3.3.1, 3.10.2) versions of HRA, the numerator is multiplied
+            # by the stressor's weighted distance raster.
+            # This will give highest values to pixels that overlap stressors and
+            # decaying values further away from the overlapping pixels.
+            if decayed_edt_raster_path:
+                numerator[valid_mask] *= decayed_edt_band.ReadAsArray(
+                    **block_info)[valid_mask]
+
+            # It is possible for the user to skip all pairwise calculations by
+            # setting the rating to 0 for every habitat/stressor combination.
+            # Doing so will leave the denominator at 0, resulting in a numpy
+            # divide-by-zero warning and +/- inf pixel values.
+            # JD is making the call to instead write out a raster filled with 0
+            # everywhere it is valid.
+            if numpy.sum(denominator[valid_mask]) == 0:
+                criterion_score[valid_mask] = 0
+            else:
+                # This is the normal calculation when the user has defined at least
+                # one rating for a habitat/stressor pair.
+                criterion_score[valid_mask] = (
+                    numerator[valid_mask] / denominator[valid_mask])
+
+            target_criterion_band.WriteArray(criterion_score,
+                                             xoff=block_info['xoff'],
+                                             yoff=block_info['yoff'])
+        decayed_edt_band = None
+        decayed_edt_raster = None
+        target_criterion_band = None
+        target_criterion_raster = None
 
 
 def _calculate_pairwise_risk(habitat_mask_raster_path, exposure_raster_path,

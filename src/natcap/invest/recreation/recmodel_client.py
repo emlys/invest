@@ -567,14 +567,15 @@ def execute(args):
 
 def _copy_aoi_no_grid(source_aoi_path, dest_aoi_path):
     """Copy a shapefile from source to destination"""
-    aoi_vector = gdal.OpenEx(source_aoi_path, gdal.OF_VECTOR)
-    driver = gdal.GetDriverByName('ESRI Shapefile')
-    local_aoi_vector = driver.CreateCopy(
-        dest_aoi_path, aoi_vector)
-    gdal.Dataset.__swig_destroy__(local_aoi_vector)
-    local_aoi_vector = None
-    gdal.Dataset.__swig_destroy__(aoi_vector)
-    aoi_vector = None
+    with utils.GDALUseExceptions():
+        aoi_vector = gdal.OpenEx(source_aoi_path, gdal.OF_VECTOR)
+        driver = gdal.GetDriverByName('ESRI Shapefile')
+        local_aoi_vector = driver.CreateCopy(
+            dest_aoi_path, aoi_vector)
+        gdal.Dataset.__swig_destroy__(local_aoi_vector)
+        local_aoi_vector = None
+        gdal.Dataset.__swig_destroy__(aoi_vector)
+        aoi_vector = None
 
 
 def _retrieve_photo_user_days(
@@ -695,93 +696,94 @@ def _grid_vector(vector_path, grid_type, cell_size, out_grid_vector_path):
         None
 
     """
-    LOGGER.info("gridding aoi")
-    driver = gdal.GetDriverByName('ESRI Shapefile')
-    if os.path.exists(out_grid_vector_path):
-        driver.Delete(out_grid_vector_path)
+    with utils.GDALUseExceptions():
+        LOGGER.info("gridding aoi")
+        driver = gdal.GetDriverByName('ESRI Shapefile')
+        if os.path.exists(out_grid_vector_path):
+            driver.Delete(out_grid_vector_path)
 
-    vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR)
-    vector_layer = vector.GetLayer()
-    spat_ref = vector_layer.GetSpatialRef()
+        vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR)
+        vector_layer = vector.GetLayer()
+        spat_ref = vector_layer.GetSpatialRef()
 
-    original_vector_shapes = []
-    for feature in vector_layer:
-        wkt_feat = shapely.wkt.loads(feature.geometry().ExportToWkt())
-        original_vector_shapes.append(wkt_feat)
-    vector_layer.ResetReading()
-    original_polygon = shapely.prepared.prep(
-        shapely.ops.unary_union(original_vector_shapes))
+        original_vector_shapes = []
+        for feature in vector_layer:
+            wkt_feat = shapely.wkt.loads(feature.geometry().ExportToWkt())
+            original_vector_shapes.append(wkt_feat)
+        vector_layer.ResetReading()
+        original_polygon = shapely.prepared.prep(
+            shapely.ops.unary_union(original_vector_shapes))
 
-    out_grid_vector = driver.Create(
-        out_grid_vector_path, 0, 0, 0, gdal.GDT_Unknown)
-    grid_layer = out_grid_vector.CreateLayer(
-        'grid', spat_ref, ogr.wkbPolygon)
-    grid_layer_defn = grid_layer.GetLayerDefn()
+        out_grid_vector = driver.Create(
+            out_grid_vector_path, 0, 0, 0, gdal.GDT_Unknown)
+        grid_layer = out_grid_vector.CreateLayer(
+            'grid', spat_ref, ogr.wkbPolygon)
+        grid_layer_defn = grid_layer.GetLayerDefn()
 
-    extent = vector_layer.GetExtent()  # minx maxx miny maxy
-    if grid_type == 'hexagon':
-        # calculate the inner dimensions of the hexagons
-        grid_width = extent[1] - extent[0]
-        grid_height = extent[3] - extent[2]
-        delta_short_x = cell_size * 0.25
-        delta_long_x = cell_size * 0.5
-        delta_y = cell_size * 0.25 * (3 ** 0.5)
+        extent = vector_layer.GetExtent()  # minx maxx miny maxy
+        if grid_type == 'hexagon':
+            # calculate the inner dimensions of the hexagons
+            grid_width = extent[1] - extent[0]
+            grid_height = extent[3] - extent[2]
+            delta_short_x = cell_size * 0.25
+            delta_long_x = cell_size * 0.5
+            delta_y = cell_size * 0.25 * (3 ** 0.5)
 
-        # Since the grid is hexagonal it's not obvious how many rows and
-        # columns there should be just based on the number of squares that
-        # could fit into it.  The solution is to calculate the width and
-        # height of the largest row and column.
-        n_cols = int(math.floor(grid_width / (3 * delta_long_x)) + 1)
-        n_rows = int(math.floor(grid_height / delta_y) + 1)
+            # Since the grid is hexagonal it's not obvious how many rows and
+            # columns there should be just based on the number of squares that
+            # could fit into it.  The solution is to calculate the width and
+            # height of the largest row and column.
+            n_cols = int(math.floor(grid_width / (3 * delta_long_x)) + 1)
+            n_rows = int(math.floor(grid_height / delta_y) + 1)
 
-        def _generate_polygon(col_index, row_index):
-            """Generate a points for a closed hexagon."""
-            if (row_index + 1) % 2:
-                centroid = (
-                    extent[0] + (delta_long_x * (1 + (3 * col_index))),
-                    extent[2] + (delta_y * (row_index + 1)))
-            else:
-                centroid = (
-                    extent[0] + (delta_long_x * (2.5 + (3 * col_index))),
-                    extent[2] + (delta_y * (row_index + 1)))
-            x_coordinate, y_coordinate = centroid
-            hexagon = [(x_coordinate - delta_long_x, y_coordinate),
-                       (x_coordinate - delta_short_x, y_coordinate + delta_y),
-                       (x_coordinate + delta_short_x, y_coordinate + delta_y),
-                       (x_coordinate + delta_long_x, y_coordinate),
-                       (x_coordinate + delta_short_x, y_coordinate - delta_y),
-                       (x_coordinate - delta_short_x, y_coordinate - delta_y),
-                       (x_coordinate - delta_long_x, y_coordinate)]
-            return hexagon
-    elif grid_type == 'square':
-        def _generate_polygon(col_index, row_index):
-            """Generate points for a closed square."""
-            square = [
-                (extent[0] + col_index * cell_size + x,
-                 extent[2] + row_index * cell_size + y)
-                for x, y in [
-                    (0, 0), (cell_size, 0), (cell_size, cell_size),
-                    (0, cell_size), (0, 0)]]
-            return square
-        n_rows = int((extent[3] - extent[2]) / cell_size)
-        n_cols = int((extent[1] - extent[0]) / cell_size)
-    else:
-        raise ValueError(f'Unknown polygon type: {grid_type}')
+            def _generate_polygon(col_index, row_index):
+                """Generate a points for a closed hexagon."""
+                if (row_index + 1) % 2:
+                    centroid = (
+                        extent[0] + (delta_long_x * (1 + (3 * col_index))),
+                        extent[2] + (delta_y * (row_index + 1)))
+                else:
+                    centroid = (
+                        extent[0] + (delta_long_x * (2.5 + (3 * col_index))),
+                        extent[2] + (delta_y * (row_index + 1)))
+                x_coordinate, y_coordinate = centroid
+                hexagon = [(x_coordinate - delta_long_x, y_coordinate),
+                           (x_coordinate - delta_short_x, y_coordinate + delta_y),
+                           (x_coordinate + delta_short_x, y_coordinate + delta_y),
+                           (x_coordinate + delta_long_x, y_coordinate),
+                           (x_coordinate + delta_short_x, y_coordinate - delta_y),
+                           (x_coordinate - delta_short_x, y_coordinate - delta_y),
+                           (x_coordinate - delta_long_x, y_coordinate)]
+                return hexagon
+        elif grid_type == 'square':
+            def _generate_polygon(col_index, row_index):
+                """Generate points for a closed square."""
+                square = [
+                    (extent[0] + col_index * cell_size + x,
+                     extent[2] + row_index * cell_size + y)
+                    for x, y in [
+                        (0, 0), (cell_size, 0), (cell_size, cell_size),
+                        (0, cell_size), (0, 0)]]
+                return square
+            n_rows = int((extent[3] - extent[2]) / cell_size)
+            n_cols = int((extent[1] - extent[0]) / cell_size)
+        else:
+            raise ValueError(f'Unknown polygon type: {grid_type}')
 
-    for row_index in range(n_rows):
-        for col_index in range(n_cols):
-            polygon_points = _generate_polygon(col_index, row_index)
-            ring = ogr.Geometry(ogr.wkbLinearRing)
-            for xoff, yoff in polygon_points:
-                ring.AddPoint(xoff, yoff)
-            poly = ogr.Geometry(ogr.wkbPolygon)
-            poly.AddGeometry(ring)
+        for row_index in range(n_rows):
+            for col_index in range(n_cols):
+                polygon_points = _generate_polygon(col_index, row_index)
+                ring = ogr.Geometry(ogr.wkbLinearRing)
+                for xoff, yoff in polygon_points:
+                    ring.AddPoint(xoff, yoff)
+                poly = ogr.Geometry(ogr.wkbPolygon)
+                poly.AddGeometry(ring)
 
-            if original_polygon.contains(
-                    shapely.wkt.loads(poly.ExportToWkt())):
-                poly_feature = ogr.Feature(grid_layer_defn)
-                poly_feature.SetGeometry(poly)
-                grid_layer.CreateFeature(poly_feature)
+                if original_polygon.contains(
+                        shapely.wkt.loads(poly.ExportToWkt())):
+                    poly_feature = ogr.Feature(grid_layer_defn)
+                    poly_feature.SetGeometry(poly)
+                    grid_layer.CreateFeature(poly_feature)
 
 
 def _schedule_predictor_data_processing(
@@ -901,17 +903,18 @@ def _schedule_predictor_data_processing(
 def _prepare_response_polygons_lookup(
         response_vector_path, target_pickle_path):
     """Translate a shapefile to a dictionary that maps FIDs to geometries."""
-    response_vector = gdal.OpenEx(response_vector_path, gdal.OF_VECTOR)
-    response_layer = response_vector.GetLayer()
-    response_polygons_lookup = {}  # maps FID to prepared geometry
-    for response_feature in response_layer:
-        feature_geometry = response_feature.GetGeometryRef()
-        feature_polygon = shapely.wkt.loads(feature_geometry.ExportToWkt())
-        feature_geometry = None
-        response_polygons_lookup[response_feature.GetFID()] = feature_polygon
-    response_layer = None
-    with open(target_pickle_path, 'wb') as pickle_file:
-        pickle.dump(response_polygons_lookup, pickle_file)
+    with utils.GDALUseExceptions():
+        response_vector = gdal.OpenEx(response_vector_path, gdal.OF_VECTOR)
+        response_layer = response_vector.GetLayer()
+        response_polygons_lookup = {}  # maps FID to prepared geometry
+        for response_feature in response_layer:
+            feature_geometry = response_feature.GetGeometryRef()
+            feature_polygon = shapely.wkt.loads(feature_geometry.ExportToWkt())
+            feature_geometry = None
+            response_polygons_lookup[response_feature.GetFID()] = feature_polygon
+        response_layer = None
+        with open(target_pickle_path, 'wb') as pickle_file:
+            pickle.dump(response_polygons_lookup, pickle_file)
 
 
 def _json_to_shp_table(
@@ -934,55 +937,56 @@ def _json_to_shp_table(
         None
 
     """
-    driver = gdal.GetDriverByName('ESRI Shapefile')
-    if os.path.exists(predictor_vector_path):
-        driver.Delete(predictor_vector_path)
-    response_vector = gdal.OpenEx(
-        response_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    predictor_vector = driver.CreateCopy(
-        predictor_vector_path, response_vector)
-    response_vector = None
+    with utils.GDALUseExceptions():
+        driver = gdal.GetDriverByName('ESRI Shapefile')
+        if os.path.exists(predictor_vector_path):
+            driver.Delete(predictor_vector_path)
+        response_vector = gdal.OpenEx(
+            response_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        predictor_vector = driver.CreateCopy(
+            predictor_vector_path, response_vector)
+        response_vector = None
 
-    layer = predictor_vector.GetLayer()
-    layer_defn = layer.GetLayerDefn()
+        layer = predictor_vector.GetLayer()
+        layer_defn = layer.GetLayerDefn()
 
-    predictor_id_list = []
-    for json_filename in predictor_json_list:
-        predictor_id = os.path.basename(os.path.splitext(json_filename)[0])
-        predictor_id_list.append(predictor_id)
-        # Create a new field for the predictor
-        # Delete the field first if it already exists
-        field_index = layer.FindFieldIndex(
-            str(predictor_id), 1)
-        if field_index >= 0:
-            layer.DeleteField(field_index)
-        predictor_field = ogr.FieldDefn(str(predictor_id), ogr.OFTReal)
-        predictor_field.SetWidth(24)
-        predictor_field.SetPrecision(11)
-        layer.CreateField(predictor_field)
+        predictor_id_list = []
+        for json_filename in predictor_json_list:
+            predictor_id = os.path.basename(os.path.splitext(json_filename)[0])
+            predictor_id_list.append(predictor_id)
+            # Create a new field for the predictor
+            # Delete the field first if it already exists
+            field_index = layer.FindFieldIndex(
+                str(predictor_id), 1)
+            if field_index >= 0:
+                layer.DeleteField(field_index)
+            predictor_field = ogr.FieldDefn(str(predictor_id), ogr.OFTReal)
+            predictor_field.SetWidth(24)
+            predictor_field.SetPrecision(11)
+            layer.CreateField(predictor_field)
 
-        with open(json_filename, 'r') as file:
-            predictor_results = json.load(file)
-        for feature_id, value in predictor_results.items():
-            feature = layer.GetFeature(int(feature_id))
-            feature.SetField(str(predictor_id), value)
-            layer.SetFeature(feature)
+            with open(json_filename, 'r') as file:
+                predictor_results = json.load(file)
+            for feature_id, value in predictor_results.items():
+                feature = layer.GetFeature(int(feature_id))
+                feature.SetField(str(predictor_id), value)
+                layer.SetFeature(feature)
 
-    # Get all the fieldnames. If they are not in the predictor_id_list,
-    # get their index and delete
-    n_fields = layer_defn.GetFieldCount()
-    fieldnames = []
-    for idx in range(n_fields):
-        field_defn = layer_defn.GetFieldDefn(idx)
-        fieldnames.append(field_defn.GetName())
-    for field_name in fieldnames:
-        if field_name not in predictor_id_list:
-            idx = layer.FindFieldIndex(field_name, 1)
-            layer.DeleteField(idx)
-    layer_defn = None
-    layer = None
-    predictor_vector.FlushCache()
-    predictor_vector = None
+        # Get all the fieldnames. If they are not in the predictor_id_list,
+        # get their index and delete
+        n_fields = layer_defn.GetFieldCount()
+        fieldnames = []
+        for idx in range(n_fields):
+            field_defn = layer_defn.GetFieldDefn(idx)
+            fieldnames.append(field_defn.GetName())
+        for field_name in fieldnames:
+            if field_name not in predictor_id_list:
+                idx = layer.FindFieldIndex(field_name, 1)
+                layer.DeleteField(idx)
+        layer_defn = None
+        layer = None
+        predictor_vector.FlushCache()
+        predictor_vector = None
 
 
 def _raster_sum_mean(
@@ -1246,19 +1250,20 @@ def _ogr_to_geometry_list(vector_path):
         ``vector_path`` layer.
 
     """
-    vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR)
-    layer = vector.GetLayer()
-    geometry_list = []
-    for feature in layer:
-        feature_geometry = feature.GetGeometryRef()
-        shapely_geometry = shapely.wkt.loads(feature_geometry.ExportToWkt())
-        if not shapely_geometry.is_valid:
-            shapely_geometry = shapely_geometry.buffer(0)
-        geometry_list.append(shapely_geometry)
-        feature_geometry = None
-    layer = None
-    vector = None
-    return geometry_list
+    with utils.GDALUseExceptions():
+        vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR)
+        layer = vector.GetLayer()
+        geometry_list = []
+        for feature in layer:
+            feature_geometry = feature.GetGeometryRef()
+            shapely_geometry = shapely.wkt.loads(feature_geometry.ExportToWkt())
+            if not shapely_geometry.is_valid:
+                shapely_geometry = shapely_geometry.buffer(0)
+            geometry_list.append(shapely_geometry)
+            feature_geometry = None
+        layer = None
+        vector = None
+        return geometry_list
 
 
 def _compute_and_summarize_regression(
@@ -1364,38 +1369,39 @@ def _build_regression(
 
     """
     LOGGER.info("Computing regression")
-    response_vector = gdal.OpenEx(response_vector_path, gdal.OF_VECTOR)
-    response_layer = response_vector.GetLayer()
+    with utils.GDALUseExceptions():
+        response_vector = gdal.OpenEx(response_vector_path, gdal.OF_VECTOR)
+        response_layer = response_vector.GetLayer()
 
-    predictor_vector = gdal.OpenEx(predictor_vector_path, gdal.OF_VECTOR)
-    predictor_layer = predictor_vector.GetLayer()
-    predictor_layer_defn = predictor_layer.GetLayerDefn()
+        predictor_vector = gdal.OpenEx(predictor_vector_path, gdal.OF_VECTOR)
+        predictor_layer = predictor_vector.GetLayer()
+        predictor_layer_defn = predictor_layer.GetLayerDefn()
 
-    n_features = predictor_layer.GetFeatureCount()
-    # Not sure what would cause this to be untrue, but if it ever is,
-    # we sure want to know about it.
-    assert(n_features == response_layer.GetFeatureCount())
+        n_features = predictor_layer.GetFeatureCount()
+        # Not sure what would cause this to be untrue, but if it ever is,
+        # we sure want to know about it.
+        assert(n_features == response_layer.GetFeatureCount())
 
-    # Response data matrix
-    response_array = numpy.empty((n_features, 1))
-    for row_index, feature in enumerate(response_layer):
-        response_array[row_index, :] = feature.GetField(str(response_id))
-    response_array = numpy.log1p(response_array)
+        # Response data matrix
+        response_array = numpy.empty((n_features, 1))
+        for row_index, feature in enumerate(response_layer):
+            response_array[row_index, :] = feature.GetField(str(response_id))
+        response_array = numpy.log1p(response_array)
 
-    # Y-Intercept data matrix
-    intercept_array = numpy.ones_like(response_array)
+        # Y-Intercept data matrix
+        intercept_array = numpy.ones_like(response_array)
 
-    # Predictor data matrix
-    n_predictors = predictor_layer_defn.GetFieldCount()
-    predictor_matrix = numpy.empty((n_features, n_predictors))
-    predictor_names = []
-    for idx in range(n_predictors):
-        field_defn = predictor_layer_defn.GetFieldDefn(idx)
-        field_name = field_defn.GetName()
-        predictor_names.append(field_name)
-    for row_index, feature in enumerate(predictor_layer):
-        predictor_matrix[row_index, :] = numpy.array(
-            [feature.GetField(str(key)) for key in predictor_names])
+        # Predictor data matrix
+        n_predictors = predictor_layer_defn.GetFieldCount()
+        predictor_matrix = numpy.empty((n_features, n_predictors))
+        predictor_names = []
+        for idx in range(n_predictors):
+            field_defn = predictor_layer_defn.GetFieldDefn(idx)
+            field_name = field_defn.GetName()
+            predictor_names.append(field_name)
+        for row_index, feature in enumerate(predictor_layer):
+            predictor_matrix[row_index, :] = numpy.array(
+                [feature.GetField(str(key)) for key in predictor_names])
 
     # If some predictor has no data across all features, drop that predictor:
     valid_pred = ~numpy.isnan(predictor_matrix).all(axis=0)
@@ -1471,52 +1477,53 @@ def _calculate_scenario(
     """
     LOGGER.info("Calculating scenario results")
 
-    # Open for writing
-    scenario_coefficient_vector = gdal.OpenEx(
-        scenario_results_path, gdal.OF_VECTOR | gdal.GA_Update)
-    scenario_coefficient_layer = scenario_coefficient_vector.GetLayer()
+    with utils.GDALUseExceptions():
+        # Open for writing
+        scenario_coefficient_vector = gdal.OpenEx(
+            scenario_results_path, gdal.OF_VECTOR | gdal.GA_Update)
+        scenario_coefficient_layer = scenario_coefficient_vector.GetLayer()
 
-    # delete the response ID if it's already there because it must have been
-    # copied from the base layer
-    response_index = scenario_coefficient_layer.FindFieldIndex(response_id, 1)
-    if response_index >= 0:
-        scenario_coefficient_layer.DeleteField(response_index)
+        # delete the response ID if it's already there because it must have been
+        # copied from the base layer
+        response_index = scenario_coefficient_layer.FindFieldIndex(response_id, 1)
+        if response_index >= 0:
+            scenario_coefficient_layer.DeleteField(response_index)
 
-    response_field = ogr.FieldDefn(response_id, ogr.OFTReal)
-    response_field.SetWidth(24)
-    response_field.SetPrecision(11)
-    scenario_coefficient_layer.CreateField(response_field)
+        response_field = ogr.FieldDefn(response_id, ogr.OFTReal)
+        response_field.SetWidth(24)
+        response_field.SetPrecision(11)
+        scenario_coefficient_layer.CreateField(response_field)
 
-    # Load the pre-existing predictor coefficients to build the regression
-    # equation.
-    with open(coefficient_json_path, 'r') as json_file:
-        predictor_estimates = json.load(json_file)
+        # Load the pre-existing predictor coefficients to build the regression
+        # equation.
+        with open(coefficient_json_path, 'r') as json_file:
+            predictor_estimates = json.load(json_file)
 
-    y_intercept = predictor_estimates.pop("(Intercept)")
+        y_intercept = predictor_estimates.pop("(Intercept)")
 
-    for feature in scenario_coefficient_layer:
-        feature_id = feature.GetFID()
-        response_value = 0
-        try:
-            for predictor_id, coefficient in predictor_estimates.items():
-                response_value += (
-                    coefficient *
-                    feature.GetField(str(predictor_id)))
-        except TypeError:
-            # TypeError will happen if GetField returned None
-            LOGGER.warning('incomplete predictor data for feature_id '
-                           f'{feature_id}, not estimating PUD_EST')
+        for feature in scenario_coefficient_layer:
+            feature_id = feature.GetFID()
+            response_value = 0
+            try:
+                for predictor_id, coefficient in predictor_estimates.items():
+                    response_value += (
+                        coefficient *
+                        feature.GetField(str(predictor_id)))
+            except TypeError:
+                # TypeError will happen if GetField returned None
+                LOGGER.warning('incomplete predictor data for feature_id '
+                               f'{feature_id}, not estimating PUD_EST')
+                feature = None
+                continue  # without writing to the feature
+            response_value += y_intercept
+            # recall the coefficients are log normal, so expm1 inverses it
+            feature.SetField(response_id, numpy.expm1(response_value))
+            scenario_coefficient_layer.SetFeature(feature)
             feature = None
-            continue  # without writing to the feature
-        response_value += y_intercept
-        # recall the coefficients are log normal, so expm1 inverses it
-        feature.SetField(response_id, numpy.expm1(response_value))
-        scenario_coefficient_layer.SetFeature(feature)
-        feature = None
 
-    scenario_coefficient_layer = None
-    scenario_coefficient_vector.FlushCache()
-    scenario_coefficient_vector = None
+        scenario_coefficient_layer = None
+        scenario_coefficient_vector.FlushCache()
+        scenario_coefficient_vector = None
 
 
 def _validate_same_id_lengths(table_path):
@@ -1593,40 +1600,35 @@ def _validate_same_projection(base_vector_path, table_path):
         table_path, **MODEL_SPEC['args']['predictor_table_path']
     )['path'].tolist()
 
-    base_vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
-    base_layer = base_vector.GetLayer()
-    base_ref = osr.SpatialReference(base_layer.GetSpatialRef().ExportToWkt())
-    base_layer = None
-    base_vector = None
+    with utils.GDALUseExceptions():
+        base_vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
+        base_layer = base_vector.GetLayer()
+        base_ref = osr.SpatialReference(base_layer.GetSpatialRef().ExportToWkt())
+        base_layer = None
+        base_vector = None
 
-    invalid_projections = False
-    for path in data_paths:
-
-        def error_handler(err_level, err_no, err_msg):
-            """Empty error handler to avoid stderr output."""
-            pass
-        gdal.PushErrorHandler(error_handler)
-        raster = gdal.OpenEx(path, gdal.OF_RASTER)
-        gdal.PopErrorHandler()
-        if raster is not None:
-            projection_as_str = raster.GetProjection()
-            ref = osr.SpatialReference()
-            ref.ImportFromWkt(projection_as_str)
-            raster = None
-        else:
-            vector = gdal.OpenEx(path, gdal.OF_VECTOR)
-            if vector is None:
-                return f"{path} did not load"
-            layer = vector.GetLayer()
-            ref = osr.SpatialReference(layer.GetSpatialRef().ExportToWkt())
-            layer = None
-            vector = None
-        if not base_ref.IsSame(ref):
-            invalid_projections = True
-    if invalid_projections:
-        return (
-            f"One or more of the projections in the table ({path}) did not "
-            f"match the projection of the base vector ({base_vector_path})")
+        invalid_projections = False
+        for path in data_paths:
+            if pygeoprocessing.get_gis_type(path) == pygeoprocessing.RASTER_TYPE:
+                raster = gdal.OpenEx(path, gdal.OF_RASTER)
+                projection_as_str = raster.GetProjection()
+                ref = osr.SpatialReference()
+                ref.ImportFromWkt(projection_as_str)
+                raster = None
+            else:
+                vector = gdal.OpenEx(path, gdal.OF_VECTOR)
+                if vector is None:
+                    return f"{path} did not load"
+                layer = vector.GetLayer()
+                ref = osr.SpatialReference(layer.GetSpatialRef().ExportToWkt())
+                layer = None
+                vector = None
+            if not base_ref.IsSame(ref):
+                invalid_projections = True
+        if invalid_projections:
+            return (
+                f"One or more of the projections in the table ({path}) did not "
+                f"match the projection of the base vector ({base_vector_path})")
 
 
 def _validate_predictor_types(table_path):

@@ -563,13 +563,14 @@ def execute(args):
     if args['cc_method'] == 'factors':
         LOGGER.info('Calculating Cooling Coefficient from factors')
         # Evapotranspiration index (Equation #1)
-        ref_eto_raster = gdal.OpenEx(aligned_ref_eto_raster_path,
-                                     gdal.OF_RASTER)
-        ref_eto_band = ref_eto_raster.GetRasterBand(1)
-        _, ref_eto_max, _, _ = ref_eto_band.GetStatistics(0, 1)
-        ref_eto_max = numpy.round(ref_eto_max, decimals=9)
-        ref_eto_band = None
-        ref_eto_raster = None
+        with utils.GDALUseExceptions():
+            ref_eto_raster = gdal.OpenEx(aligned_ref_eto_raster_path,
+                                         gdal.OF_RASTER)
+            ref_eto_band = ref_eto_raster.GetRasterBand(1)
+            _, ref_eto_max, _, _ = ref_eto_band.GetStatistics(0, 1)
+            ref_eto_max = numpy.round(ref_eto_max, decimals=9)
+            ref_eto_band = None
+            ref_eto_raster = None
 
         eto_nodata = pygeoprocessing.get_raster_info(
             args['ref_eto_raster_path'])['nodata'][0]
@@ -913,110 +914,111 @@ def calculate_uhi_result_vector(
                 heavy_loss_stats_pickle_file):
             heavy_loss_stats = pickle.load(heavy_loss_stats_pickle_file)
 
-    base_aoi_vector = gdal.OpenEx(base_aoi_path, gdal.OF_VECTOR)
-    shapefile_driver = gdal.GetDriverByName('ESRI Shapefile')
-    try:
-        # Can't make a shapefile on top of an existing one
-        os.remove(target_uhi_vector_path)
-    except FileNotFoundError:
-        pass
+    with utils.GDALUseExceptions():
+        base_aoi_vector = gdal.OpenEx(base_aoi_path, gdal.OF_VECTOR)
+        shapefile_driver = gdal.GetDriverByName('ESRI Shapefile')
+        try:
+            # Can't make a shapefile on top of an existing one
+            os.remove(target_uhi_vector_path)
+        except FileNotFoundError:
+            pass
 
-    LOGGER.info(f"Creating {os.path.basename(target_uhi_vector_path)}")
-    shapefile_driver.CreateCopy(
-        target_uhi_vector_path, base_aoi_vector)
-    base_aoi_vector = None
-    target_uhi_vector = gdal.OpenEx(
-        target_uhi_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    target_uhi_layer = target_uhi_vector.GetLayer()
+        LOGGER.info(f"Creating {os.path.basename(target_uhi_vector_path)}")
+        shapefile_driver.CreateCopy(
+            target_uhi_vector_path, base_aoi_vector)
+        base_aoi_vector = None
+        target_uhi_vector = gdal.OpenEx(
+            target_uhi_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        target_uhi_layer = target_uhi_vector.GetLayer()
 
-    for field_id in [
-            'avg_cc', 'avg_tmp_v', 'avg_tmp_an', 'avd_eng_cn', 'avg_wbgt_v',
-            'avg_ltls_v', 'avg_hvls_v']:
-        target_uhi_layer.CreateField(ogr.FieldDefn(field_id, ogr.OFTReal))
+        for field_id in [
+                'avg_cc', 'avg_tmp_v', 'avg_tmp_an', 'avd_eng_cn', 'avg_wbgt_v',
+                'avg_ltls_v', 'avg_hvls_v']:
+            target_uhi_layer.CreateField(ogr.FieldDefn(field_id, ogr.OFTReal))
 
-    # I don't really like having two of the same conditions (one here and one
-    # in the for feature in target_uhi_layer loop), but if the user has
-    # multiple AOI features, we shouldn't have to rebuild the buildings spatial
-    # index every time.
-    if energy_consumption_vector_path:
-        energy_consumption_vector = gdal.OpenEx(
-            energy_consumption_vector_path, gdal.OF_VECTOR)
-        energy_consumption_layer = energy_consumption_vector.GetLayer()
-
-        LOGGER.info('Parsing building footprint geometry')
-        building_shapely_polygon_lookup = dict()
-        for poly_feat in energy_consumption_layer:
-            geom = poly_feat.GetGeometryRef()
-            if geom:
-                building_shapely_polygon_lookup[poly_feat.GetFID()] = (
-                    shapely.wkb.loads(bytes(geom.ExportToWkb())))
-
-        LOGGER.info("Constructing building footprint spatial index")
-        poly_rtree_index = rtree.index.Index(
-            [(poly_fid, poly.bounds, None)
-             for poly_fid, poly in
-             building_shapely_polygon_lookup.items()])
-
-    target_uhi_layer.StartTransaction()
-    for feature in target_uhi_layer:
-        feature_id = feature.GetFID()
-        if cc_stats[feature_id]['count'] > 0:
-            mean_cc = (
-                cc_stats[feature_id]['sum'] / cc_stats[feature_id]['count'])
-            feature.SetField('avg_cc', mean_cc)
-        mean_t_air = None
-        if t_air_stats[feature_id]['count'] > 0:
-            mean_t_air = (
-                t_air_stats[feature_id]['sum'] /
-                t_air_stats[feature_id]['count'])
-            feature.SetField('avg_tmp_v', mean_t_air)
-
-        if mean_t_air:
-            feature.SetField(
-                'avg_tmp_an', mean_t_air-t_ref_val)
-
-        if wbgt_stats and wbgt_stats[feature_id]['count'] > 0:
-            wbgt = (
-                wbgt_stats[feature_id]['sum'] /
-                wbgt_stats[feature_id]['count'])
-            feature.SetField('avg_wbgt_v', wbgt)
-
-        if light_loss_stats and light_loss_stats[feature_id]['count'] > 0:
-            light_loss = (
-                light_loss_stats[feature_id]['sum'] /
-                light_loss_stats[feature_id]['count'])
-            LOGGER.debug(f"Average light loss: {light_loss}")
-            feature.SetField('avg_ltls_v', float(light_loss))
-
-        if heavy_loss_stats and heavy_loss_stats[feature_id]['count'] > 0:
-            heavy_loss = (
-                heavy_loss_stats[feature_id]['sum'] /
-                heavy_loss_stats[feature_id]['count'])
-            LOGGER.debug(f"Average heavy loss: {heavy_loss}")
-            feature.SetField('avg_hvls_v', float(heavy_loss))
-
+        # I don't really like having two of the same conditions (one here and one
+        # in the for feature in target_uhi_layer loop), but if the user has
+        # multiple AOI features, we shouldn't have to rebuild the buildings spatial
+        # index every time.
         if energy_consumption_vector_path:
-            aoi_geometry = feature.GetGeometryRef()
-            aoi_shapely_geometry = shapely.wkb.loads(
-                bytes(aoi_geometry.ExportToWkb()))
-            aoi_shapely_geometry_prep = shapely.prepared.prep(
-                aoi_shapely_geometry)
-            avd_eng_cn = 0
-            for building_fid in poly_rtree_index.intersection(
-                    aoi_shapely_geometry.bounds):
-                if aoi_shapely_geometry_prep.intersects(
-                        building_shapely_polygon_lookup[building_fid]):
-                    energy_consumption_value = (
-                        energy_consumption_layer.GetFeature(
-                            building_fid).GetField('energy_sav'))
-                    if energy_consumption_value:
-                        # this step lets us skip values that might be in
-                        # nodata ranges that we can't help.
-                        avd_eng_cn += float(energy_consumption_value)
-            feature.SetField('avd_eng_cn', avd_eng_cn)
+            energy_consumption_vector = gdal.OpenEx(
+                energy_consumption_vector_path, gdal.OF_VECTOR)
+            energy_consumption_layer = energy_consumption_vector.GetLayer()
 
-        target_uhi_layer.SetFeature(feature)
-    target_uhi_layer.CommitTransaction()
+            LOGGER.info('Parsing building footprint geometry')
+            building_shapely_polygon_lookup = dict()
+            for poly_feat in energy_consumption_layer:
+                geom = poly_feat.GetGeometryRef()
+                if geom:
+                    building_shapely_polygon_lookup[poly_feat.GetFID()] = (
+                        shapely.wkb.loads(bytes(geom.ExportToWkb())))
+
+            LOGGER.info("Constructing building footprint spatial index")
+            poly_rtree_index = rtree.index.Index(
+                [(poly_fid, poly.bounds, None)
+                 for poly_fid, poly in
+                 building_shapely_polygon_lookup.items()])
+
+        target_uhi_layer.StartTransaction()
+        for feature in target_uhi_layer:
+            feature_id = feature.GetFID()
+            if cc_stats[feature_id]['count'] > 0:
+                mean_cc = (
+                    cc_stats[feature_id]['sum'] / cc_stats[feature_id]['count'])
+                feature.SetField('avg_cc', mean_cc)
+            mean_t_air = None
+            if t_air_stats[feature_id]['count'] > 0:
+                mean_t_air = (
+                    t_air_stats[feature_id]['sum'] /
+                    t_air_stats[feature_id]['count'])
+                feature.SetField('avg_tmp_v', mean_t_air)
+
+            if mean_t_air:
+                feature.SetField(
+                    'avg_tmp_an', mean_t_air-t_ref_val)
+
+            if wbgt_stats and wbgt_stats[feature_id]['count'] > 0:
+                wbgt = (
+                    wbgt_stats[feature_id]['sum'] /
+                    wbgt_stats[feature_id]['count'])
+                feature.SetField('avg_wbgt_v', wbgt)
+
+            if light_loss_stats and light_loss_stats[feature_id]['count'] > 0:
+                light_loss = (
+                    light_loss_stats[feature_id]['sum'] /
+                    light_loss_stats[feature_id]['count'])
+                LOGGER.debug(f"Average light loss: {light_loss}")
+                feature.SetField('avg_ltls_v', float(light_loss))
+
+            if heavy_loss_stats and heavy_loss_stats[feature_id]['count'] > 0:
+                heavy_loss = (
+                    heavy_loss_stats[feature_id]['sum'] /
+                    heavy_loss_stats[feature_id]['count'])
+                LOGGER.debug(f"Average heavy loss: {heavy_loss}")
+                feature.SetField('avg_hvls_v', float(heavy_loss))
+
+            if energy_consumption_vector_path:
+                aoi_geometry = feature.GetGeometryRef()
+                aoi_shapely_geometry = shapely.wkb.loads(
+                    bytes(aoi_geometry.ExportToWkb()))
+                aoi_shapely_geometry_prep = shapely.prepared.prep(
+                    aoi_shapely_geometry)
+                avd_eng_cn = 0
+                for building_fid in poly_rtree_index.intersection(
+                        aoi_shapely_geometry.bounds):
+                    if aoi_shapely_geometry_prep.intersects(
+                            building_shapely_polygon_lookup[building_fid]):
+                        energy_consumption_value = (
+                            energy_consumption_layer.GetFeature(
+                                building_fid).GetField('energy_sav'))
+                        if energy_consumption_value:
+                            # this step lets us skip values that might be in
+                            # nodata ranges that we can't help.
+                            avd_eng_cn += float(energy_consumption_value)
+                feature.SetField('avd_eng_cn', avd_eng_cn)
+
+            target_uhi_layer.SetFeature(feature)
+        target_uhi_layer.CommitTransaction()
 
 
 def calculate_energy_savings(
@@ -1056,97 +1058,98 @@ def calculate_energy_savings(
     with open(t_air_stats_pickle_path, 'rb') as t_air_stats_pickle_file:
         t_air_stats = pickle.load(t_air_stats_pickle_file)
 
-    base_building_vector = gdal.OpenEx(
-        base_building_vector_path, gdal.OF_VECTOR)
-    shapefile_driver = gdal.GetDriverByName('ESRI Shapefile')
-    LOGGER.info(f"Creating {os.path.basename(target_building_vector_path)}")
-    try:
-        # can't make a shapefile on top of an existing one
-        os.remove(target_building_vector_path)
-    except OSError:
-        pass
-    shapefile_driver.CreateCopy(
-        target_building_vector_path, base_building_vector)
-    base_building_vector = None
-    target_building_vector = gdal.OpenEx(
-        target_building_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    target_building_layer = target_building_vector.GetLayer()
-    target_building_srs = target_building_layer.GetSpatialRef()
-    target_building_square_units = target_building_srs.GetLinearUnits() ** 2
-    target_building_layer.CreateField(
-        ogr.FieldDefn('energy_sav', ogr.OFTReal))
-    target_building_layer.CreateField(
-        ogr.FieldDefn('mean_t_air', ogr.OFTReal))
-
-    # Find the index of the 'type' column in a case-insensitive way.
-    # We can assume that the field exists because we're checking for it in
-    # validation as defined in MODEL_SPEC.
-    fieldnames = [field.GetName().lower()
-                  for field in target_building_layer.schema]
-    type_field_index = fieldnames.index('type')
-
-    energy_consumption_df = validation.get_validated_dataframe(
-        energy_consumption_table_path,
-        **MODEL_SPEC['args']['energy_consumption_table_path'])
-
-    target_building_layer.StartTransaction()
-    last_time = time.time()
-    for target_index, target_feature in enumerate(target_building_layer):
-        last_time = _invoke_timed_callback(
-            last_time, lambda: LOGGER.info(
-                "energy savings approximately %.1f%% complete ",
-                100 * float(target_index + 1) /
-                target_building_layer.GetFeatureCount()),
-            _LOGGING_PERIOD)
-
-        feature_id = target_feature.GetFID()
-        t_air_mean = None
-        if feature_id in t_air_stats:
-            pixel_count = float(t_air_stats[feature_id]['count'])
-            if pixel_count > 0:
-                t_air_mean = float(
-                    t_air_stats[feature_id]['sum'] / pixel_count)
-                target_feature.SetField('mean_t_air', t_air_mean)
-
-        # Building type should be an integer and has to match the building
-        # types in the energy consumption table.
-        target_type = target_feature.GetField(int(type_field_index))
-        if target_type not in energy_consumption_df.index:
-            target_building_layer.CommitTransaction()
-            target_building_layer = None
-            target_building_vector = None
-            raise ValueError(
-                f"Encountered a building 'type' of: '{target_type}' in "
-                f"FID: {target_feature.GetFID()} in the building vector layer "
-                "that has no corresponding entry in the energy consumption "
-                f"table at {energy_consumption_table_path}")
-
-        consumption_increase = energy_consumption_df['consumption'][target_type]
-
-        # Load building cost if we can, but don't adjust the value if the cost
-        # column is not there.
-        # NOTE: if the user has an empty column value but the 'cost' column
-        # exists, this will raise an error.
+    with utils.GDALUseExceptions():
+        base_building_vector = gdal.OpenEx(
+            base_building_vector_path, gdal.OF_VECTOR)
+        shapefile_driver = gdal.GetDriverByName('ESRI Shapefile')
+        LOGGER.info(f"Creating {os.path.basename(target_building_vector_path)}")
         try:
-            building_cost = energy_consumption_df['cost'][target_type]
-        except KeyError:
-            # KeyError when cost column not present.
-            building_cost = 1
+            # can't make a shapefile on top of an existing one
+            os.remove(target_building_vector_path)
+        except OSError:
+            pass
+        shapefile_driver.CreateCopy(
+            target_building_vector_path, base_building_vector)
+        base_building_vector = None
+        target_building_vector = gdal.OpenEx(
+            target_building_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+        target_building_layer = target_building_vector.GetLayer()
+        target_building_srs = target_building_layer.GetSpatialRef()
+        target_building_square_units = target_building_srs.GetLinearUnits() ** 2
+        target_building_layer.CreateField(
+            ogr.FieldDefn('energy_sav', ogr.OFTReal))
+        target_building_layer.CreateField(
+            ogr.FieldDefn('mean_t_air', ogr.OFTReal))
 
-        # Calculate Equations 8, 9: Energy Savings.
-        # We'll only calculate energy savings if there were polygons with valid
-        # stats that could be aggregated from t_air_mean.
-        if t_air_mean:
-            building_area = target_feature.GetGeometryRef().Area()
-            building_area_m2 = building_area * target_building_square_units
-            savings = (
-                consumption_increase * building_area_m2 * (
-                    t_ref_raw - t_air_mean + uhi_max) * building_cost)
-            target_feature.SetField('energy_sav', savings)
+        # Find the index of the 'type' column in a case-insensitive way.
+        # We can assume that the field exists because we're checking for it in
+        # validation as defined in MODEL_SPEC.
+        fieldnames = [field.GetName().lower()
+                      for field in target_building_layer.schema]
+        type_field_index = fieldnames.index('type')
 
-        target_building_layer.SetFeature(target_feature)
-    target_building_layer.CommitTransaction()
-    target_building_layer.SyncToDisk()
+        energy_consumption_df = validation.get_validated_dataframe(
+            energy_consumption_table_path,
+            **MODEL_SPEC['args']['energy_consumption_table_path'])
+
+        target_building_layer.StartTransaction()
+        last_time = time.time()
+        for target_index, target_feature in enumerate(target_building_layer):
+            last_time = _invoke_timed_callback(
+                last_time, lambda: LOGGER.info(
+                    "energy savings approximately %.1f%% complete ",
+                    100 * float(target_index + 1) /
+                    target_building_layer.GetFeatureCount()),
+                _LOGGING_PERIOD)
+
+            feature_id = target_feature.GetFID()
+            t_air_mean = None
+            if feature_id in t_air_stats:
+                pixel_count = float(t_air_stats[feature_id]['count'])
+                if pixel_count > 0:
+                    t_air_mean = float(
+                        t_air_stats[feature_id]['sum'] / pixel_count)
+                    target_feature.SetField('mean_t_air', t_air_mean)
+
+            # Building type should be an integer and has to match the building
+            # types in the energy consumption table.
+            target_type = target_feature.GetField(int(type_field_index))
+            if target_type not in energy_consumption_df.index:
+                target_building_layer.CommitTransaction()
+                target_building_layer = None
+                target_building_vector = None
+                raise ValueError(
+                    f"Encountered a building 'type' of: '{target_type}' in "
+                    f"FID: {target_feature.GetFID()} in the building vector layer "
+                    "that has no corresponding entry in the energy consumption "
+                    f"table at {energy_consumption_table_path}")
+
+            consumption_increase = energy_consumption_df['consumption'][target_type]
+
+            # Load building cost if we can, but don't adjust the value if the cost
+            # column is not there.
+            # NOTE: if the user has an empty column value but the 'cost' column
+            # exists, this will raise an error.
+            try:
+                building_cost = energy_consumption_df['cost'][target_type]
+            except KeyError:
+                # KeyError when cost column not present.
+                building_cost = 1
+
+            # Calculate Equations 8, 9: Energy Savings.
+            # We'll only calculate energy savings if there were polygons with valid
+            # stats that could be aggregated from t_air_mean.
+            if t_air_mean:
+                building_area = target_feature.GetGeometryRef().Area()
+                building_area_m2 = building_area * target_building_square_units
+                savings = (
+                    consumption_increase * building_area_m2 * (
+                        t_ref_raw - t_air_mean + uhi_max) * building_cost)
+                target_feature.SetField('energy_sav', savings)
+
+            target_building_layer.SetFeature(target_feature)
+        target_building_layer.CommitTransaction()
+        target_building_layer.SyncToDisk()
 
 
 def pickle_zonal_stats(

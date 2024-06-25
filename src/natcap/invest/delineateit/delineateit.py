@@ -409,98 +409,99 @@ def preprocess_geometries(outlet_vector_path, dem_path, target_vector_path,
         shapely.geometry.box(*dem_info['bounding_box']))
     nyquist_limit = numpy.mean(numpy.abs(dem_info['pixel_size'])) / 2.
 
-    dem_srs = osr.SpatialReference()
-    dem_srs.ImportFromWkt(dem_info['projection_wkt'])
+    with utils.GDALUseExceptions():
+        dem_srs = osr.SpatialReference()
+        dem_srs.ImportFromWkt(dem_info['projection_wkt'])
 
-    gpkg_driver = gdal.GetDriverByName('GPKG')
-    target_vector = gpkg_driver.Create(target_vector_path, 0, 0, 0,
-                                       gdal.GDT_Unknown)
-    layer_name = os.path.splitext(os.path.basename(target_vector_path))[0]
-    target_layer = target_vector.CreateLayer(
-        layer_name, dem_srs, ogr.wkbUnknown)  # Use source layer type?
+        gpkg_driver = gdal.GetDriverByName('GPKG')
+        target_vector = gpkg_driver.Create(target_vector_path, 0, 0, 0,
+                                           gdal.GDT_Unknown)
+        layer_name = os.path.splitext(os.path.basename(target_vector_path))[0]
+        target_layer = target_vector.CreateLayer(
+            layer_name, dem_srs, ogr.wkbUnknown)  # Use source layer type?
 
-    outflow_vector = gdal.OpenEx(outlet_vector_path, gdal.OF_VECTOR)
-    outflow_layer = outflow_vector.GetLayer()
-    if 'ws_id' in set([field.GetName() for field in outflow_layer.schema]):
-        LOGGER.warning(_WS_ID_OVERWRITE_WARNING.format(
-            layer_name=outflow_layer.GetName(),
-            vector_basename=os.path.basename(outlet_vector_path)))
-    else:
-        target_layer.CreateField(ogr.FieldDefn('ws_id', ogr.OFTInteger64))
+        outflow_vector = gdal.OpenEx(outlet_vector_path, gdal.OF_VECTOR)
+        outflow_layer = outflow_vector.GetLayer()
+        if 'ws_id' in set([field.GetName() for field in outflow_layer.schema]):
+            LOGGER.warning(_WS_ID_OVERWRITE_WARNING.format(
+                layer_name=outflow_layer.GetName(),
+                vector_basename=os.path.basename(outlet_vector_path)))
+        else:
+            target_layer.CreateField(ogr.FieldDefn('ws_id', ogr.OFTInteger64))
 
-    target_layer.CreateFields(outflow_layer.schema)
+        target_layer.CreateFields(outflow_layer.schema)
 
-    LOGGER.info('Checking %s geometries from source vector',
-                outflow_layer.GetFeatureCount())
-    target_layer.StartTransaction()
-    ws_id = 0
-    for feature in outflow_layer:
-        original_geometry = feature.GetGeometryRef()
+        LOGGER.info('Checking %s geometries from source vector',
+                    outflow_layer.GetFeatureCount())
+        target_layer.StartTransaction()
+        ws_id = 0
+        for feature in outflow_layer:
+            original_geometry = feature.GetGeometryRef()
 
-        try:
-            shapely_geom = shapely.wkb.loads(
-                bytes(original_geometry.ExportToWkb()))
+            try:
+                shapely_geom = shapely.wkb.loads(
+                    bytes(original_geometry.ExportToWkb()))
 
-            # The classic bowtie polygons will load but require a separate
-            # check for validity.
-            if not shapely_geom.is_valid:
-                raise ValueError('Shapely geom is invalid.')
-        except (shapely.errors.ReadingError, ValueError):
-            # Parent class for shapely GEOS errors
-            # Raised when the geometry is invalid.
-            if not skip_invalid_geometry:
-                outflow_layer = None
-                outflow_vector = None
-                target_layer = None
-                target_vector = None
-                raise ValueError(
-                    "The geometry at feature %s is invalid.  Check the logs "
-                    "for details and try re-running with repaired geometry."
-                    % feature.GetFID())
-            else:
+                # The classic bowtie polygons will load but require a separate
+                # check for validity.
+                if not shapely_geom.is_valid:
+                    raise ValueError('Shapely geom is invalid.')
+            except (shapely.errors.ReadingError, ValueError):
+                # Parent class for shapely GEOS errors
+                # Raised when the geometry is invalid.
+                if not skip_invalid_geometry:
+                    outflow_layer = None
+                    outflow_vector = None
+                    target_layer = None
+                    target_vector = None
+                    raise ValueError(
+                        "The geometry at feature %s is invalid.  Check the logs "
+                        "for details and try re-running with repaired geometry."
+                        % feature.GetFID())
+                else:
+                    LOGGER.warning(
+                        "The geometry at feature %s is invalid and will not be "
+                        "included in the set of features to be delineated.",
+                        feature.GetFID())
+                    continue
+
+            if shapely_geom.is_empty:
                 LOGGER.warning(
-                    "The geometry at feature %s is invalid and will not be "
-                    "included in the set of features to be delineated.",
-                    feature.GetFID())
+                    'Feature %s has no geometry. Skipping', feature.GetFID())
                 continue
 
-        if shapely_geom.is_empty:
-            LOGGER.warning(
-                'Feature %s has no geometry. Skipping', feature.GetFID())
-            continue
+            shapely_bbox = shapely.geometry.box(*shapely_geom.bounds)
+            if not dem_bbox.intersects(shapely_bbox):
+                LOGGER.warning('Feature %s does not intersect the DEM. Skipping.',
+                               feature.GetFID())
+                continue
 
-        shapely_bbox = shapely.geometry.box(*shapely_geom.bounds)
-        if not dem_bbox.intersects(shapely_bbox):
-            LOGGER.warning('Feature %s does not intersect the DEM. Skipping.',
-                           feature.GetFID())
-            continue
+            simplified_geometry = shapely_geom.simplify(nyquist_limit)
 
-        simplified_geometry = shapely_geom.simplify(nyquist_limit)
+            new_feature = ogr.Feature(target_layer.GetLayerDefn())
+            new_feature.SetGeometry(ogr.CreateGeometryFromWkb(
+                simplified_geometry.wkb))
+            for field_name, field_value in feature.items().items():
+                new_feature.SetField(field_name, field_value)
 
-        new_feature = ogr.Feature(target_layer.GetLayerDefn())
-        new_feature.SetGeometry(ogr.CreateGeometryFromWkb(
-            simplified_geometry.wkb))
-        for field_name, field_value in feature.items().items():
-            new_feature.SetField(field_name, field_value)
+            # In case we're skipping features, ws_id field won't include any gaps
+            # in the numbers in this field.  I suspect this may save us some time
+            # on the forums later.
+            new_feature.SetField('ws_id', ws_id)
+            ws_id += 1
 
-        # In case we're skipping features, ws_id field won't include any gaps
-        # in the numbers in this field.  I suspect this may save us some time
-        # on the forums later.
-        new_feature.SetField('ws_id', ws_id)
-        ws_id += 1
+            target_layer.CreateFeature(new_feature)
 
-        target_layer.CreateFeature(new_feature)
+        target_layer.CommitTransaction()
 
-    target_layer.CommitTransaction()
-
-    LOGGER.info('%s features copied to %s from the original %s features',
-                target_layer.GetFeatureCount(),
-                os.path.basename(target_vector_path),
-                outflow_layer.GetFeatureCount())
-    outflow_layer = None
-    outflow_vector = None
-    target_layer = None
-    target_vector = None
+        LOGGER.info('%s features copied to %s from the original %s features',
+                    target_layer.GetFeatureCount(),
+                    os.path.basename(target_vector_path),
+                    outflow_layer.GetFeatureCount())
+        outflow_layer = None
+        outflow_vector = None
+        target_layer = None
+        target_vector = None
 
 
 def snap_points_to_nearest_stream(points_vector_path, stream_raster_path,
@@ -538,141 +539,142 @@ def snap_points_to_nearest_stream(points_vector_path, stream_raster_path,
     if snap_distance <= 0:
         raise ValueError('Snap_distance must be >= 0, not %s' % snap_distance)
 
-    points_vector = gdal.OpenEx(points_vector_path, gdal.OF_VECTOR)
-    points_layer = points_vector.GetLayer()
+    with utils.GDALUseExceptions():
+        points_vector = gdal.OpenEx(points_vector_path, gdal.OF_VECTOR)
+        points_layer = points_vector.GetLayer()
 
-    stream_raster_info = pygeoprocessing.get_raster_info(stream_raster_path)
-    geotransform = stream_raster_info['geotransform']
-    n_cols, n_rows = stream_raster_info['raster_size']
-    stream_raster = gdal.OpenEx(stream_raster_path, gdal.OF_RASTER)
-    stream_band = stream_raster.GetRasterBand(1)
+        stream_raster_info = pygeoprocessing.get_raster_info(stream_raster_path)
+        geotransform = stream_raster_info['geotransform']
+        n_cols, n_rows = stream_raster_info['raster_size']
+        stream_raster = gdal.OpenEx(stream_raster_path, gdal.OF_RASTER)
+        stream_band = stream_raster.GetRasterBand(1)
 
-    flow_accum_raster = gdal.OpenEx(flow_accum_raster_path, gdal.OF_RASTER)
-    flow_accum_band = flow_accum_raster.GetRasterBand(1)
+        flow_accum_raster = gdal.OpenEx(flow_accum_raster_path, gdal.OF_RASTER)
+        flow_accum_band = flow_accum_raster.GetRasterBand(1)
 
-    driver = gdal.GetDriverByName('GPKG')
-    snapped_vector = driver.Create(snapped_points_vector_path, 0, 0, 0,
-                                   gdal.GDT_Unknown)
-    layer_name = os.path.splitext(
-        os.path.basename(snapped_points_vector_path))[0]
-    snapped_layer = snapped_vector.CreateLayer(
-        layer_name, points_layer.GetSpatialRef(), points_layer.GetGeomType())
-    snapped_layer.CreateFields(points_layer.schema)
-    snapped_layer_defn = snapped_layer.GetLayerDefn()
+        driver = gdal.GetDriverByName('GPKG')
+        snapped_vector = driver.Create(snapped_points_vector_path, 0, 0, 0,
+                                       gdal.GDT_Unknown)
+        layer_name = os.path.splitext(
+            os.path.basename(snapped_points_vector_path))[0]
+        snapped_layer = snapped_vector.CreateLayer(
+            layer_name, points_layer.GetSpatialRef(), points_layer.GetGeomType())
+        snapped_layer.CreateFields(points_layer.schema)
+        snapped_layer_defn = snapped_layer.GetLayerDefn()
 
-    snapped_layer.StartTransaction()
-    n_features = points_layer.GetFeatureCount()
-    last_time = time.time()
-    for index, point_feature in enumerate(points_layer, 1):
-        if time.time() - last_time > 5.0:
-            LOGGER.info('Snapped %s of %s points', index, n_features)
-            last_time = time.time()
+        snapped_layer.StartTransaction()
+        n_features = points_layer.GetFeatureCount()
+        last_time = time.time()
+        for index, point_feature in enumerate(points_layer, 1):
+            if time.time() - last_time > 5.0:
+                LOGGER.info('Snapped %s of %s points', index, n_features)
+                last_time = time.time()
 
-        source_geometry = point_feature.GetGeometryRef()
-        geom_name = source_geometry.GetGeometryName()
-        geom_count = source_geometry.GetGeometryCount()
+            source_geometry = point_feature.GetGeometryRef()
+            geom_name = source_geometry.GetGeometryName()
+            geom_count = source_geometry.GetGeometryCount()
 
-        if source_geometry.IsEmpty():
-            LOGGER.warning(
-                f"FID {point_feature.GetFID()} is missing a defined geometry. "
-                "Skipping.")
-            continue
+            if source_geometry.IsEmpty():
+                LOGGER.warning(
+                    f"FID {point_feature.GetFID()} is missing a defined geometry. "
+                    "Skipping.")
+                continue
 
-        # If the geometry is not a primitive point, just create the new feature
-        # as it is now in the new vector. MULTIPOINT geometries with a single
-        # component point count as primitive points.
-        # OGR's wkbMultiPoint, wkbMultiPointM, wkbMultiPointZM and
-        # wkbMultiPoint25D all use the MULTIPOINT geometry name.
-        if ((geom_name not in ('POINT', 'MULTIPOINT')) or
-                (geom_name == 'MULTIPOINT' and geom_count > 1)):
-            LOGGER.warning(
-                f"FID {point_feature.GetFID()} ({geom_name}, n={geom_count}) "
-                "Geometry cannot be snapped.")
-            new_feature = ogr.Feature(snapped_layer.GetLayerDefn())
-            new_feature.SetGeometry(source_geometry)
+            # If the geometry is not a primitive point, just create the new feature
+            # as it is now in the new vector. MULTIPOINT geometries with a single
+            # component point count as primitive points.
+            # OGR's wkbMultiPoint, wkbMultiPointM, wkbMultiPointZM and
+            # wkbMultiPoint25D all use the MULTIPOINT geometry name.
+            if ((geom_name not in ('POINT', 'MULTIPOINT')) or
+                    (geom_name == 'MULTIPOINT' and geom_count > 1)):
+                LOGGER.warning(
+                    f"FID {point_feature.GetFID()} ({geom_name}, n={geom_count}) "
+                    "Geometry cannot be snapped.")
+                new_feature = ogr.Feature(snapped_layer.GetLayerDefn())
+                new_feature.SetGeometry(source_geometry)
+                for field_name, field_value in point_feature.items().items():
+                    new_feature.SetField(field_name, field_value)
+                snapped_layer.CreateFeature(new_feature)
+                continue
+
+            point = shapely.wkb.loads(bytes(source_geometry.ExportToWkb()))
+            if geom_name == 'MULTIPOINT':
+                # We already checked (above) that there's only one component point
+                point = point.geoms[0]
+
+            x_index = (point.x - geotransform[0]) // geotransform[1]
+            y_index = (point.y - geotransform[3]) // geotransform[5]
+            if (x_index < 0 or x_index > n_cols or
+                    y_index < 0 or y_index > n_rows):
+                LOGGER.warning(
+                    'Encountered a point that was outside the bounds of the '
+                    f'stream raster.  FID:{point_feature.GetFID()} at {point}')
+                continue
+
+            x_left = max(x_index - snap_distance, 0)
+            y_top = max(y_index - snap_distance, 0)
+            x_right = min(x_index + snap_distance, n_cols)
+            y_bottom = min(y_index + snap_distance, n_rows)
+
+            # snap to the nearest stream pixel out to the snap distance
+            stream_window = stream_band.ReadAsArray(
+                int(x_left), int(y_top), int(x_right - x_left),
+                int(y_bottom - y_top))
+            row_indexes, col_indexes = numpy.nonzero(
+                stream_window == 1)
+
+            # Find the closest stream pixel that meets the distance
+            # requirement. If there is a tie, snap to the stream pixel with
+            # a higher flow accumulation value.
+            if row_indexes.size > 0:  # there are streams within the snap distance
+                # Calculate euclidean distance from the point to each stream pixel
+                distance_array = numpy.hypot(
+                    # distance along y axis from the point to each stream pixel
+                    y_index - y_top - row_indexes,
+                    # distance along x axis from the point to each stream pixel
+                    x_index - x_left - col_indexes,
+                    dtype=numpy.float32)
+
+                is_nearest = distance_array == distance_array.min()
+                # if > 1 stream pixel is nearest, break tie with flow accumulation
+                if is_nearest.sum() > 1:
+                    flow_accum_array = flow_accum_band.ReadAsArray(
+                        int(x_left), int(y_top), int(x_right - x_left),
+                        int(y_bottom - y_top))
+                    # weight by flow accum
+                    is_nearest = is_nearest * flow_accum_array[row_indexes, col_indexes]
+
+                # 1d index of max value in flattened array
+                nearest_stream_index_1d = numpy.argmax(is_nearest)
+
+                # convert 1d index back to coordinates relative to window
+                nearest_stream_row = row_indexes[nearest_stream_index_1d]
+                nearest_stream_col = col_indexes[nearest_stream_index_1d]
+
+                offset_row = nearest_stream_row - (y_index - y_top)
+                offset_col = nearest_stream_col - (x_index - x_left)
+
+                y_index += offset_row
+                x_index += offset_col
+
+            point_geometry = ogr.Geometry(ogr.wkbPoint)
+            point_geometry.AddPoint(
+                geotransform[0] + (x_index + 0.5) * geotransform[1],
+                geotransform[3] + (y_index + 0.5) * geotransform[5])
+
+            # Get the output Layer's Feature Definition
+            snapped_point_feature = ogr.Feature(snapped_layer_defn)
             for field_name, field_value in point_feature.items().items():
-                new_feature.SetField(field_name, field_value)
-            snapped_layer.CreateFeature(new_feature)
-            continue
+                snapped_point_feature.SetField(field_name, field_value)
+            snapped_point_feature.SetGeometry(point_geometry)
 
-        point = shapely.wkb.loads(bytes(source_geometry.ExportToWkb()))
-        if geom_name == 'MULTIPOINT':
-            # We already checked (above) that there's only one component point
-            point = point.geoms[0]
+            snapped_layer.CreateFeature(snapped_point_feature)
+        snapped_layer.CommitTransaction()
+        snapped_layer = None
+        snapped_vector = None
 
-        x_index = (point.x - geotransform[0]) // geotransform[1]
-        y_index = (point.y - geotransform[3]) // geotransform[5]
-        if (x_index < 0 or x_index > n_cols or
-                y_index < 0 or y_index > n_rows):
-            LOGGER.warning(
-                'Encountered a point that was outside the bounds of the '
-                f'stream raster.  FID:{point_feature.GetFID()} at {point}')
-            continue
-
-        x_left = max(x_index - snap_distance, 0)
-        y_top = max(y_index - snap_distance, 0)
-        x_right = min(x_index + snap_distance, n_cols)
-        y_bottom = min(y_index + snap_distance, n_rows)
-
-        # snap to the nearest stream pixel out to the snap distance
-        stream_window = stream_band.ReadAsArray(
-            int(x_left), int(y_top), int(x_right - x_left),
-            int(y_bottom - y_top))
-        row_indexes, col_indexes = numpy.nonzero(
-            stream_window == 1)
-
-        # Find the closest stream pixel that meets the distance
-        # requirement. If there is a tie, snap to the stream pixel with
-        # a higher flow accumulation value.
-        if row_indexes.size > 0:  # there are streams within the snap distance
-            # Calculate euclidean distance from the point to each stream pixel
-            distance_array = numpy.hypot(
-                # distance along y axis from the point to each stream pixel
-                y_index - y_top - row_indexes,
-                # distance along x axis from the point to each stream pixel
-                x_index - x_left - col_indexes,
-                dtype=numpy.float32)
-
-            is_nearest = distance_array == distance_array.min()
-            # if > 1 stream pixel is nearest, break tie with flow accumulation
-            if is_nearest.sum() > 1:
-                flow_accum_array = flow_accum_band.ReadAsArray(
-                    int(x_left), int(y_top), int(x_right - x_left),
-                    int(y_bottom - y_top))
-                # weight by flow accum
-                is_nearest = is_nearest * flow_accum_array[row_indexes, col_indexes]
-
-            # 1d index of max value in flattened array
-            nearest_stream_index_1d = numpy.argmax(is_nearest)
-
-            # convert 1d index back to coordinates relative to window
-            nearest_stream_row = row_indexes[nearest_stream_index_1d]
-            nearest_stream_col = col_indexes[nearest_stream_index_1d]
-
-            offset_row = nearest_stream_row - (y_index - y_top)
-            offset_col = nearest_stream_col - (x_index - x_left)
-
-            y_index += offset_row
-            x_index += offset_col
-
-        point_geometry = ogr.Geometry(ogr.wkbPoint)
-        point_geometry.AddPoint(
-            geotransform[0] + (x_index + 0.5) * geotransform[1],
-            geotransform[3] + (y_index + 0.5) * geotransform[5])
-
-        # Get the output Layer's Feature Definition
-        snapped_point_feature = ogr.Feature(snapped_layer_defn)
-        for field_name, field_value in point_feature.items().items():
-            snapped_point_feature.SetField(field_name, field_value)
-        snapped_point_feature.SetGeometry(point_geometry)
-
-        snapped_layer.CreateFeature(snapped_point_feature)
-    snapped_layer.CommitTransaction()
-    snapped_layer = None
-    snapped_vector = None
-
-    points_layer = None
-    points_vector = None
+        points_layer = None
+        points_vector = None
 
 
 def detect_pour_points(flow_dir_raster_path_band, target_vector_path):
@@ -700,37 +702,38 @@ def detect_pour_points(flow_dir_raster_path_band, target_vector_path):
     raster_info = pygeoprocessing.get_raster_info(flow_dir_raster_path_band[0])
     pour_point_set = _find_raster_pour_points(flow_dir_raster_path_band)
 
-    # use same spatial reference as the input
-    aoi_spatial_reference = osr.SpatialReference()
-    aoi_spatial_reference.ImportFromWkt(raster_info['projection_wkt'])
+    with utils.GDALUseExceptions():
+        # use same spatial reference as the input
+        aoi_spatial_reference = osr.SpatialReference()
+        aoi_spatial_reference.ImportFromWkt(raster_info['projection_wkt'])
 
-    gpkg_driver = ogr.GetDriverByName("GPKG")
-    target_vector = gpkg_driver.CreateDataSource(target_vector_path)
-    layer_name = os.path.splitext(
-        os.path.basename(target_vector_path))[0]
-    target_layer = target_vector.CreateLayer(
-        layer_name, aoi_spatial_reference, ogr.wkbPoint)
-    target_defn = target_layer.GetLayerDefn()
+        gpkg_driver = ogr.GetDriverByName("GPKG")
+        target_vector = gpkg_driver.CreateDataSource(target_vector_path)
+        layer_name = os.path.splitext(
+            os.path.basename(target_vector_path))[0]
+        target_layer = target_vector.CreateLayer(
+            layer_name, aoi_spatial_reference, ogr.wkbPoint)
+        target_defn = target_layer.GetLayerDefn()
 
-    # It's important to have a user-facing unique ID field for post-processing
-    # (e.g. table-joins) that is not the FID. FIDs are not stable across file
-    # conversions that users might do.
-    target_layer.CreateField(
-        ogr.FieldDefn('ws_id', ogr.OFTInteger64))
+        # It's important to have a user-facing unique ID field for post-processing
+        # (e.g. table-joins) that is not the FID. FIDs are not stable across file
+        # conversions that users might do.
+        target_layer.CreateField(
+            ogr.FieldDefn('ws_id', ogr.OFTInteger64))
 
-    # Add a feature to the layer for each point
-    target_layer.StartTransaction()
-    for idx, (x, y) in enumerate(pour_point_set):
-        geometry = ogr.Geometry(ogr.wkbPoint)
-        geometry.AddPoint(x, y)
-        feature = ogr.Feature(target_defn)
-        feature.SetGeometry(geometry)
-        feature.SetField('ws_id', idx)
-        target_layer.CreateFeature(feature)
-    target_layer.CommitTransaction()
+        # Add a feature to the layer for each point
+        target_layer.StartTransaction()
+        for idx, (x, y) in enumerate(pour_point_set):
+            geometry = ogr.Geometry(ogr.wkbPoint)
+            geometry.AddPoint(x, y)
+            feature = ogr.Feature(target_defn)
+            feature.SetGeometry(geometry)
+            feature.SetField('ws_id', idx)
+            target_layer.CreateFeature(feature)
+        target_layer.CommitTransaction()
 
-    target_layer = None
-    target_vector = None
+        target_layer = None
+        target_vector = None
 
 
 def _find_raster_pour_points(flow_dir_raster_path_band):

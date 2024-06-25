@@ -1038,42 +1038,43 @@ def aggregate_results(base_aggregate_areas_path, target_vector_path, srs_wkt,
     """
     pygeoprocessing.reproject_vector(base_aggregate_areas_path, srs_wkt,
                                      target_vector_path, driver_name='GPKG')
-    aggregate_vector = gdal.OpenEx(target_vector_path, gdal.GA_Update)
-    aggregate_layer = aggregate_vector.GetLayer()
+    with utils.GDALUseExceptions():
+        aggregate_vector = gdal.OpenEx(target_vector_path, gdal.GA_Update)
+        aggregate_layer = aggregate_vector.GetLayer()
 
-    for raster_path, field_id, aggregation_op in aggregations:
-        # aggregate the raster by the vector region(s)
-        aggregate_stats = pygeoprocessing.zonal_statistics(
-            (raster_path, 1), target_vector_path)
+        for raster_path, field_id, aggregation_op in aggregations:
+            # aggregate the raster by the vector region(s)
+            aggregate_stats = pygeoprocessing.zonal_statistics(
+                (raster_path, 1), target_vector_path)
 
-        # set up the field to hold the aggregate data
-        aggregate_field = ogr.FieldDefn(field_id, ogr.OFTReal)
-        aggregate_field.SetWidth(24)
-        aggregate_field.SetPrecision(11)
-        aggregate_layer.CreateField(aggregate_field)
-        aggregate_layer.ResetReading()
+            # set up the field to hold the aggregate data
+            aggregate_field = ogr.FieldDefn(field_id, ogr.OFTReal)
+            aggregate_field.SetWidth(24)
+            aggregate_field.SetPrecision(11)
+            aggregate_layer.CreateField(aggregate_field)
+            aggregate_layer.ResetReading()
 
-        # save the aggregate data to the field for each feature
-        for feature in aggregate_layer:
-            feature_id = feature.GetFID()
-            if aggregation_op == 'mean':
-                pixel_count = aggregate_stats[feature_id]['count']
-                try:
-                    value = (aggregate_stats[feature_id]['sum'] / pixel_count)
-                except ZeroDivisionError:
-                    LOGGER.warning(
-                        f'Polygon {feature_id} does not overlap {raster_path}')
-                    value = 0.0
-            elif aggregation_op == 'sum':
-                value = aggregate_stats[feature_id]['sum']
-            feature.SetField(field_id, float(value))
-            aggregate_layer.SetFeature(feature)
+            # save the aggregate data to the field for each feature
+            for feature in aggregate_layer:
+                feature_id = feature.GetFID()
+                if aggregation_op == 'mean':
+                    pixel_count = aggregate_stats[feature_id]['count']
+                    try:
+                        value = (aggregate_stats[feature_id]['sum'] / pixel_count)
+                    except ZeroDivisionError:
+                        LOGGER.warning(
+                            f'Polygon {feature_id} does not overlap {raster_path}')
+                        value = 0.0
+                elif aggregation_op == 'sum':
+                    value = aggregate_stats[feature_id]['sum']
+                feature.SetField(field_id, float(value))
+                aggregate_layer.SetFeature(feature)
 
-    # save the aggregate vector layer and clean up references
-    aggregate_layer.SyncToDisk()
-    aggregate_layer = None
-    gdal.Dataset.__swig_destroy__(aggregate_vector)
-    aggregate_vector = None
+        # save the aggregate vector layer and clean up references
+        aggregate_layer.SyncToDisk()
+        aggregate_layer = None
+        gdal.Dataset.__swig_destroy__(aggregate_vector)
+        aggregate_vector = None
 
 
 def is_near(input_path, radius, distance_path, out_path):
