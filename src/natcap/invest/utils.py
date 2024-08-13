@@ -15,6 +15,7 @@ import numpy
 import pandas
 import pygeoprocessing
 from osgeo import gdal
+from osgeo import ogr
 from osgeo import osr
 from shapely.wkt import loads
 
@@ -771,8 +772,8 @@ def vector_apply(vector_path, op, new_fields=[]):
     vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR | gdal.GA_Update)
     layer = vector.GetLayer()
 
-    for field_name, field_type in new_fields:
-        field_defn = ogr.FieldDefn(field_name, field_type)
+    for field_name in new_fields:
+        field_defn = ogr.FieldDefn(field_name, ogr.OFTReal)
         field_defn.SetWidth(24)
         field_defn.SetPrecision(11)
         layer.CreateField(field_defn)

@@ -798,7 +798,9 @@ def execute(args):
         ('AET_mn', aet_path),
         ('wyield_mn', wyield_path)]
 
+    demand = False
     if 'demand_table_path' in args and args['demand_table_path'] != '':
+        demand = True
         reclass_error_details = {
             'raster_name': 'LULC', 'column_name': 'lucode',
             'table_name': 'Demand'}
@@ -825,34 +827,30 @@ def execute(args):
             target_path_list=[target_ws_path],
             task_name='create copy of watersheds vector')
 
-        zonal_stats_task_list = []
-        zonal_stats_pickle_list = []
-
         # Do zonal stats with the input shapefiles provided by the user
         # and store results dictionaries in pickles
-        for key_name, rast_path in raster_names_paths_list:
-            target_stats_pickle = os.path.join(
-                pickle_dir,
-                f'{ws_id_name}_{key_name}{file_suffix}.pickle')
-            zonal_stats_pickle_list.append((target_stats_pickle, key_name))
-            zonal_stats_task_list.append(graph.add_task(
-                func=zonal_stats_tofile,
-                args=(target_ws_path, rast_path, target_stats_pickle),
-                target_path_list=[target_stats_pickle],
-                dependent_task_list=[
-                    *dependent_tasks_for_watersheds_list,
-                    copy_watersheds_vector_task],
-                task_name=f'{ws_id_name}_{key_name}_zonalstats'))
+        zonal_stats_pickle = os.path.join(
+            pickle_dir,
+            f'zonal_stats{file_suffix}.pickle')
+        zonal_stats_task = graph.add_task(
+            func=zonal_stats_tofile,
+            args=(target_ws_path, raster_names_paths_list, zonal_stats_pickle),
+            target_path_list=[zonal_stats_pickle],
+            dependent_task_list=[
+                *dependent_tasks_for_watersheds_list,
+                copy_watersheds_vector_task],
+            task_name=f'{ws_id_name}_zonalstats')
 
         # Add the zonal stats data to the output vector's attribute table
         # Compute optional scarcity and valuation
         write_output_vector_attributes_task = graph.add_task(
             func=write_output_vector_attributes,
-            args=(target_ws_path, ws_id_name, zonal_stats_pickle_list,
+            args=(target_ws_path, ws_id_name, zonal_stats_pickle,
                   valuation_df),
+             kwargs={'demand': demand},
             target_path_list=[target_ws_path],
             dependent_task_list=[
-                *zonal_stats_task_list, copy_watersheds_vector_task],
+                zonal_stats_task, copy_watersheds_vector_task],
             task_name=f'create_{ws_id_name}_vector_output')
 
         # Export a CSV with all the fields present in the output vector
@@ -889,7 +887,7 @@ def copy_vector(base_vector_path, target_vector_path):
 
 
 def write_output_vector_attributes(target_vector_path, ws_id_name,
-                                   stats_path_list, valuation_df):
+                                   pickle_path, valuation_df, demand=False):
     """Add data attributes to the vector outputs of this model.
 
     Join results of zonal stats to copies of the watershed shapefiles.
@@ -911,38 +909,125 @@ def write_output_vector_attributes(target_vector_path, ws_id_name,
         None
 
     """
-    for pickle_path, key_name in stats_path_list:
-        with open(pickle_path, 'rb') as picklefile:
-            ws_stats_dict = pickle.load(picklefile)
 
-            if key_name == 'wyield_mn':
-                _add_zonal_stats_dict_to_shape(
-                    target_vector_path, ws_stats_dict, key_name, 'mean')
-                # Also create and populate 'wyield_vol' field, which
-                # relies on 'wyield_mn' already present in attribute table
-                compute_water_yield_volume(target_vector_path)
+    with open(pickle_path, 'rb') as picklefile:
+        stats = pickle.load(picklefile)
 
-            # consum_* variables rely on 'wyield_*' fields present,
-            # so this would fail if somehow 'demand' comes before 'wyield_mn'
-            # in key_names. The order is hardcoded in raster_names_paths_list.
-            elif key_name == 'demand':
-                # Add aggregated consumption to sheds shapefiles
-                _add_zonal_stats_dict_to_shape(
-                    target_vector_path, ws_stats_dict, 'consum_vol', 'sum')
 
-                # Add aggregated consumption means to sheds shapefiles
-                _add_zonal_stats_dict_to_shape(
-                    target_vector_path, ws_stats_dict, 'consum_mn', 'mean')
-                compute_rsupply_volume(target_vector_path)
+        def wyield_op(feature):
+            fid = feature.GetFID()
+            # Using the unique feature ID, index into the
+            # dictionary to get the corresponding value
+            # only write a value if zonal stats found valid pixels in the polygon:
+            if stats['wyield_mn'][fid]['count'] > 0:
+                wyield_mn = (
+                    stats['wyield_mn'][fid]['sum'] /
+                    stats['wyield_mn'][fid]['count'])
+                geom = feature.GetGeometryRef()
+                # Calculate water yield volume,
+                # 1000 is for converting the mm of wyield to meters
+                wyield_vol = wyield_mn * geom.Area() / 1000
+                feature.SetField('wyield_mn', wyield_mn)
+                feature.SetField('wyield_vol', wyield_vol)
+        utils.vector_apply(
+            target_vector_path, wyield_op,
+            new_fields=['wyield_mn', 'wyield_vol'])
 
-            else:
-                _add_zonal_stats_dict_to_shape(
-                    target_vector_path, ws_stats_dict, key_name, 'mean')
+
+        # consum_* variables rely on 'wyield_*' fields present,
+        # so this would fail if somehow 'demand' comes before 'wyield_mn'.
+        # The order is hardcoded in raster_names_paths_list.
+        if demand:
+            # Add aggregated consumption to sheds shapefiles
+            def demand_op(feature):
+                fid = feature.GetFID()
+                # Get mean and volume water yield values
+                wyield_mn = feature.GetField('wyield_mn')
+                wyield_vol = feature.GetField('wyield_vol')
+
+                # Using the unique feature ID, index into the
+                # dictionary to get the corresponding value
+                # only write a value if zonal stats found valid pixels in the polygon:
+                if stats['demand'][fid]['count'] > 0:
+                    consum_vol = stats['demand'][fid]['sum']
+                    consum_mn = consum_vol / stats['demand'][fid]['count']
+                    feature.SetField('consum_vol', consum_vol)
+                    feature.SetField('consum_mn', consum_mn)
+
+                    # Calculate realized supply
+                    # these values won't exist if the polygon feature only
+                    # covers nodata raster values, so check before doing math.
+                    if wyield_mn is not None:
+                        rsupply_vol = wyield_vol - consum_vol
+                        rsupply_mn = wyield_mn - consum_mn
+                        feature.SetField('rsupply_vl', rsupply_vol)
+                        feature.SetField('rsupply_mn', rsupply_mn)
+
+            utils.vector_apply(target_vector_path, demand_op,
+                new_fields=['consum_vol', 'consum_mn', 'rsupply_vl', 'rsupply_mn'])
+
+
+        else:
+            def mean_op(feature):
+                fid = feature.GetFID()
+                # Using the unique feature ID, index into the
+                # dictionary to get the corresponding value
+                # only write a value if zonal stats found valid pixels in the polygon:
+                if stats['precip_mn'][fid]['count'] > 0:
+                    feature.SetField('precip_mn',
+                        (stats['precip_mn'][fid]['sum'] /
+                            stats['precip_mn'][fid]['count']))
+
+                if stats['PET_mn'][fid]['count'] > 0:
+                    feature.SetField('PET_mn',
+                        (stats['PET_mn'][fid]['sum'] / stats['PET_mn'][fid]['count']))
+
+                if stats['AET_mn'][fid]['count'] > 0:
+                    feature.SetField('AET_mn',
+                        (stats['AET_mn'][fid]['sum'] / stats['AET_mn'][fid]['count']))
+
+            utils.vector_apply(target_vector_path, mean_op,
+                new_fields=['precip_mn', 'PET_mn', 'AET_mn'])
+
 
     if valuation_df is not None:
         # only do valuation for watersheds, not subwatersheds
         if ws_id_name == 'ws_id':
-            compute_watershed_valuation(target_vector_path, valuation_df)
+            def valuation_op(feat):
+                # Get the watershed ID to index into the valuation parameter dictionary
+                # Since we only allow valuation on watersheds (not subwatersheds)
+                # it's okay to hardcode 'ws_id' here.
+                ws_id = feat.GetField('ws_id')
+                # Get the rsupply volume for the watershed
+                rsupply_vl = feat.GetField('rsupply_vl')
+
+                # there won't be a rsupply_vl value if the polygon feature only
+                # covers nodata raster values, so check before doing math.
+                if rsupply_vl is not None:
+                    # Compute hydropower energy production (KWH)
+                    # This is from the equation given in the Users' Guide
+                    energy = (
+                        valuation_df['efficiency'][ws_id] * valuation_df['fraction'][ws_id] *
+                        valuation_df['height'][ws_id] * rsupply_vl * 0.00272)
+
+                    dsum = 0
+                    # Divide by 100 because it is input at a percent and we need
+                    # decimal value
+                    disc = valuation_df['discount'][ws_id] / 100
+                    # To calculate the summation of the discount rate term over the life
+                    # span of the dam we can use a geometric series
+                    ratio = 1 / (1 + disc)
+                    if ratio != 1:
+                        dsum = (1 - math.pow(ratio, valuation_df['time_span'][ws_id])) / (1 - ratio)
+
+                    npv = ((valuation_df['kw_price'][ws_id] * energy) - valuation_df['cost'][ws_id]) * dsum
+
+                    # Get the volume field index and add value
+                    feat.SetField('hp_energy', energy)
+                    feat.SetField('hp_val', npv)
+
+            utils.vector_apply(target_vector_path, valuation_op,
+                new_fields=['hp_energy', 'hp_val'])
 
 
 def convert_vector_to_csv(base_vector_path, target_csv_path):
@@ -963,7 +1048,7 @@ def convert_vector_to_csv(base_vector_path, target_csv_path):
     _ = csv_driver.CreateCopy(target_csv_path, watershed_vector)
 
 
-def zonal_stats_tofile(base_vector_path, raster_path, target_stats_pickle):
+def zonal_stats_tofile(base_vector_path, raster_path_list, target_stats_pickle):
     """Calculate zonal statistics for watersheds and write results to a file.
 
     Args:
@@ -977,10 +1062,12 @@ def zonal_stats_tofile(base_vector_path, raster_path, target_stats_pickle):
         None
 
     """
-    ws_stats_dict = pygeoprocessing.zonal_statistics(
-        (raster_path, 1), base_vector_path, ignore_nodata=True)
+    stats = {}
+    for key, raster_path in raster_path_list:
+        stats[key] = pygeoprocessing.zonal_statistics(
+            (raster_path, 1), base_vector_path, ignore_nodata=True)
     with open(target_stats_pickle, 'wb') as picklefile:
-        picklefile.write(pickle.dumps(ws_stats_dict))
+        picklefile.write(pickle.dumps(stats))
 
 
 def fractp_op(
@@ -1076,188 +1163,6 @@ def fractp_op(
     fractp[:] = nodata_dict['out_nodata']
     fractp[valid_mask] = result
     return fractp
-
-
-def compute_watershed_valuation(watershed_results_vector_path, val_df):
-    """Compute net present value and energy for the watersheds.
-
-    Args:
-        watershed_results_vector_path (string):
-            Path to an OGR shapefile for the watershed results.
-            Where the results will be added.
-        val_df (pandas.DataFrame): a dataframe that has all the valuation
-            parameters for each watershed.
-
-    Returns:
-        None.
-
-    """
-    # The field names for the new attributes
-    energy_field = 'hp_energy'
-    npv_field = 'hp_val'
-
-    def valuation_op(feat):
-        # Get the watershed ID to index into the valuation parameter dictionary
-        # Since we only allow valuation on watersheds (not subwatersheds)
-        # it's okay to hardcode 'ws_id' here.
-        ws_id = feat.GetField('ws_id')
-        # Get the rsupply volume for the watershed
-        rsupply_vl = feat.GetField('rsupply_vl')
-
-        # there won't be a rsupply_vl value if the polygon feature only
-        # covers nodata raster values, so check before doing math.
-        if rsupply_vl is not None:
-            # Compute hydropower energy production (KWH)
-            # This is from the equation given in the Users' Guide
-            energy = (
-                val_df['efficiency'][ws_id] * val_df['fraction'][ws_id] *
-                val_df['height'][ws_id] * rsupply_vl * 0.00272)
-
-            dsum = 0
-            # Divide by 100 because it is input at a percent and we need
-            # decimal value
-            disc = val_df['discount'][ws_id] / 100
-            # To calculate the summation of the discount rate term over the life
-            # span of the dam we can use a geometric series
-            ratio = 1 / (1 + disc)
-            if ratio != 1:
-                dsum = (1 - math.pow(ratio, val_df['time_span'][ws_id])) / (1 - ratio)
-
-            npv = ((val_df['kw_price'][ws_id] * energy) - val_df['cost'][ws_id]) * dsum
-
-            # Get the volume field index and add value
-            feat.SetField(energy_field, energy)
-            feat.SetField(npv_field, npv)
-
-    utils.vector_apply(watershed_results_vector_path, valuation_op,
-        new_fields=[energy_field, npv_field])
-
-
-def compute_rsupply_volume(watershed_results_vector_path):
-    """Calculate the total realized water supply volume.
-
-    And the mean realized water supply volume per pixel for the given sheds.
-    Output units in cubic meters and cubic meters per pixel respectively.
-
-    Args:
-        watershed_results_vector_path (string): a path to a vector that
-            contains fields 'wyield_vol' and 'wyield_mn'.
-
-    Returns:
-        None.
-
-    """
-    # The field names for the new attributes
-    rsupply_vol_name = 'rsupply_vl'
-    rsupply_mn_name = 'rsupply_mn'
-
-    def rsupply_vol_op(feat):
-        # Get mean and volume water yield values
-        wyield_mn = feat.GetField('wyield_mn')
-        wyield = feat.GetField('wyield_vol')
-
-        # Get water demand/consumption values
-        consump_vol = feat.GetField('consum_vol')
-        consump_mn = feat.GetField('consum_mn')
-
-        # Calculate realized supply
-        # these values won't exist if the polygon feature only
-        # covers nodata raster values, so check before doing math.
-        if wyield_mn is not None and consump_mn is not None:
-            rsupply_vol = wyield - consump_vol
-            rsupply_mn = wyield_mn - consump_mn
-
-            # Set values for the new rsupply fields
-            feat.SetField(rsupply_vol_name, rsupply_vol)
-            feat.SetField(rsupply_mn_name, rsupply_mn)
-
-    utils.vector_apply(watershed_results_vector_path, rsupply_vol_op,
-        new_fields=[rsupply_vol_name, rsupply_mn_name])
-
-
-def compute_water_yield_volume(watershed_results_vector_path):
-    """Calculate the water yield volume per sub-watershed or watershed.
-
-    Results are added to a 'wyield_vol' field in
-    `watershed_results_vector_path`. Units are cubic meters.
-
-    Args:
-        watershed_results_vector_path (str): Path to a sub-watershed
-            or watershed vector. This vector's features should have a
-            'wyield_mn' attribute.
-
-    Returns:
-        None.
-
-    """
-    vol_name = 'wyield_vol'
-
-    def wyield_vol_op(feat):
-        wyield_mn = feat.GetField('wyield_mn')
-        # there won't be a wyield_mn value if the polygon feature only
-        # covers nodata raster values, so check before doing math.
-        if wyield_mn is not None:
-            geom = feat.GetGeometryRef()
-            # Calculate water yield volume,
-            # 1000 is for converting the mm of wyield to meters
-            vol = wyield_mn * geom.Area() / 1000
-            # Get the volume field index and add value
-            feat.SetField(vol_name, vol)
-
-    utils.vector_apply(
-        watershed_results_vector_path, wyield_vol_op,
-        new_fields=[(vol_name, ogr.OFTReal)])
-
-
-def _add_zonal_stats_dict_to_shape(
-        watershed_results_vector_path,
-        stats_map, field_name, aggregate_field_id):
-    """Add a new field to a shapefile with values from a dictionary.
-
-    Args:
-        watershed_results_vector_path (string): a path to a vector whose FIDs
-            correspond with the keys in `stats_map`.
-        stats_map (dict): a dictionary in the format generated by
-            pygeoprocessing.zonal_statistics that contains at least the key
-            value of `aggregate_field_id` per feature id.
-        field_name (str): a string for the name of the new field to add to
-            the target vector.
-        aggregate_field_id (string): one of 'min' 'max' 'sum' 'mean' 'count'
-            or 'nodata_count' as defined by pygeoprocessing.zonal_statistics.
-
-    Returns:
-        None
-
-    """
-    vector = gdal.OpenEx(
-        watershed_results_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    layer = vector.GetLayer()
-
-    # Create the new field
-    field_defn = ogr.FieldDefn(field_name, ogr.OFTReal)
-    field_defn.SetWidth(24)
-    field_defn.SetPrecision(11)
-    layer.CreateField(field_defn)
-
-    # Get the number of features (polygons) and iterate through each
-    layer.ResetReading()
-    for feature in layer:
-        feature_fid = feature.GetFID()
-
-        # Using the unique feature ID, index into the
-        # dictionary to get the corresponding value
-        # only write a value if zonal stats found valid pixels in the polygon:
-        if stats_map[feature_fid]['count'] > 0:
-            if aggregate_field_id == 'mean':
-                field_val = float(
-                    stats_map[feature_fid]['sum']) / stats_map[feature_fid]['count']
-            else:
-                field_val = float(stats_map[feature_fid][aggregate_field_id])
-
-            # Set the value for the new field
-            feature.SetField(field_name, field_val)
-
-            layer.SetFeature(feature)
 
 
 @validation.invest_validator
