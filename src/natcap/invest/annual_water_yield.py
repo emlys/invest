@@ -1092,30 +1092,17 @@ def compute_watershed_valuation(watershed_results_vector_path, val_df):
         None.
 
     """
-    ws_ds = gdal.OpenEx(
-        watershed_results_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    ws_layer = ws_ds.GetLayer()
-
     # The field names for the new attributes
     energy_field = 'hp_energy'
     npv_field = 'hp_val'
 
-    # Add the new fields to the shapefile
-    for new_field in [energy_field, npv_field]:
-        field_defn = ogr.FieldDefn(new_field, ogr.OFTReal)
-        field_defn.SetWidth(24)
-        field_defn.SetPrecision(11)
-        ws_layer.CreateField(field_defn)
-
-    ws_layer.ResetReading()
-    # Iterate over the number of features (polygons)
-    for ws_feat in ws_layer:
+    def valuation_op(feat):
         # Get the watershed ID to index into the valuation parameter dictionary
         # Since we only allow valuation on watersheds (not subwatersheds)
         # it's okay to hardcode 'ws_id' here.
-        ws_id = ws_feat.GetField('ws_id')
+        ws_id = feat.GetField('ws_id')
         # Get the rsupply volume for the watershed
-        rsupply_vl = ws_feat.GetField('rsupply_vl')
+        rsupply_vl = feat.GetField('rsupply_vl')
 
         # there won't be a rsupply_vl value if the polygon feature only
         # covers nodata raster values, so check before doing math.
@@ -1139,10 +1126,11 @@ def compute_watershed_valuation(watershed_results_vector_path, val_df):
             npv = ((val_df['kw_price'][ws_id] * energy) - val_df['cost'][ws_id]) * dsum
 
             # Get the volume field index and add value
-            ws_feat.SetField(energy_field, energy)
-            ws_feat.SetField(npv_field, npv)
+            feat.SetField(energy_field, energy)
+            feat.SetField(npv_field, npv)
 
-            ws_layer.SetFeature(ws_feat)
+    utils.vector_apply(watershed_results_vector_path, valuation_op,
+        new_fields=[energy_field, npv_field])
 
 
 def compute_rsupply_volume(watershed_results_vector_path):
@@ -1159,31 +1147,18 @@ def compute_rsupply_volume(watershed_results_vector_path):
         None.
 
     """
-    ws_ds = gdal.OpenEx(
-        watershed_results_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    ws_layer = ws_ds.GetLayer()
-
     # The field names for the new attributes
     rsupply_vol_name = 'rsupply_vl'
     rsupply_mn_name = 'rsupply_mn'
 
-    # Add the new fields to the shapefile
-    for new_field in [rsupply_vol_name, rsupply_mn_name]:
-        field_defn = ogr.FieldDefn(new_field, ogr.OFTReal)
-        field_defn.SetWidth(24)
-        field_defn.SetPrecision(11)
-        ws_layer.CreateField(field_defn)
-
-    ws_layer.ResetReading()
-    # Iterate over the number of features (polygons)
-    for ws_feat in ws_layer:
+    def rsupply_vol_op(feat):
         # Get mean and volume water yield values
-        wyield_mn = ws_feat.GetField('wyield_mn')
-        wyield = ws_feat.GetField('wyield_vol')
+        wyield_mn = feat.GetField('wyield_mn')
+        wyield = feat.GetField('wyield_vol')
 
         # Get water demand/consumption values
-        consump_vol = ws_feat.GetField('consum_vol')
-        consump_mn = ws_feat.GetField('consum_mn')
+        consump_vol = feat.GetField('consum_vol')
+        consump_mn = feat.GetField('consum_mn')
 
         # Calculate realized supply
         # these values won't exist if the polygon feature only
@@ -1193,10 +1168,11 @@ def compute_rsupply_volume(watershed_results_vector_path):
             rsupply_mn = wyield_mn - consump_mn
 
             # Set values for the new rsupply fields
-            ws_feat.SetField(rsupply_vol_name, rsupply_vol)
-            ws_feat.SetField(rsupply_mn_name, rsupply_mn)
+            feat.SetField(rsupply_vol_name, rsupply_vol)
+            feat.SetField(rsupply_mn_name, rsupply_mn)
 
-            ws_layer.SetFeature(ws_feat)
+    utils.vector_apply(watershed_results_vector_path, rsupply_vol_op,
+        new_fields=[rsupply_vol_name, rsupply_mn_name])
 
 
 def compute_water_yield_volume(watershed_results_vector_path):
@@ -1214,22 +1190,9 @@ def compute_water_yield_volume(watershed_results_vector_path):
         None.
 
     """
-    shape = gdal.OpenEx(
-        watershed_results_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    layer = shape.GetLayer()
-
-    # The field names for the new attributes
     vol_name = 'wyield_vol'
 
-    # Add the new field to the shapefile
-    field_defn = ogr.FieldDefn(vol_name, ogr.OFTReal)
-    field_defn.SetWidth(24)
-    field_defn.SetPrecision(11)
-    layer.CreateField(field_defn)
-
-    layer.ResetReading()
-    # Iterate over the number of features (polygons) and compute volume
-    for feat in layer:
+    def wyield_vol_op(feat):
         wyield_mn = feat.GetField('wyield_mn')
         # there won't be a wyield_mn value if the polygon feature only
         # covers nodata raster values, so check before doing math.
@@ -1241,7 +1204,9 @@ def compute_water_yield_volume(watershed_results_vector_path):
             # Get the volume field index and add value
             feat.SetField(vol_name, vol)
 
-            layer.SetFeature(feat)
+    utils.vector_apply(
+        watershed_results_vector_path, wyield_vol_op,
+        new_fields=[(vol_name, ogr.OFTReal)])
 
 
 def _add_zonal_stats_dict_to_shape(

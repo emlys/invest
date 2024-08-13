@@ -765,3 +765,26 @@ def matches_format_string(test_string, format_string):
     if re.fullmatch(pattern, test_string):
         return True
     return False
+
+
+def vector_apply(vector_path, op, new_fields=[]):
+    vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR | gdal.GA_Update)
+    layer = vector.GetLayer()
+
+    for field_name, field_type in new_fields:
+        field_defn = ogr.FieldDefn(field_name, field_type)
+        field_defn.SetWidth(24)
+        field_defn.SetPrecision(11)
+        layer.CreateField(field_defn)
+
+    layer.ResetReading()
+    layer.StartTransaction()
+
+    # add error handling - finally write to file and save
+    # add timed logging
+    for feature in layer:
+        op(feature)
+        layer.SetFeature(feature)
+
+    layer.CommitTransaction()
+    layer.SyncToDisk()
