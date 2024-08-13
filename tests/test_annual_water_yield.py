@@ -164,7 +164,8 @@ class AnnualWaterYieldTests(unittest.TestCase):
                 os.path.join(
                     REGRESSION_DATA, 'water_yield',
                     table_path.replace('_test', '')))
-            pandas.testing.assert_frame_equal(base_table, expected_table)
+            pandas.testing.assert_frame_equal(
+                base_table.sort_index(axis=1), expected_table.sort_index(axis=1))
 
     def test_scarcity_subshed(self):
         """Hydro: testing Scarcity component w/ subwatershed."""
@@ -192,8 +193,8 @@ class AnnualWaterYieldTests(unittest.TestCase):
                           'subwatershed_results_wyield.shp']
         for vector_path in vector_results:
             utils._assert_vectors_equal(
-                os.path.join(args['workspace_dir'], 'output', vector_path),
-                os.path.join(REGRESSION_DATA, 'scarcity', vector_path))
+                os.path.join(REGRESSION_DATA, 'scarcity', vector_path),
+                os.path.join(args['workspace_dir'], 'output', vector_path))
 
         table_results = ['watershed_results_wyield.csv',
                          'subwatershed_results_wyield.csv']
@@ -202,7 +203,8 @@ class AnnualWaterYieldTests(unittest.TestCase):
                 os.path.join(args['workspace_dir'], 'output', table_path))
             expected_table = pandas.read_csv(
                 os.path.join(REGRESSION_DATA, 'scarcity', table_path))
-            pandas.testing.assert_frame_equal(base_table, expected_table)
+            pandas.testing.assert_frame_equal(
+                base_table.sort_index(axis=1), expected_table.sort_index(axis=1))
 
     def test_valuation_subshed(self):
         """Hydro: testing Valuation component w/ subwatershed."""
@@ -242,7 +244,8 @@ class AnnualWaterYieldTests(unittest.TestCase):
                 os.path.join(args['workspace_dir'], 'output', table_path))
             expected_table = pandas.read_csv(
                 os.path.join(REGRESSION_DATA, 'valuation', table_path))
-            pandas.testing.assert_frame_equal(base_table, expected_table)
+            pandas.testing.assert_frame_equal(
+                base_table.sort_index(axis=1), expected_table.sort_index(axis=1))
 
     def test_validation(self):
         """Hydro: test failure cases on the validation function."""

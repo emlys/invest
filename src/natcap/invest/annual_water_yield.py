@@ -913,121 +913,82 @@ def write_output_vector_attributes(target_vector_path, ws_id_name,
     with open(pickle_path, 'rb') as picklefile:
         stats = pickle.load(picklefile)
 
+    new_fields = ['wyield_mn', 'wyield_vol', 'precip_mn', 'PET_mn', 'AET_mn']
+    if 'demand' in stats:
+        new_fields += ['consum_mn', 'consum_vol', 'rsupply_mn', 'rsupply_vl']
+    if valuation_df is not None and ws_id_name == 'ws_id':
+        new_fields += ['hp_energy', 'hp_val']
 
-        def wyield_op(feature):
-            fid = feature.GetFID()
-            # Using the unique feature ID, index into the
-            # dictionary to get the corresponding value
-            # only write a value if zonal stats found valid pixels in the polygon:
-            if stats['wyield_mn'][fid]['count'] > 0:
-                wyield_mn = (
-                    stats['wyield_mn'][fid]['sum'] /
-                    stats['wyield_mn'][fid]['count'])
-                geom = feature.GetGeometryRef()
-                # Calculate water yield volume,
-                # 1000 is for converting the mm of wyield to meters
-                wyield_vol = wyield_mn * geom.Area() / 1000
-                feature.SetField('wyield_mn', wyield_mn)
-                feature.SetField('wyield_vol', wyield_vol)
-        utils.vector_apply(
-            target_vector_path, wyield_op,
-            new_fields=['wyield_mn', 'wyield_vol'])
+    def stats_op(feature):
+        fid = feature.GetFID()
+        # Using the unique feature ID, index into the
+        # dictionary to get the corresponding value
+        # only write a value if zonal stats found valid pixels in the polygon:
+        if stats['wyield_mn'][fid]['count'] > 0:
+            wyield_mn = (
+                stats['wyield_mn'][fid]['sum'] /
+                stats['wyield_mn'][fid]['count'])
+            # Calculate water yield volume,
+            # 1000 is for converting the mm of wyield to meters
+            wyield_vol = wyield_mn * feature.GetGeometryRef().Area() / 1000
+            feature.SetField('wyield_mn', wyield_mn)
+            feature.SetField('wyield_vol', wyield_vol)
 
+        if 'demand' in stats and stats['demand'][fid]['count'] > 0:
+            consum_vol = stats['demand'][fid]['sum']
+            consum_mn = consum_vol / stats['demand'][fid]['count']
+            feature.SetField('consum_mn', consum_mn)
+            feature.SetField('consum_vol', consum_vol)
 
-        # consum_* variables rely on 'wyield_*' fields present,
-        # so this would fail if somehow 'demand' comes before 'wyield_mn'.
-        # The order is hardcoded in raster_names_paths_list.
-        if demand:
-            # Add aggregated consumption to sheds shapefiles
-            def demand_op(feature):
-                fid = feature.GetFID()
-                # Get mean and volume water yield values
-                wyield_mn = feature.GetField('wyield_mn')
-                wyield_vol = feature.GetField('wyield_vol')
+        if ('demand' in stats and stats['demand'][fid]['count'] > 0 and
+                stats['wyield_mn'][fid]['count'] > 0):
+            # Calculate realized supply
+            # these values won't exist if the polygon feature only
+            # covers nodata raster values, so check before doing math.
+            rsupply_vol = wyield_vol - consum_vol
+            rsupply_mn = wyield_mn - consum_mn
+            feature.SetField('rsupply_mn', rsupply_mn)
+            feature.SetField('rsupply_vl', rsupply_vol)
 
-                # Using the unique feature ID, index into the
-                # dictionary to get the corresponding value
-                # only write a value if zonal stats found valid pixels in the polygon:
-                if stats['demand'][fid]['count'] > 0:
-                    consum_vol = stats['demand'][fid]['sum']
-                    consum_mn = consum_vol / stats['demand'][fid]['count']
-                    feature.SetField('consum_vol', consum_vol)
-                    feature.SetField('consum_mn', consum_mn)
+            if valuation_df is not None and ws_id_name == 'ws_id':
+                # Compute hydropower energy production (KWH)
+                # This is from the equation given in the Users' Guide
+                ws_id = feature.GetField('ws_id')
+                energy = (
+                    valuation_df['efficiency'][ws_id] * valuation_df['fraction'][ws_id] *
+                    valuation_df['height'][ws_id] * rsupply_vol * 0.00272)
 
-                    # Calculate realized supply
-                    # these values won't exist if the polygon feature only
-                    # covers nodata raster values, so check before doing math.
-                    if wyield_mn is not None:
-                        rsupply_vol = wyield_vol - consum_vol
-                        rsupply_mn = wyield_mn - consum_mn
-                        feature.SetField('rsupply_vl', rsupply_vol)
-                        feature.SetField('rsupply_mn', rsupply_mn)
+                # Divide by 100 because it is input at a percent and we need
+                # decimal value
+                disc = valuation_df['discount'][ws_id] / 100
+                # To calculate the summation of the discount rate term over the life
+                # span of the dam we can use a geometric series
+                ratio = 1 / (1 + disc)
+                dsum = 0
+                if ratio != 1:
+                    dsum = (1 - math.pow(ratio, valuation_df['time_span'][ws_id])) / (1 - ratio)
 
-            utils.vector_apply(target_vector_path, demand_op,
-                new_fields=['consum_vol', 'consum_mn', 'rsupply_vl', 'rsupply_mn'])
+                npv = ((valuation_df['kw_price'][ws_id] * energy) - valuation_df['cost'][ws_id]) * dsum
 
+                # Get the volume field index and add value
+                feature.SetField('hp_energy', energy)
+                feature.SetField('hp_val', npv)
 
-        else:
-            def mean_op(feature):
-                fid = feature.GetFID()
-                # Using the unique feature ID, index into the
-                # dictionary to get the corresponding value
-                # only write a value if zonal stats found valid pixels in the polygon:
-                if stats['precip_mn'][fid]['count'] > 0:
-                    feature.SetField('precip_mn',
-                        (stats['precip_mn'][fid]['sum'] /
-                            stats['precip_mn'][fid]['count']))
+        if stats['precip_mn'][fid]['count'] > 0:
+            feature.SetField('precip_mn',
+                (stats['precip_mn'][fid]['sum'] /
+                    stats['precip_mn'][fid]['count']))
 
-                if stats['PET_mn'][fid]['count'] > 0:
-                    feature.SetField('PET_mn',
-                        (stats['PET_mn'][fid]['sum'] / stats['PET_mn'][fid]['count']))
+        if stats['PET_mn'][fid]['count'] > 0:
+            feature.SetField('PET_mn',
+                (stats['PET_mn'][fid]['sum'] / stats['PET_mn'][fid]['count']))
 
-                if stats['AET_mn'][fid]['count'] > 0:
-                    feature.SetField('AET_mn',
-                        (stats['AET_mn'][fid]['sum'] / stats['AET_mn'][fid]['count']))
+        if stats['AET_mn'][fid]['count'] > 0:
+            feature.SetField('AET_mn',
+                (stats['AET_mn'][fid]['sum'] / stats['AET_mn'][fid]['count']))
 
-            utils.vector_apply(target_vector_path, mean_op,
-                new_fields=['precip_mn', 'PET_mn', 'AET_mn'])
-
-
-    if valuation_df is not None:
-        # only do valuation for watersheds, not subwatersheds
-        if ws_id_name == 'ws_id':
-            def valuation_op(feat):
-                # Get the watershed ID to index into the valuation parameter dictionary
-                # Since we only allow valuation on watersheds (not subwatersheds)
-                # it's okay to hardcode 'ws_id' here.
-                ws_id = feat.GetField('ws_id')
-                # Get the rsupply volume for the watershed
-                rsupply_vl = feat.GetField('rsupply_vl')
-
-                # there won't be a rsupply_vl value if the polygon feature only
-                # covers nodata raster values, so check before doing math.
-                if rsupply_vl is not None:
-                    # Compute hydropower energy production (KWH)
-                    # This is from the equation given in the Users' Guide
-                    energy = (
-                        valuation_df['efficiency'][ws_id] * valuation_df['fraction'][ws_id] *
-                        valuation_df['height'][ws_id] * rsupply_vl * 0.00272)
-
-                    dsum = 0
-                    # Divide by 100 because it is input at a percent and we need
-                    # decimal value
-                    disc = valuation_df['discount'][ws_id] / 100
-                    # To calculate the summation of the discount rate term over the life
-                    # span of the dam we can use a geometric series
-                    ratio = 1 / (1 + disc)
-                    if ratio != 1:
-                        dsum = (1 - math.pow(ratio, valuation_df['time_span'][ws_id])) / (1 - ratio)
-
-                    npv = ((valuation_df['kw_price'][ws_id] * energy) - valuation_df['cost'][ws_id]) * dsum
-
-                    # Get the volume field index and add value
-                    feat.SetField('hp_energy', energy)
-                    feat.SetField('hp_val', npv)
-
-            utils.vector_apply(target_vector_path, valuation_op,
-                new_fields=['hp_energy', 'hp_val'])
+    utils.vector_apply(target_vector_path, stats_op,
+        new_fields=new_fields)
 
 
 def convert_vector_to_csv(base_vector_path, target_csv_path):
