@@ -768,24 +768,63 @@ def matches_format_string(test_string, format_string):
     return False
 
 
-def vector_apply(vector_path, op, new_fields=[]):
+def _invoke_timed_callback(
+        reference_time, callback_lambda, callback_period=5):
+    """Invoke callback if a certain amount of time has passed.
+
+    This is a convenience function to standardize update callbacks from the
+    module.
+
+    Args:
+        reference_time (float): time to base `callback_period` length from.
+        callback_lambda (lambda): function to invoke if difference between
+            current time and `reference_time` has exceeded `callback_period`.
+        callback_period (float): time in seconds to pass until
+            `callback_lambda` is invoked.
+
+    Returns:
+        `reference_time` if `callback_lambda` not invoked, otherwise the time
+        when `callback_lambda` was invoked.
+
+    """
+    current_time = time.time()
+    if current_time - reference_time > callback_period:
+        callback_lambda()
+        return current_time
+    return reference_time
+
+
+def vector_apply(vector_path, op, new_fields=[], enumerated=False):
     vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR | gdal.GA_Update)
     layer = vector.GetLayer()
 
-    for field_name in new_fields:
-        field_defn = ogr.FieldDefn(field_name, ogr.OFTReal)
-        field_defn.SetWidth(24)
-        field_defn.SetPrecision(11)
+    for field in new_fields:
+        if isinstance(field, ogr.FieldDefn):
+            field_defn = field
+        else:
+            field_defn = ogr.FieldDefn(field, ogr.OFTReal)
+            field_defn.SetWidth(24)
+            field_defn.SetPrecision(11)
         layer.CreateField(field_defn)
 
     layer.ResetReading()
     layer.StartTransaction()
 
+    last_time = time.time()
+    n_features = layer.GetFeatureCount()
+
     # add error handling - finally write to file and save
-    # add timed logging
-    for feature in layer:
-        op(feature)
+    for index, feature in enumerate(layer):
+        last_time = _invoke_timed_callback(
+            last_time, lambda: LOGGER.info(
+                "vector_apply approximately %.1f%% complete",
+                100 * (index + 1) / n_features))
+        if enumerated:
+            op(index, feature)
+        else:
+            op(feature)
         layer.SetFeature(feature)
+
 
     layer.CommitTransaction()
     layer.SyncToDisk()
