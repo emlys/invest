@@ -1332,9 +1332,6 @@ def _add_target_fields_to_wave_vector(
 
     """
     _copy_vector_or_raster(base_wave_vector_path, target_wave_vector_path)
-    target_wave_vector = gdal.OpenEx(
-        target_wave_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    target_wave_layer = target_wave_vector.GetLayer(0)
 
     # Get the coordinates of points of wave, land, and grid vectors
     wave_point_list = _get_points_geometries(base_wave_vector_path)
@@ -1349,20 +1346,10 @@ def _add_target_fields_to_wave_vector(
     land_to_grid_dist_list, _ = _calculate_min_distances(
         land_point_list, grid_point_list)
 
-    # Add target fields to the wave vector to store results
-    for field in [_W2L_DIST_FIELD, _L2G_DIST_FIELD, _LAND_ID_FIELD,
-                  _NPV_25Y_FIELD, _CAPWE_ALL_FIELD, _UNIT_FIELD]:
-        field_defn = ogr.FieldDefn(field, ogr.OFTReal)
-        field_defn.SetWidth(24)
-        field_defn.SetPrecision(11)
-        target_wave_layer.CreateField(field_defn)
-
     # For each feature in the shapefile add the corresponding distance
     # from wave_to_land_dist and land_to_grid_dist calculated above
-    target_wave_layer.ResetReading()
-
     LOGGER.info('Calculating and adding new fields to wave layer.')
-    for i, feat in enumerate(target_wave_layer):
+    def add_fields_op(i, feat):
         # Get corresponding distances and land ID for the wave point
         land_id = int(wave_to_land_id_list[i])
         wave_to_land_dist = wave_to_land_dist_list[i]
@@ -1384,12 +1371,10 @@ def _add_target_fields_to_wave_vector(
         feat.SetField(_NPV_25Y_FIELD, npv_result)
         feat.SetField(_CAPWE_ALL_FIELD, capwe_all_result)
         feat.SetField(_UNIT_FIELD, number_of_machines)
-
-        target_wave_layer.SetFeature(feat)
-        feat = None
-
-    target_wave_layer = None
-    target_wave_vector = None
+    utils.vector_apply(target_wave_vector_path, add_fields_op,
+        enumerated=True,
+        new_fields=[_W2L_DIST_FIELD, _L2G_DIST_FIELD, _LAND_ID_FIELD,
+                    _NPV_25Y_FIELD, _CAPWE_ALL_FIELD, _UNIT_FIELD])
 
 
 def _dict_to_point_vector(base_dict_data, target_vector_path, layer_name,
@@ -2148,20 +2133,10 @@ def _energy_and_power_to_wave_vector(
     """
     _copy_vector_or_raster(base_wave_vector_path, target_wave_vector_path)
 
-    target_wave_vector = gdal.OpenEx(
-        target_wave_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    target_wave_layer = target_wave_vector.GetLayer()
-    # Create the Captured Energy and Wave Power fields for the shapefile
-    for field_name in [_CAP_WE_FIELD, _WAVE_POWER_FIELD]:
-        field_defn = ogr.FieldDefn(field_name, ogr.OFTReal)
-        field_defn.SetWidth(24)
-        field_defn.SetPrecision(11)
-        target_wave_layer.CreateField(field_defn)
-
     # For all of the features (points) in the shapefile, get the corresponding
     # point/value from the dictionary and set the _CAP_WE_FIELD field as
     # the value from the dictionary
-    for feat in target_wave_layer:
+    def energy_power_op(feat):
         # Calculate and set the Captured Wave Energy field
         value_i = feat.GetField('I')
         value_j = feat.GetField('J')
@@ -2203,13 +2178,8 @@ def _energy_and_power_to_wave_vector(
                      (numpy.square(height)) * wave_group_velocity) / 1000)
 
         feat.SetField(_WAVE_POWER_FIELD, wave_pow)
-
-        # Save the feature modifications to the layer.
-        target_wave_layer.SetFeature(feat)
-        feat = None
-
-    target_wave_layer = None
-    target_wave_vector = None
+    utils.vector_apply(target_wave_vector_path, energy_power_op,
+        new_fields=[_CAP_WE_FIELD, _WAVE_POWER_FIELD])
 
 
 def _count_pixels_groups(raster_path, group_values):

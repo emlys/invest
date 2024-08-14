@@ -1333,47 +1333,27 @@ def _aggregate_recharge(
         os.remove(aggregate_vector_path)
 
     original_aoi_vector = gdal.OpenEx(aoi_path, gdal.OF_VECTOR)
-
     driver = gdal.GetDriverByName('ESRI Shapefile')
     driver.CreateCopy(aggregate_vector_path, original_aoi_vector)
-    gdal.Dataset.__swig_destroy__(original_aoi_vector)
-    original_aoi_vector = None
-    aggregate_vector = gdal.OpenEx(aggregate_vector_path, 1)
-    aggregate_layer = aggregate_vector.GetLayer()
 
-    for raster_path, aggregate_field_id, op_type in [
-            (l_path, 'qb', 'mean'), (vri_path, 'vri_sum', 'sum')]:
+    l_stats = pygeoprocessing.zonal_statistics(
+        (l_path, 1), aggregate_vector_path)
+    vri_stats = pygeoprocessing.zonal_statistics(
+            (vri_path, 1), aggregate_vector_path)
 
-        # aggregate carbon stocks by the new ID field
-        aggregate_stats = pygeoprocessing.zonal_statistics(
-            (raster_path, 1), aggregate_vector_path)
-
-        aggregate_field = ogr.FieldDefn(aggregate_field_id, ogr.OFTReal)
-        aggregate_field.SetWidth(24)
-        aggregate_field.SetPrecision(11)
-        aggregate_layer.CreateField(aggregate_field)
-
-        aggregate_layer.ResetReading()
-        for poly_index, poly_feat in enumerate(aggregate_layer):
-            if op_type == 'mean':
-                pixel_count = aggregate_stats[poly_index]['count']
-                if pixel_count != 0:
-                    value = (aggregate_stats[poly_index]['sum'] / pixel_count)
-                else:
-                    LOGGER.warning(
-                        "no coverage for polygon %s", ', '.join(
-                            [str(poly_feat.GetField(_)) for _ in range(
-                                poly_feat.GetFieldCount())]))
-                    value = 0
-            elif op_type == 'sum':
-                value = aggregate_stats[poly_index]['sum']
-            poly_feat.SetField(aggregate_field_id, float(value))
-            aggregate_layer.SetFeature(poly_feat)
-
-    aggregate_layer.SyncToDisk()
-    aggregate_layer = None
-    gdal.Dataset.__swig_destroy__(aggregate_vector)
-    aggregate_vector = None
+    def aggregate_op(poly_index, poly_feat):
+        if l_stats[poly_index]['count'] != 0:
+            qb = l_stats[poly_index]['sum'] / l_stats[poly_index]['count']
+        else:
+            LOGGER.warning(
+                "no coverage for polygon %s", ', '.join(
+                    [str(poly_feat.GetField(_)) for _ in range(
+                        poly_feat.GetFieldCount())]))
+            qb = 0
+        poly_feat.SetField('qb', float(qb))
+        poly_feat.SetField('vri_sum', float(vri_stats[poly_index]['sum']))
+    utils.vector_apply(aggregate_vector_path, aggregate_op,
+        enumerated=True, new_fields=['qb', 'vri_sum'])
 
 
 @validation.invest_validator

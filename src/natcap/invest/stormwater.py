@@ -691,12 +691,15 @@ def execute(args):
         task_name='calculate stormwater runoff volume'
     )
     aggregation_task_dependencies = [retention_volume_task]
-    data_to_aggregate = [
-        # tuple of (raster path, output field name, op) for aggregation
-        (final_retention_ratio_path, 'mean_retention_ratio', 'mean'),
-        (files['retention_volume_path'], 'total_retention_volume', 'sum'),
-        (files['runoff_ratio_path'], 'mean_runoff_ratio', 'mean'),
-        (files['runoff_volume_path'], 'total_runoff_volume', 'sum')]
+    data_to_sum = [
+        (files['retention_volume_path'], 'total_retention_volume'),
+        (files['runoff_volume_path'], 'total_runoff_volume')
+    ]
+    data_to_average = [
+        # tuple of (raster path, output field name) for aggregation
+        (final_retention_ratio_path, 'mean_retention_ratio'),
+        (files['runoff_ratio_path'], 'mean_runoff_ratio')
+    ]
 
     # (Optional) Calculate stormwater percolation ratio and volume from
     # LULC, soil groups, biophysical table, and precipitation
@@ -734,10 +737,10 @@ def execute(args):
             task_name='calculate stormwater retention volume'
         )
         aggregation_task_dependencies.append(percolation_volume_task)
-        data_to_aggregate.append((files['percolation_ratio_path'],
-                                 'mean_percolation_ratio', 'mean'))
-        data_to_aggregate.append((files['percolation_volume_path'],
-                                 'total_percolation_volume', 'sum'))
+        data_to_average.append(
+            (files['percolation_ratio_path'], 'mean_percolation_ratio'))
+        data_to_sum.append(
+            (files['percolation_volume_path'], 'total_percolation_volume'))
 
     # get all EMC columns from an arbitrary row in the dictionary
     # strip the first four characters off 'EMC_pollutant' to get pollutant name
@@ -795,10 +798,10 @@ def execute(args):
             task_name=f'calculate actual pollutant {pollutant} load'
         )
         aggregation_task_dependencies += [avoided_load_task, actual_load_task]
-        data_to_aggregate.append((avoided_pollutant_load_path,
-                                 f'{pollutant}_total_avoided_load', 'sum'))
-        data_to_aggregate.append(
-            (actual_pollutant_load_path, f'{pollutant}_total_load', 'sum'))
+        data_to_sum.append(
+            (avoided_pollutant_load_path, f'{pollutant}_total_avoided_load'))
+        data_to_sum.append(
+            (actual_pollutant_load_path, f'{pollutant}_total_load'))
 
     # (Optional) Do valuation if a replacement cost is defined
     # you could theoretically have a cost of 0 which should be allowed
@@ -818,8 +821,8 @@ def execute(args):
             task_name='calculate stormwater retention value'
         )
         aggregation_task_dependencies.append(valuation_task)
-        data_to_aggregate.append(
-            (files['retention_value_path'], 'total_retention_value', 'sum'))
+        data_to_sum.append(
+            (files['retention_value_path'], 'total_retention_value'))
 
     # (Optional) Aggregate to watersheds if an aggregate vector is defined
     if 'aggregate_areas_path' in args and args['aggregate_areas_path']:
@@ -829,7 +832,8 @@ def execute(args):
                 args['aggregate_areas_path'],
                 files['reprojected_aggregate_areas_path'],
                 source_lulc_raster_info['projection_wkt'],
-                data_to_aggregate),
+                data_to_sum,
+                data_to_average),
             target_path_list=[files['reprojected_aggregate_areas_path']],
             dependent_task_list=aggregation_task_dependencies,
             task_name='aggregate data over polygons'
@@ -1015,7 +1019,7 @@ def adjust_op(ratio_array, avg_ratio_array, near_connected_lulc_array,
 
 
 def aggregate_results(base_aggregate_areas_path, target_vector_path, srs_wkt,
-                      aggregations):
+                      data_to_sum, data_to_average):
     """Aggregate outputs into regions of interest.
 
     Args:
@@ -1038,42 +1042,30 @@ def aggregate_results(base_aggregate_areas_path, target_vector_path, srs_wkt,
     """
     pygeoprocessing.reproject_vector(base_aggregate_areas_path, srs_wkt,
                                      target_vector_path, driver_name='GPKG')
-    aggregate_vector = gdal.OpenEx(target_vector_path, gdal.GA_Update)
-    aggregate_layer = aggregate_vector.GetLayer()
-
-    for raster_path, field_id, aggregation_op in aggregations:
+    stats = {}
+    new_fields = []
+    for raster_path, field_id in data_to_sum + data_to_average:
         # aggregate the raster by the vector region(s)
-        aggregate_stats = pygeoprocessing.zonal_statistics(
+        stats[field_id] = pygeoprocessing.zonal_statistics(
             (raster_path, 1), target_vector_path)
+        new_fields.append(field_id)
 
-        # set up the field to hold the aggregate data
-        aggregate_field = ogr.FieldDefn(field_id, ogr.OFTReal)
-        aggregate_field.SetWidth(24)
-        aggregate_field.SetPrecision(11)
-        aggregate_layer.CreateField(aggregate_field)
-        aggregate_layer.ResetReading()
-
-        # save the aggregate data to the field for each feature
-        for feature in aggregate_layer:
-            feature_id = feature.GetFID()
-            if aggregation_op == 'mean':
-                pixel_count = aggregate_stats[feature_id]['count']
-                try:
-                    value = (aggregate_stats[feature_id]['sum'] / pixel_count)
-                except ZeroDivisionError:
-                    LOGGER.warning(
-                        f'Polygon {feature_id} does not overlap {raster_path}')
-                    value = 0.0
-            elif aggregation_op == 'sum':
-                value = aggregate_stats[feature_id]['sum']
+    # save the aggregate data to the field for each feature
+    def aggregate_op(feature):
+        feature_id = feature.GetFID()
+        for _, field_id in data_to_sum:
+            feature.SetField(field_id, float(stats[field_id][feature_id]['sum']))
+        for _, field_id in data_to_average:
+            try:
+                value = (stats[field_id][feature_id]['sum'] /
+                         stats[field_id][feature_id]['count'])
+            except ZeroDivisionError:
+                LOGGER.warning(
+                    f'Polygon {feature_id} does not overlap {raster_path}')
+                value = 0
             feature.SetField(field_id, float(value))
-            aggregate_layer.SetFeature(feature)
 
-    # save the aggregate vector layer and clean up references
-    aggregate_layer.SyncToDisk()
-    aggregate_layer = None
-    gdal.Dataset.__swig_destroy__(aggregate_vector)
-    aggregate_vector = None
+    utils.vector_apply(target_vector_path, aggregate_op, new_fields=new_fields)
 
 
 def is_near(input_path, radius, distance_path, out_path):

@@ -1763,8 +1763,6 @@ def _calculate_land_to_grid_distance(
     driver.CopyDataSource(base_land_vector, target_land_vector_path)
     base_land_vector = None
 
-    target_land_vector = gdal.OpenEx(
-        target_land_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
     base_grid_vector = gdal.OpenEx(
         base_grid_vector_path, gdal.OF_VECTOR | gdal.GA_ReadOnly)
 
@@ -1785,13 +1783,8 @@ def _calculate_land_to_grid_distance(
     LOGGER.info('Get the collection of polygon geometries by taking the union')
     grid_point_collection = shapely.ops.unary_union(grid_point_list)
 
-    target_land_layer = target_land_vector.GetLayer()
-    # Create a new distance field based on the name given
-    dist_field_defn = ogr.FieldDefn(dist_field_name, ogr.OFTReal)
-    target_land_layer.CreateField(dist_field_defn)
-
     LOGGER.info('Loading the points into shapely')
-    for land_point_feat in target_land_layer:
+    def set_distance_op(land_point_feat):
         # Get the geometry of the point in WKT format
         land_point_wkt = land_point_feat.GetGeometryRef().ExportToWkt()
         # Load the geometry into shapely making it a shapely object
@@ -1801,13 +1794,8 @@ def _calculate_land_to_grid_distance(
             grid_point_collection) / 1000
         # Add the distance value to the new field and set to the feature
         land_point_feat.SetField(dist_field_name, land_to_grid_dist)
-        target_land_layer.SetFeature(land_point_feat)
-
-    target_land_layer = None
-    target_land_vector = None
-    base_grid_layer = None
-    base_grid_vector = None
-
+    utils.vector_apply(target_land_vector_path, set_distance_op,
+        new_fields=[dist_field_name])
     LOGGER.info('Finished _calculate_land_to_grid_distance.')
 
 

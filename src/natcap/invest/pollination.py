@@ -999,8 +999,9 @@ def execute(args):
     if os.path.exists(target_farm_result_path):
         os.remove(target_farm_result_path)
     reproject_farm_task.join()
-    _create_farm_result_vector(
-        farm_vector_path, target_farm_result_path)
+    base_vector = gdal.OpenEx(farm_vector_path, gdal.OF_VECTOR)
+    driver = gdal.GetDriverByName('ESRI Shapefile')
+    driver.CreateCopy(target_farm_result_path, base_vector)
 
     # aggregate wild pollinator yield over farm
     wild_pollinator_task.join()
@@ -1024,11 +1025,8 @@ def execute(args):
                 (total_pollinator_abundance_index_path, 1),
                 target_farm_result_path))
 
-    target_farm_vector = gdal.OpenEx(target_farm_result_path, 1)
-    target_farm_layer = target_farm_vector.GetLayer()
-
     # aggregate results per farm
-    for farm_feature in target_farm_layer:
+    def farms_op(farm_feature):
         nu = float(farm_feature.GetField(_CROP_POLLINATOR_DEPENDENCE_FIELD))
         fid = farm_feature.GetFID()
         if total_farm_results[fid]['count'] > 0:
@@ -1059,10 +1057,10 @@ def execute(args):
                 pollinator_abundance_results[farm_season][fid]['sum'] /
                 float(pollinator_abundance_results[farm_season][fid]['count']))
 
-        target_farm_layer.SetFeature(farm_feature)
-    target_farm_layer.SyncToDisk()
-    target_farm_layer = None
-    target_farm_vector = None
+    utils.vector_apply(target_farm_result_path, farms_op, new_fields=[
+        _POLLINATOR_ABUNDANCE_FARM_FIELD_ID, _TOTAL_FARM_YIELD_FIELD_ID,
+        _POLLINATOR_PROPORTION_FARM_YIELD_FIELD_ID,
+        _WILD_POLLINATOR_FARM_YIELD_FIELD_ID])
 
     task_graph.close()
     task_graph.join()
@@ -1119,59 +1117,6 @@ def _rasterize_vector_onto_base(
     target_raster = None
     layer = None
     vector = None
-
-
-def _create_farm_result_vector(
-        base_vector_path, target_vector_path):
-    """Create a copy of `base_vector_path` and add FID field to it.
-
-    Args:
-        base_vector_path (string): path to vector to copy
-        target_vector_path (string): path to target vector. This path must
-            not already exist. Vector will be created at this path that is
-            a copy of the base vector with result fields added:
-                pollination._POLLINATOR_ABUNDANCE_FARM_FIELD_ID,
-                pollination._TOTAL_FARM_YIELD_FIELD_ID,
-                pollination._POLLINATOR_PROPORTION_FARM_YIELD_FIELD_ID,
-                pollination._WILD_POLLINATOR_FARM_YIELD_FIELD_ID
-
-    Returns:
-        None.
-
-    """
-    base_vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
-
-    driver = gdal.GetDriverByName('ESRI Shapefile')
-    target_vector = driver.CreateCopy(target_vector_path, base_vector)
-    target_layer = target_vector.GetLayer()
-
-    farm_pollinator_abundance_defn = ogr.FieldDefn(
-        _POLLINATOR_ABUNDANCE_FARM_FIELD_ID, ogr.OFTReal)
-    farm_pollinator_abundance_defn.SetWidth(25)
-    farm_pollinator_abundance_defn.SetPrecision(11)
-    target_layer.CreateField(farm_pollinator_abundance_defn)
-
-    total_farm_yield_field_defn = ogr.FieldDefn(
-        _TOTAL_FARM_YIELD_FIELD_ID, ogr.OFTReal)
-    total_farm_yield_field_defn.SetWidth(25)
-    total_farm_yield_field_defn.SetPrecision(11)
-    target_layer.CreateField(total_farm_yield_field_defn)
-
-    pol_proportion_farm_yield_field_defn = ogr.FieldDefn(
-        _POLLINATOR_PROPORTION_FARM_YIELD_FIELD_ID, ogr.OFTReal)
-    pol_proportion_farm_yield_field_defn.SetWidth(25)
-    pol_proportion_farm_yield_field_defn.SetPrecision(11)
-    target_layer.CreateField(pol_proportion_farm_yield_field_defn)
-
-    wild_pol_farm_yield_field_defn = ogr.FieldDefn(
-        _WILD_POLLINATOR_FARM_YIELD_FIELD_ID, ogr.OFTReal)
-    wild_pol_farm_yield_field_defn.SetWidth(25)
-    wild_pol_farm_yield_field_defn.SetPrecision(11)
-    target_layer.CreateField(wild_pol_farm_yield_field_defn)
-
-    target_layer = None
-    target_vector.FlushCache()
-    target_vector = None
 
 
 def _parse_scenario_variables(args):

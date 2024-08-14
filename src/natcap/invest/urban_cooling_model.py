@@ -925,14 +925,6 @@ def calculate_uhi_result_vector(
     shapefile_driver.CreateCopy(
         target_uhi_vector_path, base_aoi_vector)
     base_aoi_vector = None
-    target_uhi_vector = gdal.OpenEx(
-        target_uhi_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    target_uhi_layer = target_uhi_vector.GetLayer()
-
-    for field_id in [
-            'avg_cc', 'avg_tmp_v', 'avg_tmp_an', 'avd_eng_cn', 'avg_wbgt_v',
-            'avg_ltls_v', 'avg_hvls_v']:
-        target_uhi_layer.CreateField(ogr.FieldDefn(field_id, ogr.OFTReal))
 
     # I don't really like having two of the same conditions (one here and one
     # in the for feature in target_uhi_layer loop), but if the user has
@@ -957,8 +949,7 @@ def calculate_uhi_result_vector(
              for poly_fid, poly in
              building_shapely_polygon_lookup.items()])
 
-    target_uhi_layer.StartTransaction()
-    for feature in target_uhi_layer:
+    def stats_op(feature):
         feature_id = feature.GetFID()
         if cc_stats[feature_id]['count'] > 0:
             mean_cc = (
@@ -1015,8 +1006,9 @@ def calculate_uhi_result_vector(
                         avd_eng_cn += float(energy_consumption_value)
             feature.SetField('avd_eng_cn', avd_eng_cn)
 
-        target_uhi_layer.SetFeature(feature)
-    target_uhi_layer.CommitTransaction()
+    utils.vector_apply(target_uhi_vector_path, stats_op,
+        new_fields=['avg_cc', 'avg_tmp_v', 'avg_tmp_an', 'avd_eng_cn',
+            'avg_wbgt_v', 'avg_ltls_v', 'avg_hvls_v'])
 
 
 def calculate_energy_savings(
@@ -1073,10 +1065,6 @@ def calculate_energy_savings(
     target_building_layer = target_building_vector.GetLayer()
     target_building_srs = target_building_layer.GetSpatialRef()
     target_building_square_units = target_building_srs.GetLinearUnits() ** 2
-    target_building_layer.CreateField(
-        ogr.FieldDefn('energy_sav', ogr.OFTReal))
-    target_building_layer.CreateField(
-        ogr.FieldDefn('mean_t_air', ogr.OFTReal))
 
     # Find the index of the 'type' column in a case-insensitive way.
     # We can assume that the field exists because we're checking for it in
@@ -1089,16 +1077,7 @@ def calculate_energy_savings(
         energy_consumption_table_path,
         **MODEL_SPEC['args']['energy_consumption_table_path'])
 
-    target_building_layer.StartTransaction()
-    last_time = time.time()
-    for target_index, target_feature in enumerate(target_building_layer):
-        last_time = _invoke_timed_callback(
-            last_time, lambda: LOGGER.info(
-                "energy savings approximately %.1f%% complete ",
-                100 * float(target_index + 1) /
-                target_building_layer.GetFeatureCount()),
-            _LOGGING_PERIOD)
-
+    def buildings_op(target_feature):
         feature_id = target_feature.GetFID()
         t_air_mean = None
         if feature_id in t_air_stats:
@@ -1110,11 +1089,8 @@ def calculate_energy_savings(
 
         # Building type should be an integer and has to match the building
         # types in the energy consumption table.
-        target_type = target_feature.GetField(int(type_field_index))
+        target_type = target_feature.GetField(type_field_index)
         if target_type not in energy_consumption_df.index:
-            target_building_layer.CommitTransaction()
-            target_building_layer = None
-            target_building_vector = None
             raise ValueError(
                 f"Encountered a building 'type' of: '{target_type}' in "
                 f"FID: {target_feature.GetFID()} in the building vector layer "
@@ -1144,9 +1120,8 @@ def calculate_energy_savings(
                     t_ref_raw - t_air_mean + uhi_max) * building_cost)
             target_feature.SetField('energy_sav', savings)
 
-        target_building_layer.SetFeature(target_feature)
-    target_building_layer.CommitTransaction()
-    target_building_layer.SyncToDisk()
+    utils.vector_apply(target_building_vector_path, buildings_op,
+        new_fields=['energy_sav', 'mean_t_air'])
 
 
 def pickle_zonal_stats(
@@ -1346,32 +1321,6 @@ def map_work_loss(
         rasters=[temperature_raster_path],
         target_path=work_loss_raster_path,
         target_dtype=numpy.uint8)
-
-
-def _invoke_timed_callback(
-        reference_time, callback_lambda, callback_period):
-    """Invoke callback if a certain amount of time has passed.
-
-    This is a convenience function to standardize update callbacks from the
-    module.
-
-    Args:
-        reference_time (float): time to base `callback_period` length from.
-        callback_lambda (lambda): function to invoke if difference between
-            current time and `reference_time` has exceeded `callback_period`.
-        callback_period (float): time in seconds to pass until
-            `callback_lambda` is invoked.
-
-    Returns:
-        `reference_time` if `callback_lambda` not invoked, otherwise the time
-        when `callback_lambda` was invoked.
-
-    """
-    current_time = time.time()
-    if current_time - reference_time > callback_period:
-        callback_lambda()
-        return current_time
-    return reference_time
 
 
 def convolve_2d_by_exponential(

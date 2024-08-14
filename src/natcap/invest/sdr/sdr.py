@@ -1488,11 +1488,7 @@ def _generate_report(
         LOGGER.warning(f'overwriting results at {watershed_results_sdr_path}')
         os.remove(watershed_results_sdr_path)
     driver = gdal.GetDriverByName('ESRI Shapefile')
-    target_vector = driver.CreateCopy(
-        watershed_results_sdr_path, original_datasource)
-
-    target_layer = target_vector.GetLayer()
-    target_layer.SyncToDisk()
+    driver.CreateCopy(watershed_results_sdr_path, original_datasource)
 
     # It's worth it to check if the geometries don't significantly overlap.
     # On large rasters, this can save a TON of time rasterizing even a
@@ -1515,22 +1511,14 @@ def _generate_report(
         field: stats for ((field, _), stats) in
         zip(fields_and_rasters, zonal_stats_results)}
 
-    for field_name in field_summaries:
-        field_def = ogr.FieldDefn(field_name, ogr.OFTReal)
-        field_def.SetWidth(24)
-        field_def.SetPrecision(11)
-        target_layer.CreateField(field_def)
-
-    target_layer.ResetReading()
-    for feature in target_layer:
+    def stats_op(feature):
         feature_id = feature.GetFID()
         for field_name in field_summaries:
             feature.SetField(
                 field_name,
                 float(field_summaries[field_name][feature_id]['sum']))
-        target_layer.SetFeature(feature)
-    target_vector = None
-    target_layer = None
+    utils.vector_apply(watershed_results_sdr_path, stats_op,
+        new_fields=list(field_summaries.keys()))
 
 
 @validation.invest_validator

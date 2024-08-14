@@ -1482,11 +1482,6 @@ def _calculate_scenario(
     if response_index >= 0:
         scenario_coefficient_layer.DeleteField(response_index)
 
-    response_field = ogr.FieldDefn(response_id, ogr.OFTReal)
-    response_field.SetWidth(24)
-    response_field.SetPrecision(11)
-    scenario_coefficient_layer.CreateField(response_field)
-
     # Load the pre-existing predictor coefficients to build the regression
     # equation.
     with open(coefficient_json_path, 'r') as json_file:
@@ -1494,7 +1489,7 @@ def _calculate_scenario(
 
     y_intercept = predictor_estimates.pop("(Intercept)")
 
-    for feature in scenario_coefficient_layer:
+    def scenario_op(feature):
         feature_id = feature.GetFID()
         response_value = 0
         try:
@@ -1506,17 +1501,12 @@ def _calculate_scenario(
             # TypeError will happen if GetField returned None
             LOGGER.warning('incomplete predictor data for feature_id '
                            f'{feature_id}, not estimating PUD_EST')
-            feature = None
-            continue  # without writing to the feature
+            return
         response_value += y_intercept
         # recall the coefficients are log normal, so expm1 inverses it
         feature.SetField(response_id, numpy.expm1(response_value))
-        scenario_coefficient_layer.SetFeature(feature)
-        feature = None
-
-    scenario_coefficient_layer = None
-    scenario_coefficient_vector.FlushCache()
-    scenario_coefficient_vector = None
+    utils.vector_apply(scenario_results_path, scenario_op,
+        new_fields=[response_id])
 
 
 def _validate_same_id_lengths(table_path):

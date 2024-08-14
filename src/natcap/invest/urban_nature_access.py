@@ -1635,18 +1635,10 @@ def _reproject_and_identify(base_vector_path, target_projection_wkt,
         target_layer_name=target_layer_name,
         driver_name=driver_name)
 
-    vector = gdal.OpenEx(target_path, gdal.GA_Update)
-    layer = vector.GetLayer()
-    field = ogr.FieldDefn(id_fieldname, ogr.OFTInteger)
-    layer.CreateField(field)
-
-    layer.StartTransaction()
-    for field_id, feature in enumerate(layer):
-        feature.SetField(id_fieldname, field_id)
-        layer.SetFeature(feature)
-    layer.CommitTransaction()
-    layer = None
-    vector = None
+    def index_op(index, feature):
+        feature.SetField(id_fieldname, index)
+    utils.vector_apply(target_path, index_op, enumerated=True,
+        new_fields=[ogr.FieldDefn(id_fieldname, ogr.OFTInteger)])
 
 
 def _weighted_sum(raster_path_list, weight_raster_list, target_path):

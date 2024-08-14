@@ -1120,27 +1120,19 @@ def _add_fields_to_shapefile(field_pickle_map, target_vector_path):
     Returns:
         None.
     """
-    target_vector = gdal.OpenEx(
-        target_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
-    target_layer = target_vector.GetLayer()
     field_summaries = {}
+    new_fields = []
     for field_name, pickle_file_name in field_pickle_map.items():
-        field_def = ogr.FieldDefn(field_name, ogr.OFTReal)
-        field_def.SetWidth(24)
-        field_def.SetPrecision(11)
-        target_layer.CreateField(field_def)
+        new_fields.append(field_name)
         with open(pickle_file_name, 'rb') as pickle_file:
             field_summaries[field_name] = pickle.load(pickle_file)
 
-    for feature in target_layer:
+    def op(feature):
         fid = feature.GetFID()
         for field_name in field_pickle_map:
             feature.SetField(
                 field_name, float(field_summaries[field_name][fid]['sum']))
-        # Save back to datasource
-        target_layer.SetFeature(feature)
-    target_layer = None
-    target_vector = None
+    utils.vector_apply(target_vector_path, op, new_fields=new_fields)
 
 
 @validation.invest_validator

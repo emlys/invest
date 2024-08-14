@@ -564,23 +564,7 @@ def _aggregate_carbon_map(
     serviceshed_stats = pygeoprocessing.zonal_statistics(
         (carbon_map_path, 1), target_aggregate_vector_path)
 
-    carbon_sum_field = ogr.FieldDefn('c_sum', ogr.OFTReal)
-    carbon_sum_field.SetWidth(24)
-    carbon_sum_field.SetPrecision(11)
-    carbon_mean_field = ogr.FieldDefn('c_ha_mean', ogr.OFTReal)
-    carbon_mean_field.SetWidth(24)
-    carbon_mean_field.SetPrecision(11)
-
-    target_aggregate_vector = gdal.OpenEx(
-        target_aggregate_vector_path, gdal.OF_UPDATE)
-    target_aggregate_layer = target_aggregate_vector.GetLayer()
-    target_aggregate_layer.CreateField(carbon_sum_field)
-    target_aggregate_layer.CreateField(carbon_mean_field)
-
-    target_aggregate_layer.ResetReading()
-    target_aggregate_layer.StartTransaction()
-
-    for poly_feat in target_aggregate_layer:
+    def carbon_op(poly_feat):
         poly_fid = poly_feat.GetFID()
         poly_feat.SetField(
             'c_sum', serviceshed_stats[poly_fid]['sum'])
@@ -591,9 +575,8 @@ def _aggregate_carbon_map(
         poly_feat.SetField(
             'c_ha_mean', serviceshed_stats[poly_fid]['sum']/poly_area_ha)
 
-        target_aggregate_layer.SetFeature(poly_feat)
-    target_aggregate_layer.CommitTransaction()
-    target_aggregate_layer, target_aggregate_vector = None, None
+    utils.vector_apply(target_aggregate_vector_path, carbon_op,
+        new_fields=['c_sum', 'c_ha_mean'])
 
 
 def _calculate_lulc_carbon_map(
