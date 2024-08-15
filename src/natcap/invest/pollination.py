@@ -999,9 +999,7 @@ def execute(args):
     if os.path.exists(target_farm_result_path):
         os.remove(target_farm_result_path)
     reproject_farm_task.join()
-    base_vector = gdal.OpenEx(farm_vector_path, gdal.OF_VECTOR)
-    driver = gdal.GetDriverByName('ESRI Shapefile')
-    driver.CreateCopy(target_farm_result_path, base_vector)
+    utils.copy_vector(farm_vector_path, target_farm_result_path)
 
     # aggregate wild pollinator yield over farm
     wild_pollinator_task.join()

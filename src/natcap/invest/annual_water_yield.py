@@ -798,9 +798,7 @@ def execute(args):
         ('AET_mn', aet_path),
         ('wyield_mn', wyield_path)]
 
-    demand = False
     if 'demand_table_path' in args and args['demand_table_path'] != '':
-        demand = True
         reclass_error_details = {
             'raster_name': 'LULC', 'column_name': 'lucode',
             'table_name': 'Demand'}
@@ -822,7 +820,7 @@ def execute(args):
         # make a copy so we don't modify the original
         # do zonal stats with the copy so that FIDS are correct
         copy_watersheds_vector_task = graph.add_task(
-            func=copy_vector,
+            func=utils.copy_vector,
             args=[base_ws_path, target_ws_path],
             target_path_list=[target_ws_path],
             task_name='create copy of watersheds vector')
@@ -847,7 +845,6 @@ def execute(args):
             func=write_output_vector_attributes,
             args=(target_ws_path, ws_id_name, zonal_stats_pickle,
                   valuation_df),
-             kwargs={'demand': demand},
             target_path_list=[target_ws_path],
             dependent_task_list=[
                 zonal_stats_task, copy_watersheds_vector_task],
@@ -857,8 +854,11 @@ def execute(args):
         target_basename = os.path.splitext(target_ws_path)[0]
         target_csv_path = target_basename + '.csv'
         create_output_table_task = graph.add_task(
-            func=convert_vector_to_csv,
-            args=(target_ws_path, target_csv_path),
+            func=utils.copy_vector,
+            kwargs=dict(
+                base_vector_path=target_ws_path,
+                target_vector_path=target_csv_path,
+                driver=CSV),
             target_path_list=[target_csv_path],
             dependent_task_list=[write_output_vector_attributes_task],
             task_name=f'create_{ws_id_name}_table_output')
@@ -870,24 +870,8 @@ def execute(args):
 def wyield_op(fractp, precip): return (1 - fractp) * precip
 
 
-def copy_vector(base_vector_path, target_vector_path):
-    """Wrapper around CreateCopy that handles opening & closing the dataset.
-
-    Args:
-        base_vector_path: path to the vector to copy
-        target_vector_path: path to copy the vector to
-
-    Returns:
-        None
-    """
-    esri_shapefile_driver = gdal.GetDriverByName('ESRI Shapefile')
-    base_dataset = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
-    esri_shapefile_driver.CreateCopy(target_vector_path, base_dataset)
-    base_dataset = None
-
-
 def write_output_vector_attributes(target_vector_path, ws_id_name,
-                                   pickle_path, valuation_df, demand=False):
+                                   pickle_path, valuation_df):
     """Add data attributes to the vector outputs of this model.
 
     Join results of zonal stats to copies of the watershed shapefiles.
@@ -989,24 +973,6 @@ def write_output_vector_attributes(target_vector_path, ws_id_name,
 
     utils.vector_apply(target_vector_path, stats_op,
         new_fields=new_fields)
-
-
-def convert_vector_to_csv(base_vector_path, target_csv_path):
-    """Create a CSV with all the fields present in vector attribute table.
-
-    Args:
-        base_vector_path (string):
-            Path to the watershed shapefile in the output workspace.
-        target_csv_path (string):
-            Path to a CSV to create in the output workspace.
-
-    Returns:
-        None
-
-    """
-    watershed_vector = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
-    csv_driver = gdal.GetDriverByName('CSV')
-    _ = csv_driver.CreateCopy(target_csv_path, watershed_vector)
 
 
 def zonal_stats_tofile(base_vector_path, raster_path_list, target_stats_pickle):

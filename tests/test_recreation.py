@@ -955,7 +955,7 @@ class RecreationRegressionTests(unittest.TestCase):
             self.workspace_dir, 'no_grid_vector_path.shp')
         response_polygons_lookup_path = os.path.join(
             self.workspace_dir, 'response_polygons_lookup.pickle')
-        recmodel_client._copy_aoi_no_grid(
+        utils.copy_vector(
             os.path.join(SAMPLE_DATA, 'andros_aoi.shp'), response_vector_path)
 
         predictor_table_path = os.path.join(SAMPLE_DATA, 'predictors.csv')
@@ -998,7 +998,7 @@ class RecreationRegressionTests(unittest.TestCase):
 
         response_vector_path = os.path.join(
             self.workspace_dir, 'no_grid_vector_path.shp')
-        recmodel_client._copy_aoi_no_grid(
+        utils.copy_vector(
             os.path.join(SAMPLE_DATA, 'andros_aoi.shp'), response_vector_path)
 
         predictor_table_path = os.path.join(

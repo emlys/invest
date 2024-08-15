@@ -27,7 +27,6 @@ from .unit_registry import u
 
 LOGGER = logging.getLogger(__name__)
 TARGET_NODATA = -1
-_LOGGING_PERIOD = 5
 
 MODEL_SPEC = {
     "model_name": MODEL_METADATA["urban_cooling_model"].model_title,
@@ -913,18 +912,8 @@ def calculate_uhi_result_vector(
                 heavy_loss_stats_pickle_file):
             heavy_loss_stats = pickle.load(heavy_loss_stats_pickle_file)
 
-    base_aoi_vector = gdal.OpenEx(base_aoi_path, gdal.OF_VECTOR)
-    shapefile_driver = gdal.GetDriverByName('ESRI Shapefile')
-    try:
-        # Can't make a shapefile on top of an existing one
-        os.remove(target_uhi_vector_path)
-    except FileNotFoundError:
-        pass
-
     LOGGER.info(f"Creating {os.path.basename(target_uhi_vector_path)}")
-    shapefile_driver.CreateCopy(
-        target_uhi_vector_path, base_aoi_vector)
-    base_aoi_vector = None
+    utils.copy_vector(base_aoi_path, target_uhi_vector_path)
 
     # I don't really like having two of the same conditions (one here and one
     # in the for feature in target_uhi_layer loop), but if the user has
@@ -1048,18 +1037,8 @@ def calculate_energy_savings(
     with open(t_air_stats_pickle_path, 'rb') as t_air_stats_pickle_file:
         t_air_stats = pickle.load(t_air_stats_pickle_file)
 
-    base_building_vector = gdal.OpenEx(
-        base_building_vector_path, gdal.OF_VECTOR)
-    shapefile_driver = gdal.GetDriverByName('ESRI Shapefile')
     LOGGER.info(f"Creating {os.path.basename(target_building_vector_path)}")
-    try:
-        # can't make a shapefile on top of an existing one
-        os.remove(target_building_vector_path)
-    except OSError:
-        pass
-    shapefile_driver.CreateCopy(
-        target_building_vector_path, base_building_vector)
-    base_building_vector = None
+    utils.copy_vector(base_building_vector_path, target_building_vector_path)
     target_building_vector = gdal.OpenEx(
         target_building_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
     target_building_layer = target_building_vector.GetLayer()

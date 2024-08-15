@@ -860,7 +860,7 @@ def execute(args):
 
         # Make a copy of the wave point shapefile so that the original input is
         # not corrupted when we clip the vector
-        _copy_vector_or_raster(analysis_area_points_path, wave_vector_path)
+        utils.copy_vector(analysis_area_points_path, wave_vector_path)
 
         # The path to a polygon shapefile that specifies the broader AOI
         aoi_vector_path = analysis_area_extract_path
@@ -1133,40 +1133,6 @@ def execute(args):
     LOGGER.info('End of Wave Energy Valuation.')
 
 
-def _copy_vector_or_raster(base_file_path, target_file_path):
-    """Make a copy of a vector or raster.
-
-    Args:
-        base_file_path (str): a path to the base vector or raster to be copied
-            from.
-        target_file_path (str): a path to the target copied vector or raster.
-
-    Returns:
-        None
-
-    Raises:
-        ValueError if the base file can't be opened by GDAL.
-
-    """
-    # Open the file as raster first
-    source_dataset = gdal.OpenEx(base_file_path, gdal.OF_RASTER)
-    target_driver_name = _RASTER_DRIVER_NAME
-    if source_dataset is None:
-        # File didn't open as a raster; assume it's a vector
-        source_dataset = gdal.OpenEx(base_file_path, gdal.OF_VECTOR)
-        target_driver_name = _VECTOR_DRIVER_NAME
-
-        # Raise an exception if the file can't be opened by GDAL
-        if source_dataset is None:
-            raise ValueError(
-                'File %s is neither a GDAL-compatible raster nor vector.'
-                % base_file_path)
-
-    driver = gdal.GetDriverByName(target_driver_name)
-    driver.CreateCopy(target_file_path, source_dataset)
-    source_dataset = None
-
-
 def _interpolate_vector_field_onto_raster(
         base_vector_path, base_raster_path, target_interpolated_raster_path,
         field_name):
@@ -1188,7 +1154,10 @@ def _interpolate_vector_field_onto_raster(
         None
 
     """
-    _copy_vector_or_raster(base_raster_path, target_interpolated_raster_path)
+    source_dataset = gdal.OpenEx(base_raster_path, gdal.OF_RASTER)
+    driver = gdal.GetDriverByName(_RASTER_DRIVER_NAME)
+    driver.CreateCopy(target_interpolated_raster_path, source_dataset)
+    source_dataset = None
     pygeoprocessing.interpolate_points(
         base_vector_path, field_name, (target_interpolated_raster_path, 1),
         _TARGET_RESAMPLE_METHOD)
@@ -1331,7 +1300,7 @@ def _add_target_fields_to_wave_vector(
         None
 
     """
-    _copy_vector_or_raster(base_wave_vector_path, target_wave_vector_path)
+    utils.copy_vector(base_wave_vector_path, target_wave_vector_path)
 
     # Get the coordinates of points of wave, land, and grid vectors
     wave_point_list = _get_points_geometries(base_wave_vector_path)
@@ -1997,7 +1966,7 @@ def _index_raster_value_to_point_vector(
         None
 
     """
-    _copy_vector_or_raster(base_point_vector_path, target_point_vector_path)
+    utils.copy_vector(base_point_vector_path, target_point_vector_path)
 
     target_vector = gdal.OpenEx(
         target_point_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
@@ -2131,7 +2100,7 @@ def _energy_and_power_to_wave_vector(
         None.
 
     """
-    _copy_vector_or_raster(base_wave_vector_path, target_wave_vector_path)
+    utils.copy_vector(base_wave_vector_path, target_wave_vector_path)
 
     # For all of the features (points) in the shapefile, get the corresponding
     # point/value from the dictionary and set the _CAP_WE_FIELD field as

@@ -481,8 +481,10 @@ def execute(args):
         # Even if we don't modify the AOI by gridding it, we still need
         # to move it to the expected location.
         prep_aoi_task = task_graph.add_task(
-            func=_copy_aoi_no_grid,
-            args=(args['aoi_path'], file_registry['local_aoi_path']),
+            func=utils.copy_vector,
+            kwargs=dict(
+                base_vector_path=args['aoi_path'],
+                target_vector_path=file_registry['local_aoi_path']),
             target_path_list=[file_registry['local_aoi_path']],
             task_name='copy_aoi')
     # All other tasks are dependent on this one, including tasks added
@@ -563,18 +565,6 @@ def execute(args):
 
     task_graph.close()
     task_graph.join()
-
-
-def _copy_aoi_no_grid(source_aoi_path, dest_aoi_path):
-    """Copy a shapefile from source to destination"""
-    aoi_vector = gdal.OpenEx(source_aoi_path, gdal.OF_VECTOR)
-    driver = gdal.GetDriverByName('ESRI Shapefile')
-    local_aoi_vector = driver.CreateCopy(
-        dest_aoi_path, aoi_vector)
-    gdal.Dataset.__swig_destroy__(local_aoi_vector)
-    local_aoi_vector = None
-    gdal.Dataset.__swig_destroy__(aoi_vector)
-    aoi_vector = None
 
 
 def _retrieve_photo_user_days(

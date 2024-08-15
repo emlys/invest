@@ -825,6 +825,22 @@ def vector_apply(vector_path, op, new_fields=[], enumerated=False):
             op(feature)
         layer.SetFeature(feature)
 
-
     layer.CommitTransaction()
     layer.SyncToDisk()
+
+
+def copy_vector(base_vector_path, target_vector_path, driver='ESRI Shapefile'):
+    """Wrapper around CreateCopy that handles opening & closing the dataset.
+
+    Args:
+        base_vector_path: path to the vector to copy
+        target_vector_path: path to copy the vector to
+
+    Returns:
+        None
+    """
+    driver = gdal.GetDriverByName(driver)
+    if os.path.exists(target_vector_path):
+        driver.Delete(target_vector_path)
+    base_dataset = gdal.OpenEx(base_vector_path, gdal.OF_VECTOR)
+    driver.CreateCopy(target_vector_path, base_dataset)

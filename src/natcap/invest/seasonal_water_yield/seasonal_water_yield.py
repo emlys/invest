@@ -1326,15 +1326,7 @@ def _aggregate_recharge(
     Returns:
         None
     """
-    if os.path.exists(aggregate_vector_path):
-        LOGGER.warning(
-            '%s exists, deleting and writing new output',
-            aggregate_vector_path)
-        os.remove(aggregate_vector_path)
-
-    original_aoi_vector = gdal.OpenEx(aoi_path, gdal.OF_VECTOR)
-    driver = gdal.GetDriverByName('ESRI Shapefile')
-    driver.CreateCopy(aggregate_vector_path, original_aoi_vector)
+    utils.copy_vector(aoi_path, aggregate_vector_path)
 
     l_stats = pygeoprocessing.zonal_statistics(
         (l_path, 1), aggregate_vector_path)

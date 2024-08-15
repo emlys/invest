@@ -552,13 +552,7 @@ def _aggregate_carbon_map(
         None
 
     """
-    aoi_vector = gdal.OpenEx(aoi_vector_path, gdal.OF_VECTOR)
-    driver = gdal.GetDriverByName('ESRI Shapefile')
-
-    if os.path.exists(target_aggregate_vector_path):
-        os.remove(target_aggregate_vector_path)
-    driver.CreateCopy(target_aggregate_vector_path, aoi_vector)
-    aoi_vector = None
+    utils.copy_vector(aoi_vector_path, target_aggregate_vector_path)
 
     # aggregate carbon stocks by the FID
     serviceshed_stats = pygeoprocessing.zonal_statistics(

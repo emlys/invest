@@ -1483,12 +1483,7 @@ def _generate_report(
     Returns:
         ``None``
     """
-    original_datasource = gdal.OpenEx(watersheds_path, gdal.OF_VECTOR)
-    if os.path.exists(watershed_results_sdr_path):
-        LOGGER.warning(f'overwriting results at {watershed_results_sdr_path}')
-        os.remove(watershed_results_sdr_path)
-    driver = gdal.GetDriverByName('ESRI Shapefile')
-    driver.CreateCopy(watershed_results_sdr_path, original_datasource)
+    utils.copy_vector(watersheds_path, watershed_results_sdr_path)
 
     # It's worth it to check if the geometries don't significantly overlap.
     # On large rasters, this can save a TON of time rasterizing even a
