@@ -1613,63 +1613,22 @@ def _simplify(source_vector_path, tolerance, target_vector_path,
     Returns:
         ``None``.
     """
-    LOGGER.info(
-        f'Simplifying vector with tolerance {tolerance}: {source_vector_path}')
-    if preserve_columns is None:
-        preserve_columns = []
-    preserve_columns = set(name.lower() for name in preserve_columns)
-
-    source_vector = gdal.OpenEx(source_vector_path)
-    source_layer = source_vector.GetLayer()
-
-    target_driver = gdal.GetDriverByName('GPKG')
-    target_vector = target_driver.Create(
-        target_vector_path, 0, 0, 0, gdal.GDT_Unknown)
-    target_layer_name = os.path.splitext(
-        os.path.basename(target_vector_path))[0]
-
-    # Using wkbUnknown is important here because a user can provide a single
-    # vector with multiple geometry types.  GPKG can handle whatever geom types
-    # we want it to use, but it will only be a conformant GPKG if and only if
-    # we set the layer type to ogr.wkbUnknown.  Otherwise, the GPKG standard
-    # would expect that all geometries in a layer match the geom type of the
-    # layer and GDAL will raise a warning if that's not the case.
-    target_layer = target_vector.CreateLayer(
-        target_layer_name, source_layer.GetSpatialRef(), ogr.wkbUnknown)
-
-    for field in source_layer.schema:
-        if field.GetName().lower() in preserve_columns:
-            new_definition = ogr.FieldDefn(field.GetName(), field.GetType())
-            target_layer.CreateField(new_definition)
-
-    target_layer_defn = target_layer.GetLayerDefn()
-    target_layer.StartTransaction()
-
-    for source_feature in source_layer:
-        target_feature = ogr.Feature(target_layer_defn)
+    def op(source_feature, target_feature):
         source_geom = source_feature.GetGeometryRef()
         simplified_geom = source_geom.SimplifyPreserveTopology(tolerance)
-        if simplified_geom is not None:
-            target_geom = simplified_geom
-        else:
+        if simplified_geom is None:
             # If the simplification didn't work for whatever reason, fall back
             # to the original geometry.
             LOGGER.debug(
                 f"Simplification of {os.path.basename(source_vector_path)} "
                 f"feature FID:{source_feature.GetFID()} failed; falling back "
                 "to original geometry")
-            target_geom = source_geom
-
-        for fieldname in [field.GetName() for field in target_layer.schema]:
-            target_feature.SetField(
-                fieldname, source_feature.GetField(fieldname))
-
-        target_feature.SetGeometry(target_geom)
-        target_layer.CreateFeature(target_feature)
-
-    target_layer.CommitTransaction()
-    target_layer = None
-    target_vector = None
+        else:
+            target_feature.SetGeometry(simplified_geom)
+        return target_feature
+    LOGGER.info(
+        f'Simplifying vector with tolerance {tolerance}: {source_vector_path}')
+    utils.vector_apply2(source_vector_path, target_vector_path, op, driver='GPKG')
 
 
 def _prep_input_criterion_raster(

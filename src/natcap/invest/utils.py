@@ -795,6 +795,7 @@ def _invoke_timed_callback(
 
 
 def vector_apply(vector_path, op, new_fields=[], enumerated=False):
+    gdal.UseExceptions()
     vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR | gdal.GA_Update)
     layer = vector.GetLayer()
 
@@ -827,6 +828,66 @@ def vector_apply(vector_path, op, new_fields=[], enumerated=False):
 
     layer.CommitTransaction()
     layer.SyncToDisk()
+
+
+def vector_apply2(vector_path, target_path, op, new_fields=[], enumerated=False, driver='ESRI Shapefile', copy=True):
+    # gdal.UseExceptions()
+    source_vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR)
+    source_layer = source_vector.GetLayer()
+    source_geom_type = source_layer.GetGeomType()
+
+    source_srs_wkt = pygeoprocessing.get_vector_info(vector_path)['projection_wkt']
+    source_srs = osr.SpatialReference()
+    source_srs.ImportFromWkt(source_srs_wkt)
+
+    driver = gdal.GetDriverByName(driver)
+    target_vector = driver.Create(target_path, 0, 0, 0, gdal.GDT_Unknown)
+    target_layer = target_vector.CreateLayer(
+        os.path.splitext(os.path.basename(target_path))[0],
+        source_srs, source_geom_type)
+
+    target_layer.CreateFields(source_layer.schema)
+
+    for field in new_fields:
+        if isinstance(field, ogr.FieldDefn):
+            field_defn = field
+        else:
+            field_defn = ogr.FieldDefn(field, ogr.OFTReal)
+            field_defn.SetWidth(24)
+            field_defn.SetPrecision(11)
+        target_layer.CreateField(field_defn)
+    target_layer_defn = target_layer.GetLayerDefn()
+
+    source_layer.ResetReading()
+    target_layer.StartTransaction()
+
+    last_time = time.time()
+    n_features = source_layer.GetFeatureCount()
+
+    # add error handling - finally write to file and save
+    for index, source_feature in enumerate(source_layer):
+        last_time = _invoke_timed_callback(
+            last_time, lambda: LOGGER.info(
+                "vector_apply approximately %.1f%% complete",
+                100 * (index + 1) / n_features))
+
+        target_feature = ogr.Feature(target_layer_defn)
+        base_geom_ref = source_feature.GetGeometryRef()
+        target_feature.SetGeometry(base_geom_ref.Clone())
+
+        if copy:
+            for fieldname in [field.GetName() for field in target_layer.schema]:
+                target_feature.SetField(
+                    fieldname, source_feature.GetField(fieldname))
+
+        if enumerated:
+            target_feature = op(index, source_feature, target_feature)
+        else:
+            target_feature = op(source_feature, target_feature)
+        target_layer.CreateFeature(target_feature)
+
+    target_layer.CommitTransaction()
+    target_layer.SyncToDisk()
 
 
 def copy_vector(base_vector_path, target_vector_path, driver='ESRI Shapefile'):
