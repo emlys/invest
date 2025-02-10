@@ -27,7 +27,6 @@ jobs:
 
   build-binaries:
     name: Build binaries
-    needs: check-syntax-errors
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
