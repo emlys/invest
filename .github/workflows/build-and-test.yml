@@ -57,18 +57,6 @@ jobs:
             constraints_tests.txt
           requirements: ${{ env.CONDA_DEFAULT_DEPENDENCIES }} pandoc
 
-        # Not caching chocolatey packages because the cache may not be reliable
-        # https://github.com/chocolatey/choco/issues/2134
-        # and this step only takes about 30 seconds.
-      - name: Install build dependencies (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: powershell
-        run: |
-          choco install zip unzip
-          $env:PATH += ";C:\ProgramData\chocolatey\bin"
-          Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
-          refreshenv  # Choco-provided command to reload environment variables
-
       - name: Install Node.js
         uses: actions/setup-node@v3
         with:
@@ -92,7 +80,7 @@ jobs:
 
       - if: matrix.os == 'windows-latest'
         run: |
-          micromamba.exe create --yes --prefix ./test_env -c conda-forge python pip==24.3
+          micromamba.exe create --yes --prefix ./test_env -c conda-forge python pip==24.2
           micromamba.exe run --prefix ./test_env python -m pip --version
           micromamba.exe run --prefix ./test_env pip --version
 
