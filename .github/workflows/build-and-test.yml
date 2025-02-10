@@ -334,6 +334,20 @@ jobs:
         with:
           fetch-depth: 0 # Fetch complete history for accurate versioning
 
+      - name: Set up conda environment
+        uses: ./.github/actions/setup_env
+        with:
+          python-version: ${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
+          requirements-files: |
+            requirements.txt
+            requirements-dev.txt
+            requirements-docs.txt
+            constraints_tests.txt
+          requirements: ${{ env.CONDA_DEFAULT_DEPENDENCIES }} pandoc
+
+      - name: Make install
+        run: make install
+
         # Not caching chocolatey packages because the cache may not be reliable
         # https://github.com/chocolatey/choco/issues/2134
         # and this step only takes about 30 seconds.
@@ -346,6 +360,25 @@ jobs:
           Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
           refreshenv  # Choco-provided command to reload environment variables
 
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Restore node_modules cache
+        id: nodemodules-cache
+        uses: actions/cache@v3
+        with:
+          path: workbench/node_modules
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('workbench/yarn.lock') }}
+
+      - name: Install Workbench Dependencies
+        if: steps.nodemodules-cache.outputs.cache-hit != 'true'
+        working-directory: workbench
+        run: |
+          yarn config set network-timeout 600000 -g
+          yarn install
+
       - name: Download micromamba for distribution (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
@@ -357,9 +390,9 @@ jobs:
 
       - if: matrix.os == 'windows-latest'
         run: |
-          dist/micromamba.exe create --yes --prefix ./test_env -c conda-forge python pip
-          dist/micromamba.exe run --prefix ./test_env python -m pip --version
-          dist/micromamba.exe run --prefix ./test_env pip --version
+          micromamba.exe create --yes --prefix ./test_env -c conda-forge python pip
+          micromamba.exe run --prefix ./test_env python -m pip --version
+          micromamba.exe run --prefix ./test_env pip --version
 
       - name: Authenticate GCP
         if: github.event_name != 'pull_request'
