@@ -28,16 +28,16 @@ jobs:
     name: Build binaries
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      # - uses: actions/checkout@v4
 
-      - name: Setup conda environment
-        uses: mamba-org/setup-micromamba@v2
-        with:
-          environment-name: env
-          condarc: |
-                channels:
-                  - conda-forge
-          init-shell: bash
+      # - name: Setup conda environment
+      #   uses: mamba-org/setup-micromamba@v2
+      #   with:
+      #     environment-name: env
+      #     condarc: |
+      #           channels:
+      #             - conda-forge
+      #     init-shell: bash
 
       - name: Download micromamba for distribution (Windows)
         shell: pwsh
