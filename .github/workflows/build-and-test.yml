@@ -52,9 +52,10 @@ jobs:
           ./micromamba create --yes --name test_env -c conda-forge python pip==24.2
           ps --help
 
-      - run: |
+      - shell: cmd
+        run: |
           ls .
-          micromamba --version
+          .\micromamba --version
           .\micromamba create --yes --name test_env2 -c conda-forge python pip==24.2
           .\micromamba run --name test_env2 python -m pip --version
           .\micromamba run --name test_env2 pip --version
