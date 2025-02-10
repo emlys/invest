@@ -29,18 +29,18 @@ jobs:
     name: Build binaries
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@v4
 
-      - name: Install Node.js
-        uses: actions/setup-node@v3
+      - name: Set up conda environment
+        uses: ./.github/actions/setup_env
         with:
-          node-version: 18
-
-      - name: Restore node_modules cache
-        id: nodemodules-cache
-        uses: actions/cache@v3
-        with:
-          path: workbench/node_modules
-          key: windows-latest-${{ runner.arch }}-${{ hashFiles('workbench/yarn.lock') }}
+          python-version: ${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
+          requirements-files: |
+            requirements.txt
+            requirements-dev.txt
+            requirements-docs.txt
+            constraints_tests.txt
+          requirements: ${{ env.CONDA_DEFAULT_DEPENDENCIES }} pandoc
 
       - name: Download micromamba for distribution (Windows)
         shell: pwsh
