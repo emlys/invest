@@ -87,8 +87,8 @@ jobs:
         run: |
           Invoke-Webrequest -URI https://micro.mamba.pm/api/micromamba/win-64/latest -OutFile micromamba.tar.bz2
           tar xf micromamba.tar.bz2
-          MOVE -Force Library\bin\micromamba.exe dist\micromamba.exe
-          .\dist\micromamba.exe --help  # make sure the executable works
+          MOVE -Force Library\bin\micromamba.exe .\micromamba.exe
+          .\micromamba.exe --help  # make sure the executable works
 
       - if: matrix.os == 'windows-latest'
         run: |
