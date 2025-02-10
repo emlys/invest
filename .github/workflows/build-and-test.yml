@@ -30,11 +30,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up conda environment
-        uses: ./.github/actions/setup_env
+      - name: Setup conda environment
+        uses: mamba-org/setup-micromamba@v2
         with:
-          python-version: ${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
-          requirements: |
+          environment-name: env
+          condarc: |
+                channels:
+                  - conda-forge
+          init-shell: bash
+          create-args: >-
             GDAL>=3.4.2
             Pyro4==4.77
             pandas>=1.2.1
@@ -63,7 +67,6 @@ jobs:
             xlwt
             build
             rst2html5
-
 
       - name: Download micromamba for distribution (Windows)
         shell: pwsh
