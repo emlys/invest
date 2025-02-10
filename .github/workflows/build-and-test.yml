@@ -2,10 +2,6 @@ name: Run Tests and Build
 
 on: [push, pull_request]
 
-defaults:
-  run:
-    shell: bash -l {0}
-
 concurrency:
   # make sure only one run of this workflow for a given PR or a given branch
   # can happen at one time. previous queued or started runs will be cancelled.
@@ -57,7 +53,7 @@ jobs:
           ps --help
 
       - run: |
-          .\micromamba create --yes --name test_env2 -c conda-forge python pip==24.2
-          .\micromamba run --name test_env2 python -m pip --version
-          .\micromamba run --name test_env2 pip --version
+          .\\micromamba create --yes --name test_env2 -c conda-forge python pip==24.2
+          .\\micromamba run --name test_env2 python -m pip --version
+          .\\micromamba run --name test_env2 pip --version
 
