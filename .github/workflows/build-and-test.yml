@@ -20,7 +20,6 @@ env:
   # build: dependency of make install
   # nomkl: make sure numpy w/out mkl
   # setuptools_scm: needed for versioning to work
-  CONDA_DEFAULT_DEPENDENCIES: python-build nomkl setuptools_scm
   LATEST_SUPPORTED_PYTHON_VERSION: "3.12"
 
 jobs:
@@ -35,12 +34,36 @@ jobs:
         uses: ./.github/actions/setup_env
         with:
           python-version: ${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
-          requirements-files: |
-            requirements.txt
-            requirements-dev.txt
-            requirements-docs.txt
-            constraints_tests.txt
-          requirements: ${{ env.CONDA_DEFAULT_DEPENDENCIES }} pandoc
+          requirements: |
+            GDAL>=3.4.2
+            Pyro4==4.77  # pip-only
+            pandas>=1.2.1
+            numpy>=1.11.0,!=1.16.0
+            Rtree>=0.8.2,!=0.9.1
+            shapely>=2.0.0
+            scipy>=1.9.0,!=1.12.*
+            pygeoprocessing>=2.4.6  # pip-only
+            taskgraph>=0.11.0
+            psutil>=5.6.6
+            chardet>=3.0.4
+            pint
+            Babel
+            Flask
+            flask_cors
+            requests
+            virtualenv>=12.0.1
+            pytest
+            wheel>=0.27.0
+            pypiwin32; sys_platform == 'win32'
+            setuptools>=8.0,!=60.7.0
+            PyInstaller>=6.9.0
+            setuptools_scm>=6.4.0
+            requests
+            coverage
+            xlwt
+            build  # pip-only
+            rst2html5
+
 
       - name: Download micromamba for distribution (Windows)
         shell: pwsh
