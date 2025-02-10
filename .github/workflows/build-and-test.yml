@@ -55,8 +55,8 @@ jobs:
       - shell: pwsh
         run: |
           ls .
-          mamba --version
-          mamba create --yes --name test_env2 -c conda-forge python pip==24.2
-          mamba run --name test_env2 python -m pip --version
-          mamba run --name test_env2 pip --version
+          D:\\a\\invest\\invest\\micromamba --version
+          D:\\a\\invest\\invest\\micromamba create --yes --name test_env2 -c conda-forge python pip==24.2
+          D:\\a\\invest\\invest\\micromamba run --name test_env2 python -m pip --version
+          D:\\a\\invest\\invest\\micromamba run --name test_env2 pip --version
 
