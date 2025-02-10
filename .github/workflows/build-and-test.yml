@@ -73,14 +73,17 @@ jobs:
         shell: pwsh
         run: |
           Invoke-Webrequest -URI https://micro.mamba.pm/api/micromamba/win-64/latest -OutFile micromamba.tar.bz2
+          echo "downloaded"
           tar xf micromamba.tar.bz2
-          Library\bin\micromamba.exe --help  # make sure the executable works
-          Library\bin\micromamba.exe --version  # make sure the executable works
+          echo "extracted"
+          MOVE -Force Library\bin\micromamba.exe dist\micromamba.exe
+          echo "moved"
+          .\micromamba.exe --help  # make sure the executable works
 
       - run: |
-          Library/bin/micromamba.exe create --yes --prefix ./test_env -c conda-forge python pip
-          Library/bin/micromamba.exe run --prefix ./test_env python -m pip --version
-          Library/bin/micromamba.exe run --prefix ./test_env pip --version
+          micromamba.exe create --yes --prefix ./test_env -c conda-forge python pip
+          micromamba.exe run --prefix ./test_env python -m pip --version
+          micromamba.exe run --prefix ./test_env pip --version
 
 
   run-model-tests:
