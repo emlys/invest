@@ -69,16 +69,13 @@ jobs:
     name: check for micromamba issue
     runs-on: windows-latest
     steps:
-      - name: Download micromamba
+      - name: Download micromamba for distribution (Windows)
         shell: pwsh
         run: |
           Invoke-Webrequest -URI https://micro.mamba.pm/api/micromamba/win-64/latest -OutFile micromamba.tar.bz2
-          echo "downloaded"
           tar xf micromamba.tar.bz2
-          echo "extracted"
           MOVE -Force Library\bin\micromamba.exe dist\micromamba.exe
-          echo "moved"
-          .\micromamba.exe --help  # make sure the executable works
+          .\dist\micromamba.exe --help  # make sure the executable works
 
       - run: |
           micromamba.exe create --yes --prefix ./test_env -c conda-forge python pip
@@ -337,20 +334,6 @@ jobs:
         with:
           fetch-depth: 0 # Fetch complete history for accurate versioning
 
-      - name: Set up conda environment
-        uses: ./.github/actions/setup_env
-        with:
-          python-version: ${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
-          requirements-files: |
-            requirements.txt
-            requirements-dev.txt
-            requirements-docs.txt
-            constraints_tests.txt
-          requirements: ${{ env.CONDA_DEFAULT_DEPENDENCIES }} pandoc
-
-      - name: Make install
-        run: make install
-
         # Not caching chocolatey packages because the cache may not be reliable
         # https://github.com/chocolatey/choco/issues/2134
         # and this step only takes about 30 seconds.
@@ -363,39 +346,6 @@ jobs:
           Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
           refreshenv  # Choco-provided command to reload environment variables
 
-        # Ignoring compiled modules for plugin development
-        #- name: Build userguide
-        #run: make userguide
-
-      - name: Build binaries
-        run: make CONDA="$MAMBA_EXE" binaries
-
-      - name: Install Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
-
-      - name: Restore node_modules cache
-        id: nodemodules-cache
-        uses: actions/cache@v3
-        with:
-          path: workbench/node_modules
-          key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('workbench/yarn.lock') }}
-
-      - name: Install Workbench Dependencies
-        if: steps.nodemodules-cache.outputs.cache-hit != 'true'
-        working-directory: workbench
-        run: |
-          yarn config set network-timeout 600000 -g
-          yarn install
-
-      - name: Download micromamba for distribution (MacOS)
-        if: matrix.os == 'macos-13'
-        run: |
-          curl -Ls https://micro.mamba.pm/api/micromamba/osx-64/latest | tar -xvj bin/micromamba
-          mv bin/micromamba dist/
-          ./dist/micromamba --help  # make sure the executable works
-
       - name: Download micromamba for distribution (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
@@ -404,6 +354,12 @@ jobs:
           tar xf micromamba.tar.bz2
           MOVE -Force Library\bin\micromamba.exe dist\micromamba.exe
           .\dist\micromamba.exe --help  # make sure the executable works
+
+      - if: matrix.os == 'windows-latest'
+        run: |
+          dist/micromamba.exe create --yes --prefix ./test_env -c conda-forge python pip
+          dist/micromamba.exe run --prefix ./test_env python -m pip --version
+          dist/micromamba.exe run --prefix ./test_env pip --version
 
       - name: Authenticate GCP
         if: github.event_name != 'pull_request'
