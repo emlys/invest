@@ -52,6 +52,7 @@ jobs:
           BIN_FOLDER=. INIT_YES=NO "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
           ls .
           pwd
+          ./micromamba --version
           ./micromamba create --yes --name test_env -c conda-forge python pip==24.2
 
           ls .
