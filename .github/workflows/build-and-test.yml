@@ -39,13 +39,17 @@ jobs:
       #             - conda-forge
       #     init-shell: bash
 
-      - name: Download micromamba for distribution (Windows)
-        shell: pwsh
+      # - name: Download micromamba for distribution (Windows)
+      #   shell: pwsh
+      #   run: |
+      #     Invoke-Webrequest -URI https://micro.mamba.pm/api/micromamba/win-64/2.0.4 -OutFile micromamba.tar.bz2
+      #     tar xf micromamba.tar.bz2
+      #     MOVE -Force Library\bin\micromamba.exe .\micromamba.exe
+      #     .\micromamba.exe --help  # make sure the executable works
+
+      - shell: bash
         run: |
-          Invoke-Webrequest -URI https://micro.mamba.pm/api/micromamba/win-64/2.0.4 -OutFile micromamba.tar.bz2
-          tar xf micromamba.tar.bz2
-          MOVE -Force Library\bin\micromamba.exe .\micromamba.exe
-          .\micromamba.exe --help  # make sure the executable works
+          BIN_FOLDER=. INIT_YES=NO "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
 
       - run: |
           micromamba.exe create --yes --prefix ./test_env -c conda-forge python pip==24.2
