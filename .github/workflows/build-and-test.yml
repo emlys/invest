@@ -45,18 +45,18 @@ jobs:
 
       - shell: bash
         run: |
-          BIN_FOLDER=. INIT_YES=NO "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
+          BIN_FOLDER=. "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
           ls .
           pwd
           ./micromamba --version
           ./micromamba create --yes --name test_env -c conda-forge python pip==24.2
           ps --help
 
-      - shell: cmd
+      - shell: bash
         run: |
           ls .
-          .\micromamba --version
-          .\micromamba create --yes --name test_env2 -c conda-forge python pip==24.2
-          .\micromamba run --name test_env2 python -m pip --version
-          .\micromamba run --name test_env2 pip --version
+          ./micromamba --version
+          ./micromamba create --yes --name test_env2 -c conda-forge python pip==24.2
+          ./micromamba run --name test_env2 python -m pip --version
+          ./micromamba run --name test_env2 pip --version
 
