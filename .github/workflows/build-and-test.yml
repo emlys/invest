@@ -53,7 +53,7 @@ jobs:
           ls .
 
       - run: |
-          micromamba create --yes --prefix ./test_env -c conda-forge python pip==24.2
-          micromamba run --prefix ./test_env python -m pip --version
-          micromamba run --prefix ./test_env pip --version
+          ./micromamba create --yes --prefix ./test_env -c conda-forge python pip==24.2
+          ./micromamba run --prefix ./test_env python -m pip --version
+          ./micromamba run --prefix ./test_env pip --version
 
