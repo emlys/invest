@@ -35,29 +35,33 @@ jobs:
       #             - conda-forge
       #     init-shell: bash
 
-      # - name: Download micromamba for distribution (Windows)
-      #   shell: pwsh
+      - name: Download micromamba for distribution (Windows)
+        shell: pwsh
+        run: |
+          tar --help
+          echo "download'"
+          Invoke-Webrequest -URI https://micro.mamba.pm/api/micromamba/win-64/2.0.4 -OutFile micromamba.tar.bz2
+          echo "extract"
+          tar xf micromamba.tar.bz2
+          echo "move"
+          MOVE -Force Library\bin\micromamba.exe .\micromamba.exe
+          .\micromamba.exe --help  # make sure the executable works
+
+      # - shell: bash
       #   run: |
-      #     Invoke-Webrequest -URI https://micro.mamba.pm/api/micromamba/win-64/2.0.4 -OutFile micromamba.tar.bz2
-      #     tar xf micromamba.tar.bz2
-      #     MOVE -Force Library\bin\micromamba.exe .\micromamba.exe
-      #     .\micromamba.exe --help  # make sure the executable works
+      #     "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
+      #     source ~/.bash_profile
+      #     micromamba --version
+      #     micromamba create --yes --name test_env -c conda-forge python pip
+      #     micromamba run --name test_env python -m pip --version
+      #     micromamba run --name test_env pip --version
+      #     ps --help
 
-      - shell: bash
-        run: |
-          "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
-          source ~/.bash_profile
-          micromamba --version
-          micromamba create --yes --name test_env -c conda-forge python pip
-          micromamba run --name test_env python -m pip --version
-          micromamba run --name test_env pip --version
-          ps --help
-
-      - shell: pwsh
-        run: |
-          ls .
-          "D:\a\invest\invest\micromamba" --version
-          "D:\a\invest\invest\micromamba" create --yes --name test_env2 -c conda-forge python pip==24.2
-          "D:\a\invest\invest\micromamba" run --name test_env2 python -m pip --version
-          "D:\a\invest\invest\micromamba" run --name test_env2 pip --version
+      # - shell: pwsh
+      #   run: |
+      #     ls .
+      #     "D:\a\invest\invest\micromamba" --version
+      #     "D:\a\invest\invest\micromamba" create --yes --name test_env2 -c conda-forge python pip==24.2
+      #     "D:\a\invest\invest\micromamba" run --name test_env2 python -m pip --version
+      #     "D:\a\invest\invest\micromamba" run --name test_env2 pip --version
 
