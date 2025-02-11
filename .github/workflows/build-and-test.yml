@@ -45,11 +45,9 @@ jobs:
 
       - shell: bash
         run: |
-          BIN_FOLDER=. "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
-          ls .
-          pwd
-          ./micromamba --version
-          ./micromamba create --yes --name test_env -c conda-forge python pip==24.2
+          "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
+          micromamba --version
+          micromamba create --yes --name test_env -c conda-forge python pip==24.2
           ps --help
 
       - shell: pwsh
