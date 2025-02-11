@@ -19,15 +19,17 @@ jobs:
     runs-on: windows-latest
     steps:
 
-      - name: Setup conda environment
-        uses: mamba-org/setup-micromamba@v2
-        with:
-          init-shell: bash
+      # - name: Setup conda environment
+      #   uses: mamba-org/setup-micromamba@v2
+      #   with:
+      #     init-shell: bash
 
       - shell: bash
         run: |
-          micromamba --version
-          micromamba create --yes --name test_env -c conda-forge python pip
-          micromamba run --name test_env python -m pip --version
-          micromamba run --name test_env pip --version
+          curl -O https://github.com/mamba-org/micromamba-releases/releases/latest/download/micromamba-win-64
+          ls
+          micromamba-win-64 --version
+          micromamba-win-64 create --yes --name test_env -c conda-forge python pip
+          micromamba-win-64 run --name test_env python -m pip --version
+          micromamba-win-64 run --name test_env pip --version
 
