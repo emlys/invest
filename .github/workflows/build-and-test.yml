@@ -12,27 +12,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # build: dependency of make install
-  # nomkl: make sure numpy w/out mkl
-  # setuptools_scm: needed for versioning to work
-  LATEST_SUPPORTED_PYTHON_VERSION: "3.12"
-
 jobs:
 
   build-binaries:
     name: Build binaries
     runs-on: windows-latest
     steps:
-      # - uses: actions/checkout@v4
 
       - name: Setup conda environment
         uses: mamba-org/setup-micromamba@v2
         with:
-          environment-name: env
-          condarc: |
-                channels:
-                  - conda-forge
           init-shell: bash
 
       - shell: bash
@@ -41,32 +30,4 @@ jobs:
           micromamba create --yes --name test_env -c conda-forge python pip
           micromamba run --name test_env python -m pip --version
           micromamba run --name test_env pip --version
-
-      # - name: Download micromamba for distribution (Windows)
-      #   shell: pwsh
-      #   run: |
-      #     tar --help
-      #     echo "download"
-      #     Invoke-Webrequest -URI https://micro.mamba.pm/api/micromamba/win-64/2.0.4 -OutFile micromamba.tar.bz2
-      #     echo "extract"
-      #     tar -t -v -f micromamba.tar.bz2
-      #     tar -x -v -f micromamba.tar.bz2
-      #     echo "move"
-      #     MOVE -Force Library\bin\micromamba.exe .\micromamba.exe
-      #     .\micromamba.exe --help  # make sure the executable works
-
-      # - shell: bash
-      #   run: |
-      #     "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
-      #     source ~/.bash_profile
-
-      #     ps --help
-
-      # - shell: pwsh
-      #   run: |
-      #     ls .
-      #     "D:\a\invest\invest\micromamba" --version
-      #     "D:\a\invest\invest\micromamba" create --yes --name test_env2 -c conda-forge python pip==24.2
-      #     "D:\a\invest\invest\micromamba" run --name test_env2 python -m pip --version
-      #     "D:\a\invest\invest\micromamba" run --name test_env2 pip --version
 
