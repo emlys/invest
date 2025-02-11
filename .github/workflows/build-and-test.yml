@@ -46,7 +46,7 @@ jobs:
       - shell: bash
         run: |
           "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
-          source ~/.bashrc
+          source ~/.bash_profile
           micromamba --version
           micromamba create --yes --name test_env -c conda-forge python pip
           micromamba run --name test_env python -m pip --version
