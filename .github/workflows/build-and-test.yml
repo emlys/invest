@@ -39,10 +39,10 @@ jobs:
         shell: pwsh
         run: |
           tar --help
-          echo "download'"
+          echo "download"
           Invoke-Webrequest -URI https://micro.mamba.pm/api/micromamba/win-64/2.0.4 -OutFile micromamba.tar.bz2
           echo "extract"
-          tar xf micromamba.tar.bz2
+          tar -xf micromamba.tar.bz2
           echo "move"
           MOVE -Force Library\bin\micromamba.exe .\micromamba.exe
           .\micromamba.exe --help  # make sure the executable works
