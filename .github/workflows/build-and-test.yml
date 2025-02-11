@@ -28,8 +28,8 @@ jobs:
         run: |
           curl -O https://github.com/mamba-org/micromamba-releases/releases/latest/download/micromamba-win-64
           ls
-          micromamba-win-64 --version
-          micromamba-win-64 create --yes --name test_env -c conda-forge python pip
-          micromamba-win-64 run --name test_env python -m pip --version
-          micromamba-win-64 run --name test_env pip --version
+          ./micromamba-win-64 --version
+          ./micromamba-win-64 create --yes --name test_env -c conda-forge python pip
+          ./micromamba-win-64 run --name test_env python -m pip --version
+          ./micromamba-win-64 run --name test_env pip --version
 
