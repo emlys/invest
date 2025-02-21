@@ -187,7 +187,11 @@ jobs:
           $PYTHON -m pip install $(find dist -name "natcap.invest*.whl")
 
       - name: Install git lfs
-        run: curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
+        run: |
+          curl -LO https://github.com/git-lfs/git-lfs/releases/download/v3.6.1/git-lfs-linux-amd64-v3.6.1.tar.gz
+          tar -xvzf git-lfs-linux-amd64-v3.6.1.tar.gz
+          cd git-lfs-3.6.1
+          ./install.sh
 
       - name: Run model tests
         run: make test
