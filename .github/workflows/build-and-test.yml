@@ -98,18 +98,21 @@ jobs:
           path: data/invest-test-data
           key: git-lfs-testdata-${{ hashfiles('Makefile') }}
 
-      - name: Set up python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
+      # - name: Set up python
+      #   uses: actions/setup-python@v4
+      #   with:
+      #     python-version: ${{ matrix.python-version }}
 
       # save week number to use in next step
       # save CONDA_PREFIX to GITHUB_ENV so it's accessible outside of shell commands
       - name: Set environment variables
         shell: bash -l {0} # need login shell so that CONDA_PREFIX is set
         run: |
+          which python
+          ls /opt/python/
           echo "WEEK=$(date +%U)" >> $GITHUB_ENV
           echo "CONDA_PREFIX=$CONDA_PREFIX" >> $GITHUB_ENV
+          echo "PYTHON=/opt/python/cp39-cp39m"
 
       - name: Copy requirements into file
         shell: bash
@@ -127,7 +130,7 @@ jobs:
         run: |
           # make sure each file is separated by a space
           REQUIREMENTS_FILES=$(echo "${{ env.requirements-files }}" | xargs | tr "\n" " ")
-          python ./scripts/convert-requirements-to-conda-yml.py \
+          $PYTHON ./scripts/convert-requirements-to-conda-yml.py \
             extra_requirements.txt $REQUIREMENTS_FILES \
           > environment.yml
           echo "Will update environment using this environment.yml:"
@@ -178,10 +181,10 @@ jobs:
       - name: Build and install wheel
         run: |
           # uninstall InVEST if it was already in the restored cache
-          python -m pip uninstall -y natcap.invest
-          python -m build --wheel
+          $PYTHON -m pip uninstall -y natcap.invest
+          $PYTHON -m build --wheel
           ls -la dist
-          pip install $(find dist -name "natcap.invest*.whl")
+          $PYTHON/pip install $(find dist -name "natcap.invest*.whl")
 
       - name: Run model tests
         run: make test
