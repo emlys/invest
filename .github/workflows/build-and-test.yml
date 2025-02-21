@@ -112,7 +112,7 @@ jobs:
           ls /opt/python/
           echo "WEEK=$(date +%U)" >> $GITHUB_ENV
           echo "CONDA_PREFIX=$CONDA_PREFIX" >> $GITHUB_ENV
-          echo "PYTHON=/opt/python/cp39-cp39m"
+          echo "PYTHON=/opt/python/cp39-cp39" >> $GITHUB_ENV
 
       - name: Copy requirements into file
         shell: bash
