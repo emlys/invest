@@ -130,6 +130,7 @@ jobs:
         run: |
           # make sure each file is separated by a space
           REQUIREMENTS_FILES=$(echo "${{ env.requirements-files }}" | xargs | tr "\n" " ")
+          chmod +x ./scripts/convert-requirements-to-conda-yml.py
           $PYTHON ./scripts/convert-requirements-to-conda-yml.py \
             extra_requirements.txt $REQUIREMENTS_FILES \
           > environment.yml
