@@ -108,10 +108,10 @@ jobs:
       - name: Set environment variables
         shell: bash -l {0} # need login shell so that CONDA_PREFIX is set
         run: |
-          ls /opt/python/cp39-cp39/
+          ls /opt/python/cp39-cp39/bin
           echo "WEEK=$(date +%U)" >> $GITHUB_ENV
           echo "CONDA_PREFIX=$CONDA_PREFIX" >> $GITHUB_ENV
-          echo "PYTHON=/opt/python/cp39-cp39/python" >> $GITHUB_ENV
+          echo "PYTHON=/opt/python/cp39-cp39/bin/python" >> $GITHUB_ENV
 
       - name: Copy requirements into file
         shell: bash
