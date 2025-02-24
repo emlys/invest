@@ -186,14 +186,16 @@ jobs:
           diff ./conda-env.txt ./conda-env-artifact/conda-env.txt || true
 
       - name: Build and install wheel
+        env:
+          PIP_ROOT_USER_ACTION: ignore
         run: |
           chown -R $(whoami) /github/home
           # uninstall InVEST if it was already in the restored cache
-          $PYTHON -m pip --root-user-action uninstall -y natcap.invest
+          $PYTHON -m pip uninstall -y natcap.invest
           $PYTHON -m build --wheel
           ls -la dist
-          $PYTHON -m pip --root-user-action install $(find dist -name "natcap.invest*.whl")
-          $PYTHON -m pip --root-user-action list
+          $PYTHON -m pip install $(find dist -name "natcap.invest*.whl")
+          $PYTHON -m pip list
 
       - name: Install git lfs
         run: |
