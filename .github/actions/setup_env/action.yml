@@ -7,6 +7,10 @@ description:
   requirements, and the number of the week in the year, so that the cache
   refreshes weekly."
 inputs:
+  setup-python:
+    description: "Whether to run the setup-python action"
+    required: false
+    default: true
   python-version:
     description: "Python version to install"
     required: true
@@ -30,6 +34,7 @@ runs:
     # conda-managed python and this python won't be used again
     - name: Set up python
       uses: actions/setup-python@v4
+      if: setup-python
       with:
         python-version: ${{ inputs.python-version }}
 
