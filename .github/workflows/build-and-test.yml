@@ -192,6 +192,7 @@ jobs:
         include:
           - os: ubuntu-latest
             container: quay.io/pypa/manylinux_2_28_x86_64
+            skip: DirectoryValidationMacOnly
     steps:
       - uses: actions/checkout@v4
         with:
@@ -269,7 +270,9 @@ jobs:
           pip install $(find dist -name "natcap.invest*.whl")
 
       - name: Run model tests
-        run: make test
+        run: |
+          make TESTRUNNER="python -m pytest -vs --import-mode=importlib \
+            --durations=0 -k '${{ matrix.skip }}'" test
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
