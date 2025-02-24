@@ -186,6 +186,7 @@ jobs:
           $PYTHON -m build --wheel
           ls -la dist
           $PYTHON -m pip install $(find dist -name "natcap.invest*.whl")
+          $PYTHON -m pip list
 
       - name: Install git lfs
         run: |
@@ -195,7 +196,9 @@ jobs:
           ./install.sh
 
       - name: Run model tests
-        run: make test
+        run: |
+          $PYTHON -m pip list
+          make test
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
