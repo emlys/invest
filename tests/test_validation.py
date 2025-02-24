@@ -342,8 +342,9 @@ class DirectoryValidationMacOnly(unittest.TestCase):
         from natcap.invest import validation
 
         with tempfile.TemporaryDirectory() as tempdir:
-            print(bool(os.stat(tempdir).st_mode & stat.S_IXUSR))
             os.chmod(tempdir, stat.S_IREAD)
+            # print(os.environ)
+            print(os.getuid(), os.geteuid())
             print(os.stat(tempdir))
             print(bool(os.stat(tempdir).st_mode & stat.S_IXUSR))
             print(os.access(tempdir, os.X_OK))

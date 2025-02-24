@@ -203,9 +203,6 @@ def check_directory(dirpath, must_exist=True, permissions='rx', **kwargs):
     # Check for x access before checking for w,
     # since w operations to a dir are dependent on x access
     if 'x' in permissions:
-        # print(os.stat(dirpath))
-        print(os.access(dirpath, os.X_OK))
-
         try:
             cwd = os.getcwd()
             os.chdir(dirpath)
