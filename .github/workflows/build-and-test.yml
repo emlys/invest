@@ -58,7 +58,11 @@ jobs:
           python-version: ${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
 
       - name: Set up environment
-        run: pip install doc8
+        run: |
+          id --help
+          id -u
+          id -g
+          pip install doc8
 
       - name: Lint with doc8
         run: |
