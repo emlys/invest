@@ -78,7 +78,7 @@ jobs:
       #   - 80
       # volumes:
       #   - my_docker_volume:/volume_mount
-      # options: --cpus 1
+      options: --user $(id -u):$(id -g)
     strategy:
       fail-fast: false
       matrix:
