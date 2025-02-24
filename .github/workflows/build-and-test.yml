@@ -180,7 +180,7 @@ jobs:
 
       - name: Build and install wheel
         run: |
-          sudo chown -R $(whoami) /github/home
+          chown -R $(whoami) /github/home
           # uninstall InVEST if it was already in the restored cache
           $PYTHON -m pip uninstall -y natcap.invest
           $PYTHON -m build --wheel
