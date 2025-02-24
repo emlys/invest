@@ -34,7 +34,7 @@ runs:
     # conda-managed python and this python won't be used again
     - name: Set up python
       uses: actions/setup-python@v4
-      if: setup-python
+      if: ${{ inputs.setup-python }}
       with:
         python-version: ${{ inputs.python-version }}
 
