@@ -82,19 +82,19 @@ jobs:
       #   - 80
       # volumes:
       #   - my_docker_volume:/volume_mount
-      options: --user 1001:118
-    defaults:
-      run:
-        shell: sudo -u runner {0}
+      # options: --user 1001:118
+    # defaults:
+    #   run:
+    #     shell: sudo -u runner {0}
     strategy:
       fail-fast: false
       matrix:
         python-version: [3.9, "3.10", "3.11", "3.12", "3.13"]
     steps:
-      - name: Create user
-        shell: bash -l {0}
-        run: |
-          useradd runner -g sudo --password ''
+      # - name: Create user
+      #   shell: bash -l {0}
+      #   run: |
+      #     useradd runner -g sudo --password ''
 
       - uses: actions/checkout@v4
         with:
@@ -200,12 +200,12 @@ jobs:
           curl -LO https://github.com/git-lfs/git-lfs/releases/download/v3.6.1/git-lfs-linux-amd64-v3.6.1.tar.gz
           tar -xvzf git-lfs-linux-amd64-v3.6.1.tar.gz
           cd git-lfs-3.6.1
-          sudo ./install.sh
+          ./install.sh
 
       - name: Run model tests
         run: |
           $PYTHON -m pip list
-          make test
+          make PYTHON=$PYTHON test
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
