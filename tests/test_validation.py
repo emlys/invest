@@ -342,10 +342,10 @@ class DirectoryValidationMacOnly(unittest.TestCase):
         from natcap.invest import validation
 
         with tempfile.TemporaryDirectory() as tempdir:
-            print(os.stat(tempdir).st_mode & stat.S_IXUSR)
+            print(bool(os.stat(tempdir).st_mode & stat.S_IXUSR))
             os.chmod(tempdir, stat.S_IREAD)
-            print(os.stat(tempdir).st_mode & stat.S_IXUSR)
-            print(os.access(dirpath, os.X_OK))
+            print(bool(os.stat(tempdir).st_mode & stat.S_IXUSR))
+            print(os.access(tempdir, os.X_OK))
 
             validation_warning = validation.check_directory(tempdir,
                                                             permissions='rwx')
