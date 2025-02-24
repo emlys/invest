@@ -82,7 +82,7 @@ jobs:
       #   - 80
       # volumes:
       #   - my_docker_volume:/volume_mount
-      options: --user "$(id -u):$(id -g)"
+      options: --user 1001:118
     strategy:
       fail-fast: false
       matrix:
