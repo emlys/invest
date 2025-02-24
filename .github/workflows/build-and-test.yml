@@ -243,7 +243,24 @@ jobs:
           # otherwise, an error appears in the action annotations
           diff ./conda-env.txt ./conda-env-artifact/conda-env.txt || true
 
+      - name: Setup for linux docker container
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          #
+          chown -R $(whoami) /github/home
+
+          # Ignore "dubious ownership" error
+          git config --global --add safe.directory /__w/invest/invest
+
+          # Install git lfs
+          curl -LO https://github.com/git-lfs/git-lfs/releases/download/v3.6.1/git-lfs-linux-amd64-v3.6.1.tar.gz
+          tar -xvzf git-lfs-linux-amd64-v3.6.1.tar.gz
+          cd git-lfs-3.6.1
+          ./install.sh
+
       - name: Build and install wheel
+        env:
+          PIP_ROOT_USER_ACTION: ignore  # for the linux docker container
         run: |
           # uninstall InVEST if it was already in the restored cache
           python -m pip uninstall -y natcap.invest
