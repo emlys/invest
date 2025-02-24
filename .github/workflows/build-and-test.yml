@@ -189,11 +189,11 @@ jobs:
         run: |
           chown -R $(whoami) /github/home
           # uninstall InVEST if it was already in the restored cache
-          $PYTHON -m pip uninstall -y natcap.invest
+          $PYTHON -m pip --root-user-action uninstall -y natcap.invest
           $PYTHON -m build --wheel
           ls -la dist
-          $PYTHON -m pip install $(find dist -name "natcap.invest*.whl")
-          $PYTHON -m pip list
+          $PYTHON -m pip --root-user-action install $(find dist -name "natcap.invest*.whl")
+          $PYTHON -m pip --root-user-action list
 
       - name: Install git lfs
         run: |
@@ -206,6 +206,7 @@ jobs:
         run: |
           git config --global --add safe.directory /__w/invest/invest
           $PYTHON -m pip list
+          $PYTHON -c "import natcap.invest; print(natcap.invest.__version__)"
           make PYTHON=$PYTHON test
 
       - name: Upload wheel artifact
