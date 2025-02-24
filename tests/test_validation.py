@@ -347,6 +347,7 @@ class DirectoryValidationMacOnly(unittest.TestCase):
             print(os.stat(tempdir))
             print(bool(os.stat(tempdir).st_mode & stat.S_IXUSR))
             print(os.access(tempdir, os.X_OK))
+            print(os.access(tempdir, os.X_OK, effective_ids=True))
 
             validation_warning = validation.check_directory(tempdir,
                                                             permissions='rwx')
