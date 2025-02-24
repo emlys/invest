@@ -84,7 +84,8 @@ jobs:
       #   - my_docker_volume:/volume_mount
       options: --user 1001:118
     defaults:
-      shell: sudo -u runner {0}
+      run:
+        shell: sudo -u runner {0}
     strategy:
       fail-fast: false
       matrix:
