@@ -204,6 +204,7 @@ jobs:
 
       - name: Run model tests
         run: |
+          git config --global --add safe.directory /__w/invest/invest
           $PYTHON -m pip list
           make PYTHON=$PYTHON test
 
