@@ -191,6 +191,7 @@ jobs:
         run: |
           chown -R $(whoami) /github/home
           which python
+          git config --global --add safe.directory /__w/invest/invest
           git rev-parse HEAD
 
           # uninstall InVEST if it was already in the restored cache
@@ -209,7 +210,6 @@ jobs:
 
       - name: Run model tests
         run: |
-          git config --global --add safe.directory /__w/invest/invest
           python -m pip list
           ls /github/home/micromamba/envs/env/lib/python3.9/site-packages/natcap/invest
           python -c "import natcap.invest; print(natcap.invest.__version__)"
