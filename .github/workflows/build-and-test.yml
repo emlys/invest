@@ -12,14 +12,30 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.container }}
-      volumes:
-        - /home/runner:/runner
+      # volumes:
+      #   - /home/runner:/runner
     strategy:
       fail-fast: false
       matrix:
         container: [quay.io/pypa/manylinux_2_28_x86_64, 'amd64/almalinux:9', 'ubuntu:latest', '']
     steps:
+      - name: create user
+        run: |
+          USERNAME=runner
+          USER_UID=1000
+          USER_GID=$USER_UID
+
+          groupadd --gid $USER_GID $USERNAME \
+          && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+          #
+          # [Optional] Add sudo support. Omit if you don't need to install software after connecting.
+          && apt-get update \
+          && apt-get install -y sudo \
+          && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+          && chmod 0440 /etc/sudoers.d/$USERNAME
+
       - name: test
+        shell: su - runner {0}
         run: |
           pwd
           ls
