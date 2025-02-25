@@ -78,7 +78,7 @@ jobs:
         include:
           - os: ubuntu-latest
             container: quay.io/pypa/manylinux_2_28_x86_64
-            pytest-pattern: not DirectoryValidationMacOnly
+            # pytest-pattern: not DirectoryValidationMacOnly
     steps:
       - uses: actions/checkout@v4
         with:
