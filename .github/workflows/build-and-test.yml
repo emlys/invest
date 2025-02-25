@@ -86,9 +86,9 @@ jobs:
 
       - name: test
         run:
-          mkdir test
-          chmod 0444 test
-          cd test
+          mkdir foo
+          chmod 0444 foo
+          cd foo
 
       # NOTE: It takes twice as long to save the sample data cache
       # as it does to do a fresh clone (almost 5 minutes vs. 2.5 minutes)
