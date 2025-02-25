@@ -10,7 +10,9 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
-    container: ${{ matrix.container }}
+    container:
+      image: ${{ matrix.container }}
+      options: -v /__w/invest/invest:/invest/
     strategy:
       fail-fast: false
       matrix:
