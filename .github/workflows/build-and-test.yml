@@ -86,9 +86,10 @@ jobs:
 
       - name: test
         run: |
-          ls -la
           mkdir foo
+          ls -ld foo
           chmod 0444 foo
+          ls -ld foo
           cd foo
 
       # NOTE: It takes twice as long to save the sample data cache
