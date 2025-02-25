@@ -2,6 +2,7 @@
 import functools
 import os
 import shutil
+import subprocess
 import stat
 import string
 import sys
