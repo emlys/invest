@@ -348,6 +348,7 @@ class DirectoryValidationMacOnly(unittest.TestCase):
             subprocess.run(['chmod', '0444', tempdir])
             result = subprocess.run(['ls', '-ld', tempdir], capture_output=True, text=True)
             print(result.stdout)
+            subprocess.run(['cd', tempdir])
             # os.chmod(tempdir, stat.S_IREAD)
 
             validation_warning = validation.check_directory(tempdir,
