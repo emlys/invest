@@ -20,6 +20,9 @@ jobs:
     steps:
       - name: test
         run: |
+          pwd
+          ls
+
           mkdir foo
           ls -ld foo
           chmod 0444 foo
