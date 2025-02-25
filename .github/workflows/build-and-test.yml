@@ -26,12 +26,16 @@ jobs:
 
           touch foo
           ls -l foo
+          chmod +x foo
+          ls -l foo
+          ./foo
+
           chmod 0444 foo
           ls -l foo
           ./foo
 
-          mkdir foo
-          ls -ld foo
-          chmod 0444 foo
-          ls -ld foo
-          cd foo
+          mkdir bar
+          ls -ld bar
+          chmod 0444 bar
+          ls -ld bar
+          cd bar
