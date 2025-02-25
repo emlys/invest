@@ -84,6 +84,12 @@ jobs:
         with:
           fetch-depth: 0 # Fetch complete history for accurate versioning
 
+      - name: test
+        run:
+          mkdir test
+          chmod 0444 test
+          cd test
+
       # NOTE: It takes twice as long to save the sample data cache
       # as it does to do a fresh clone (almost 5 minutes vs. 2.5 minutes)
       # Test data is way, way faster by contrast (on the order of a few
