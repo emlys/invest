@@ -24,6 +24,12 @@ jobs:
           pwd
           ls
 
+          touch foo
+          ls -l foo
+          chmod 0444 foo
+          ls -l foo
+          ./foo
+
           mkdir foo
           ls -ld foo
           chmod 0444 foo
