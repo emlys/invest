@@ -85,7 +85,8 @@ jobs:
           fetch-depth: 0 # Fetch complete history for accurate versioning
 
       - name: test
-        run:
+        run: |
+          ls -la
           mkdir foo
           chmod 0444 foo
           cd foo
