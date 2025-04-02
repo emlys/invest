@@ -1444,18 +1444,24 @@ def _get_monthly_file_lists(n_months, in_dir):
 
     for month_index in range(1, n_months + 1):
         month_file_pattern = re.compile(r'.*[^\d]0?%d\.[^.]+$' % month_index)
-        file_list = [
-            month_file_path for month_file_path in in_path_list
-            if month_file_pattern.match(month_file_path)]
+        file_list = []
+        for file in in_path_list:
+            if month_file_pattern.match(month_file_path):
+                # filter out any non-raster sidecar files with the same name
+                try:
+                    gdal.OpenEx(file)
+                except RuntimeError:
+                    continue  # file is not a raster
+                file_list.append(file)
         if len(file_list) == 0:
             raise ValueError(
-                "No files found in %s for month %d. Please ensure that \
-                    filenames end in the month number (e.g., precip_1.tif)."
-                % (in_dir, month_index))
+                f"No files found in {in_dir} for month {month_index}. \
+                Please ensure that filenames end in the month number \
+                (e.g., precip_1.tif).")
         if len(file_list) > 1:
             raise ValueError(
-                "Ambiguous set of files found for month %d: %s" %
-                (month_index, file_list))
+                f"Ambiguous set of files found for month "
+                f"{month_index}: {file_list}")
         out_path_list.append(file_list[0])
 
     return out_path_list

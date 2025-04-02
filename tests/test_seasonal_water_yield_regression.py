@@ -398,6 +398,29 @@ class SeasonalWaterYieldUnusualDataTests(unittest.TestCase):
         # Verify that the returned lists match the input
         self.assertEqual(precip_path_list, match_precip)
 
+    def test_monthly_sidecar_files(self):
+        """_get_monthly_file_lists ignores sidecar files with same name"""
+        from natcap.invest.seasonal_water_yield.seasonal_water_yield import _get_monthly_file_lists
+
+        n_months = 12
+
+        # Make directory and file names with (non-zero-padded) months
+        precip_dir_path = os.path.join(self.workspace_dir, 'precip_dir')
+        os.makedirs(precip_dir_path)
+        make_precip_rasters(precip_dir_path)
+
+        precip_path_list = _get_monthly_file_lists(
+            n_months, precip_dir_path)
+
+        # Create lists of monthly filenames to which to compare function output
+        # Note this is hardcoded to match the filenames created in make_precip_rasters
+        match_precip = [os.path.join(precip_dir_path,
+                                     "precip_mm_" + str(m) + ".tif")
+                                     for m in range(1, n_months + 1)]
+
+        # Verify that the returned lists match the input
+        self.assertEqual(precip_path_list, match_precip)
+
     def test_ambiguous_precip_data(self):
         """SWY test case where there are more than 12 precipitation files."""
         from natcap.invest.seasonal_water_yield import seasonal_water_yield
