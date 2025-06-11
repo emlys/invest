@@ -12,18 +12,9 @@
 # Sometimes conda-forge does not install the latest available version,
 # pip-only can be a workaround for that.
 
-virtualenv>=12.0.1
 pytest
 pytest-subtests!=0.14.0  # https://github.com/pytest-dev/pytest-subtests/issues/173
-wheel>=0.27.0
-pypiwin32; sys_platform == 'win32'  # pip-only
 
-# 60.7.0 exception because of https://github.com/pyinstaller/pyinstaller/issues/6564
-setuptools>=8.0,!=60.7.0
 PyInstaller>=6.9.0
-setuptools_scm>=6.4.0
 requests
 coverage
-xlwt
-build  # pip-only
-rst2html5
