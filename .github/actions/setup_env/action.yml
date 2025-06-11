@@ -77,6 +77,7 @@ runs:
         cache-environment-key: ${{ runner.os }}${{ runner.arch }}-${{ env.WEEK }}-${{ hashFiles('environment.yml') }}
 
     - name: Install pip requirements
+      shell: bash
       run: |
         REQUIREMENTS_FILES=$(echo "${{ inputs.requirements-files }}" | xargs | tr "\n" "-r ")
         pip install -r extra_requirements.txt -r $REQUIREMENTS_FILES
