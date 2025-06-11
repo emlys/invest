@@ -12,7 +12,6 @@
 # Sometimes conda-forge does not install the latest available version,
 # pip-only can be a workaround for that.
 
-virtualenv>=12.0.1
 pytest
 pytest-subtests!=0.14.0  # https://github.com/pytest-dev/pytest-subtests/issues/173
 PyInstaller>=6.9.0
