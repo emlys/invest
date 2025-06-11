@@ -17,5 +17,4 @@ pytest-subtests!=0.14.0  # https://github.com/pytest-dev/pytest-subtests/issues/
 PyInstaller>=6.9.0
 requests
 coverage
-build  # pip-only
 rst2html5

@@ -104,6 +104,7 @@ jobs:
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             ${{ matrix.platform-specific-dependencies }}
             python=${{ matrix.python-version }}
+            build  # pip-only
 
       - name: Download previous conda environment.yml
         continue-on-error: true
