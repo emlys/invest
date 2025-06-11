@@ -99,12 +99,8 @@ jobs:
       - name: Set up python environment
         uses: ./.github/actions/setup_env
         with:
-          requirements-files: requirements.txt requirements-dev.txt constraints_tests.txt
+          requirements-files: requirements.txt requirements-dev.txt requirements-extra.txt constraints_tests.txt
           requirements: |
-            wheel>=0.27.0
-            setuptools>=8.0,!=60.7.0
-            setuptools_scm>=6.4.0
-            build
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             ${{ matrix.platform-specific-dependencies }}
             python=${{ matrix.python-version }}
