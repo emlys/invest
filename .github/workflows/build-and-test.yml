@@ -96,16 +96,6 @@ jobs:
           path: data/invest-test-data
           key: git-lfs-testdata-${{ hashfiles('Makefile') }}
 
-      - name: Parse requirements from pyproject.toml
-        uses: mikefarah/yq@master
-        with:
-          cmd: yq -oy '.project.dependencies' pyproject.toml > requirements.txt
-
-      - name: Parse optional requirements from pyproject.toml
-        uses: mikefarah/yq@master
-        with:
-          cmd: yq -oy '.project.optional-dependencies.dev' pyproject.toml > requirements-dev.txt
-
       - name: Set up python environment
         uses: ./.github/actions/setup_env
         with:

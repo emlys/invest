@@ -27,47 +27,15 @@ classifiers = [
     "Topic :: Scientific/Engineering :: GIS"
 ]
 # the version is provided dynamically by setuptools_scm
-dynamic = ["version"]
-dependencies = [
-    "GDAL>=3.4.2",
-    "Pyro5",
-    "pandas>=1.2.1",
-    "numpy>=1.11.0,!=1.16.0",
-    "Rtree>=0.8.2,!=0.9.1",
-    "shapely>=2.0.0",
-    "scipy>=1.9.0,!=1.12.*",
-    "pygeoprocessing>=2.4.6",
-    "taskgraph>=0.11.0",
-    "psutil>=5.6.6",
-    "chardet>=3.0.4",
-    "pint",
-    "Babel",
-    "Flask",
-    "flask_cors",
-    "requests",
-    "geometamaker"
-]
+dynamic = ["version", "dependencies", "optional-dependencies"]
+dependencies = { file = "requirements.txt" }
 
 [project.optional-dependencies]
 # the packages and requirements for packages that are needed
 # by infrastructure, but not by natcap.invest.
-dev = [
-    "pytest",
-    "pytest-subtests!=0.14.0",  # https://github.com/pytest-dev/pytest-subtests/issues/173
-    "PyInstaller>=6.9.0",
-    "requests",
-    "coverage",
-    "rst2html5"
-]
-
+dev = { file = "requirements-dev.txt" }
 # dependencies required to build docs
-docs = [
-    "Sphinx>=1.3.1,!=1.7.1",
-    "sphinx-rtd-theme",
-    "sphinx-intl",
-    "sphinx-reredirects",
-    "pyyaml"
-]
+docs = { file = "requirements-docs.txt" }
 
 [project.urls]
 homepage = "http://github.com/natcap/invest"
