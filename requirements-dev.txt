@@ -18,7 +18,4 @@ pytest-subtests!=0.14.0  # https://github.com/pytest-dev/pytest-subtests/issues/
 PyInstaller>=6.9.0
 requests
 coverage
-build
-wheel
 setuptools>=8.0,!=60.7.0
-setuptools_scm>=6.4.0
