@@ -14,11 +14,17 @@ inputs:
     default: 'python'
   requirements-files:
     description:
-      "List of requirements files to install from. May be separated by spaces
+      "List of pip requirements files to install from. May be separated by spaces
       and/or newlines."
     required: false
     default: ""
   requirements:
+    description:
+      "List of pip packages to install. May be separated by spaces and/or
+      newlines."
+    required: false
+    default: ""
+  conda-requirements:
     description:
       "List of conda packages to install. May be separated by spaces and/or
       newlines."
@@ -40,17 +46,23 @@ runs:
       run: |
         # make sure each package is separated by a newline
         echo "${{ inputs.requirements }}" | xargs | tr " " "\n" >> extra_requirements.txt
-
-    - name: Combine all requirements into environment YML
-      shell: bash
-      run: |
-        # make sure each file is separated by a space
-        REQUIREMENTS_FILES=$(echo "${{ inputs.requirements-files }}" | xargs | tr "\n" " ")
-        ${{ inputs.python }} ./scripts/convert-requirements-to-conda-yml.py \
-          extra_requirements.txt $REQUIREMENTS_FILES \
-        > environment.yml
+        echo "${{ inputs.conda-requirements }}" | xargs | tr " " "\n" >> conda_requirements.txt
+        ${{ inputs.python }} ./scripts/convert-requirements-to-conda-yml.py conda_requirements.txt > environment.yml
         echo "Will update environment using this environment.yml:"
         cat environment.yml
+
+    # - name: Combine all requirements into environment YML
+    #   shell: bash
+    #   run: |
+    #     # make sure each file is separated by a space
+    #     REQUIREMENTS_FILES=$(echo "${{ inputs.requirements-files }}" | xargs | tr "\n" "-r ")
+    #     # ${{ inputs.python }} ./scripts/convert-requirements-to-conda-yml.py \
+    #     #   extra_requirements.txt $REQUIREMENTS_FILES \
+    #     # > environment.yml
+
+    #     pip install -r extra_requirements.txt -r $REQUIREMENTS_FILES
+    #     # echo "Will update environment using this environment.yml:"
+    #     # cat environment.yml
 
     - name: Setup conda environment
       uses: mamba-org/setup-micromamba@v2
@@ -63,6 +75,11 @@ runs:
         init-shell: bash
         cache-environment: true
         cache-environment-key: ${{ runner.os }}${{ runner.arch }}-${{ env.WEEK }}-${{ hashFiles('environment.yml') }}
+
+    - name: Install pip requirements
+      run: |
+        REQUIREMENTS_FILES=$(echo "${{ inputs.requirements-files }}" | xargs | tr "\n" "-r ")
+        pip install -r extra_requirements.txt -r $REQUIREMENTS_FILES
 
     - name: List conda environment
       shell: bash -l {0}
