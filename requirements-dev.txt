@@ -20,3 +20,5 @@ requests
 coverage
 build
 wheel
+setuptools>=8.0,!=60.7.0
+setuptools_scm>=6.4.0
