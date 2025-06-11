@@ -99,11 +99,12 @@ jobs:
       - name: Set up python environment
         uses: ./.github/actions/setup_env
         with:
-          requirements-files: requirements.txt requirements-dev.txt constraints_tests.txt
-          requirements: |
+          conda-requirements: |
+            gdal
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             ${{ matrix.platform-specific-dependencies }}
             python=${{ matrix.python-version }}
+          requirements-files: requirements.txt requirements-dev.txt constraints_tests.txt
 
       - name: Download previous conda environment.yml
         continue-on-error: true
