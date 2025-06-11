@@ -105,6 +105,10 @@ jobs:
             ${{ matrix.platform-specific-dependencies }}
             python=${{ matrix.python-version }}
 
+      - name: install extra dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: pip install setuptools>=8.0,!=60.7.0 setuptools_scm>=6.4.0 build wheel
+
       - name: Download previous conda environment.yml
         continue-on-error: true
         # Using 'dawidd6' since 'download-artifact' GH action doesn't
