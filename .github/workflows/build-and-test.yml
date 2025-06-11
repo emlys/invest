@@ -105,9 +105,9 @@ jobs:
             ${{ matrix.platform-specific-dependencies }}
             python=${{ matrix.python-version }}
             wheel>=0.27.0
-            setuptools>=8.0,!=60.7.0  # https://github.com/pyinstaller/pyinstaller/issues/6564
+            setuptools>=8.0,!=60.7.0
             setuptools_scm>=6.4.0
-            build  # pip-only
+            build
 
       - name: install extra dependencies
         if: matrix.os == 'ubuntu-latest'
