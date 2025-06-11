@@ -12,7 +12,7 @@
 # Sometimes conda-forge does not install the latest available version,
 # pip-only can be a workaround for that.
 
-coverage
+virtualenv>=12.0.1
 pytest
 pytest-subtests!=0.14.0  # https://github.com/pytest-dev/pytest-subtests/issues/173
 
@@ -21,8 +21,6 @@ setuptools>=8.0,!=60.7.0
 PyInstaller>=6.9.0
 setuptools_scm>=6.4.0
 requests
+coverage
 build
 rst2html5
-
-
-
