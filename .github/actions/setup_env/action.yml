@@ -79,6 +79,7 @@ runs:
     - name: Install pip requirements
       shell: bash
       run: |
+        echo \"${{ inputs.requirements-files }}\"
         REQUIREMENTS_FILES=$(echo "${{ inputs.requirements-files }}" | xargs | tr "\n" " " | sed "s/ / -r /g")
         echo $REQUIREMENTS_FILES
         pip install -r extra_requirements.txt -r $REQUIREMENTS_FILES
