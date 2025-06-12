@@ -144,7 +144,6 @@ jobs:
       - name: Audit and repair wheel for manylinux
         if: matrix.os == 'ubuntu-latest'
         run: |
-          ldd --version
           pip install auditwheel
           WHEEL=$(find dist -name "natcap[._-]invest*.whl")
           auditwheel show $WHEEL
@@ -153,8 +152,8 @@ jobs:
 
       - name: Install wheel and run model tests
         run: |
-          pip install $(find dist -name "natcap[._-]invest*.whl")
-          pip install -r requirements-test.txt
+          WHEEL=$(find dist -name "natcap[._-]invest*.whl")
+          pip install '$WHEEL[test]'
           make test
 
       - name: Upload wheel artifact
