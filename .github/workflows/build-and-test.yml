@@ -206,6 +206,7 @@ jobs:
       - uses: ./.github/actions/setup_env
         with:
           conda-requirements: |
+            gdal
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ matrix.python-version }}
             ${{ matrix.platform-specific-dependencies }}
@@ -284,6 +285,7 @@ jobs:
       - uses: ./.github/actions/setup_env
         with:
           conda-requirements: |
+            gdal
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
 
@@ -319,6 +321,7 @@ jobs:
         uses: ./.github/actions/setup_env
         with:
           conda-requirements: |
+            gdal
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
 
@@ -379,6 +382,7 @@ jobs:
         uses: ./.github/actions/setup_env
         with:
           conda-requirements: |
+            gdal
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
             pandoc
