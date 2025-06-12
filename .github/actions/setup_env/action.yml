@@ -51,7 +51,7 @@ runs:
         # combine all pip requirements into a single file
         echo "${{ inputs.requirements }}" | xargs | tr " " "\n" >> extra_requirements.txt
         REQUIREMENTS_FILES=$(echo -n "${{ inputs.requirements-files }}" | tr "\n" " ")
-        cat REQUIREMENTS_FILES extra_requirements.txt > all_requirements.txt
+        cat $REQUIREMENTS_FILES extra_requirements.txt > all_requirements.txt
 
         echo "- pip:" >> environment.yml
         sed 's/^/  /' all_requirements.txt >> environment.yml
