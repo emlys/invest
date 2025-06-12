@@ -54,7 +54,7 @@ runs:
         cat $REQUIREMENTS_FILES extra_requirements.txt > all_requirements.txt
 
         echo "- pip:" >> environment.yml
-        sed 's/^/  /' all_requirements.txt >> environment.yml
+        sed 's/^/  - /' all_requirements.txt >> environment.yml
 
         echo "Will update environment using this environment.yml:"
         cat environment.yml
