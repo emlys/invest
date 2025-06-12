@@ -76,14 +76,14 @@ runs:
         cache-environment: true
         cache-environment-key: ${{ runner.os }}${{ runner.arch }}-${{ env.WEEK }}-${{ hashFiles('environment.yml') }}
 
+    - name: List conda environment
+      shell: bash -l {0}
+      run: micromamba list
+
     - name: Install pip requirements
-      shell: bash
+      shell: bash -l {0}
       run: |
         echo \"${{ inputs.requirements-files }}\"
         REQUIREMENTS_FILES=$(echo -n "${{ inputs.requirements-files }}" | tr "\n" " " | sed "s/ / -r /g")
         echo $REQUIREMENTS_FILES
-        pip install -r extra_requirements.txt -r $REQUIREMENTS_FILES
-
-    - name: List conda environment
-      shell: bash -l {0}
-      run: micromamba list
+        python -m pip install -r extra_requirements.txt -r $REQUIREMENTS_FILES
