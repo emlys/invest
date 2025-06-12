@@ -80,7 +80,7 @@ runs:
       shell: bash
       run: |
         echo \"${{ inputs.requirements-files }}\"
-        REQUIREMENTS_FILES=$(echo "${{ inputs.requirements-files }}" | xargs | tr "\n" " " | sed "s/ / -r /g")
+        REQUIREMENTS_FILES=$(echo "${{ inputs.requirements-files }}" | tr "\n" " " | sed "s/ / -r /g")
         echo $REQUIREMENTS_FILES
         pip install -r extra_requirements.txt -r $REQUIREMENTS_FILES
 
