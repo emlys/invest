@@ -2,6 +2,7 @@ channels:
 - conda-forge
 - defaults
 dependencies:
+- cxx-compiler
 - GDAL!=3.6.*,!=3.7.*
 - GDAL>=3.4.2
 - libsqlite<3.49.1
@@ -15,7 +16,6 @@ dependencies:
   - build  # pip-only
   - chardet>=3.0.4
   - coverage
-  - cxx-compiler
   - Flask
   - flask_cors
   - geometamaker
