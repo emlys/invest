@@ -100,12 +100,14 @@ jobs:
       - name: Set up python environment
         uses: ./.github/actions/setup_env
         with:
-          requirements-files: requirements-dev.txt
           conda-requirements: |
             gdal
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             ${{ matrix.platform-specific-dependencies }}
             python=${{ matrix.python-version }}
+
+      - name: Install dev requirements
+        run: pip install -r requirements-dev.txt
 
       - name: Download previous conda environment.yml
         continue-on-error: true
@@ -203,11 +205,13 @@ jobs:
 
       - uses: ./.github/actions/setup_env
         with:
-          requirements-files: requirements-dev.txt
           conda-requirements: |
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ matrix.python-version }}
             ${{ matrix.platform-specific-dependencies }}
+
+      - name: Install dev requirements
+        run: pip install -r requirements-dev.txt
 
       - name: Build source distribution
         run: |
@@ -279,10 +283,12 @@ jobs:
 
       - uses: ./.github/actions/setup_env
         with:
-          requirements-files: requirements-dev.txt
           conda-requirements: |
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
+
+      - name: Install dev requirements
+        run: pip install -r requirements-dev.txt
 
       - name: Make install
         run: NATCAP_INVEST_GDAL_LIB_PATH="$CONDA_PREFIX/Library" make install
@@ -312,10 +318,12 @@ jobs:
       - name: Set up python environment
         uses: ./.github/actions/setup_env
         with:
-          requirements-files: requirements-dev.txt
           conda-requirements: |
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
+
+      - name: Install dev requirements
+        run: pip install -r requirements-dev.txt
 
       - name: Make install
         run: NATCAP_INVEST_GDAL_LIB_PATH="$CONDA_PREFIX/Library" make install
@@ -370,11 +378,13 @@ jobs:
       - name: Set up conda environment
         uses: ./.github/actions/setup_env
         with:
-          requirements-files: requirements-dev.txt
           conda-requirements: |
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
             pandoc
+
+      - name: Install dev requirements
+        run: pip install -r requirements-dev.txt
 
       - name: Make install
         run: NATCAP_INVEST_GDAL_LIB_PATH="$CONDA_PREFIX/Library" make install
