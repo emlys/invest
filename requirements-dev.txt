@@ -6,11 +6,17 @@
 # Note that there may be some OS-specific requirements, so be sure to run
 # `make check` to verify you have all the required packages.
 
-# required to build python package
+# required to build wheel
 build
+
+# required to build widely compatible linux wheels
+auditwheel; sys_platform=='linux'
 
 # required to build binaries
 PyInstaller>=6.9.0
+
+# required to upload distributions to PyPI
+twine
 
 # required to run tests
 pytest
