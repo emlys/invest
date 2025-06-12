@@ -55,10 +55,14 @@ runs:
 
         echo "- pip:" >> environment.yml
 
+        # remove lines that start with #
+        # remove blank lines
+        # prefix each pip requirement with "  - "
+        # and append to environment.yml
         cat all_requirements.txt | \
-        sed /^#/d' | \               # remove lines that start with #
-        sed '/^[[:space:]]*$/d' | \  # remove blank lines
-        sed 's/^/  - /' \            # prefix each pip requirement with "  - "
+        sed '/^#/d' | \
+        sed '/^[[:space:]]*$/d' | \
+        sed 's/^/  - /' \
         >> environment.yml
 
         echo "Will update environment using this environment.yml:"
