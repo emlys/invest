@@ -105,7 +105,6 @@ jobs:
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             ${{ matrix.platform-specific-dependencies }}
             python=${{ matrix.python-version }}
-          requirements-files: requirements.txt requirements-dev.txt constraints_tests.txt
 
       - name: Download previous conda environment.yml
         continue-on-error: true
@@ -129,6 +128,8 @@ jobs:
 
       - name: Build wheel
         run: |
+          pip install build
+
           # uninstall InVEST if it was already in the restored cache
           python -m pip uninstall -y natcap.invest
           NATCAP_INVEST_GDAL_LIB_PATH="$CONDA_PREFIX/Library" python -m build --wheel
@@ -153,6 +154,9 @@ jobs:
       - name: Install wheel and run model tests
         run: |
           pip install $(find dist -name "natcap[._-]invest*.whl")
+
+          pip install pytest pytest-subtests!=0.14.0
+          pip install -r constraints_tests.txt
           make test
 
       - name: Upload wheel artifact
