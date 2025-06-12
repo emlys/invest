@@ -48,23 +48,23 @@ runs:
         echo "${{ inputs.conda-requirements }}" | xargs | tr " " "\n" >> conda_requirements.txt
         ${{ inputs.python }} ./scripts/convert-requirements-to-conda-yml.py conda_requirements.txt > environment.yml
 
-        # combine all pip requirements into a single file
-        echo "${{ inputs.requirements }}" | xargs | tr " " "\n" >> extra_requirements.txt
-        REQUIREMENTS_FILES=$(echo -n "${{ inputs.requirements-files }}" | tr "\n" " ")
-        cat $REQUIREMENTS_FILES extra_requirements.txt > all_requirements.txt
+        # # combine all pip requirements into a single file
+        # echo "${{ inputs.requirements }}" | xargs | tr " " "\n" >> extra_requirements.txt
+        # REQUIREMENTS_FILES=$(echo -n "${{ inputs.requirements-files }}" | tr "\n" " ")
+        # cat $REQUIREMENTS_FILES extra_requirements.txt > all_requirements.txt
 
-        # add pip requirements to environment.yml
-        echo "- pip:" >> environment.yml
+        # # add pip requirements to environment.yml
+        # echo "- pip:" >> environment.yml
 
-        # remove lines that start with #
-        # remove blank lines
-        # prefix each pip requirement with "  - "
-        # and append to environment.yml
-        cat all_requirements.txt | \
-        sed '/^#/d' | \
-        sed '/^[[:space:]]*$/d' | \
-        sed 's/^/  - /' \
-        >> environment.yml
+        # # remove lines that start with #
+        # # remove blank lines
+        # # prefix each pip requirement with "  - "
+        # # and append to environment.yml
+        # cat all_requirements.txt | \
+        # sed '/^#/d' | \
+        # sed '/^[[:space:]]*$/d' | \
+        # sed 's/^/  - /' \
+        # >> environment.yml
 
         echo "Will update environment using this environment.yml:"
         cat environment.yml
