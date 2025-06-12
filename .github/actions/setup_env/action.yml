@@ -56,13 +56,13 @@ runs:
         echo "- pip:" >> environment.yml
 
         # remove lines that start with #
-        sed '/^#/d' all_requirements.txt > all_requirements.txt
+        sed -i '' '/^#/d' all_requirements.txt
 
         # remove blank lines
-        sed '/^[[:space:]]*$/d' all_requirements.txt > all_requirements.txt
+        sed -i '' '/^[[:space:]]*$/d' all_requirements.txt
 
         # prefix each pip requirement with "  - "
-        sed 's/^/  - /' all_requirements.txt > all_requirements.txt
+        sed -i '' 's/^/  - /' all_requirements.txt
 
         cat all_requirements.txt >> environment.yml
 
