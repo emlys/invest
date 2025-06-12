@@ -8,8 +8,6 @@ dependencies:
 - libsqlite<3.49.1
 - libxcrypt
 - nomkl
-- pip
-- python-build
 - python=3.9
 - sqlite<3.49.1
 - pip:
