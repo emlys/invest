@@ -5,15 +5,9 @@
 #
 # Note that there may be some OS-specific requirements, so be sure to run
 # `make check` to verify you have all the required packages.
-#
-# Sometimes conda-forge does not install the latest available version,
-# pip-only can be a workaround for that.
 
-pytest
-pytest-subtests!=0.14.0  # https://github.com/pytest-dev/pytest-subtests/issues/173
+build
 PyInstaller>=6.9.0
 requests
-coverage
 rst2html5
-build
 setuptools_scm
