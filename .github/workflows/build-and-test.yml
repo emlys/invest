@@ -154,7 +154,7 @@ jobs:
       - name: Install wheel and run model tests
         run: |
           pip install $(find dist -name "natcap[._-]invest*.whl")
-          pip install -r requirements_test.txt
+          pip install -r requirements-test.txt
           make test
 
       - name: Upload wheel artifact
