@@ -54,7 +54,17 @@ runs:
         cat $REQUIREMENTS_FILES extra_requirements.txt > all_requirements.txt
 
         echo "- pip:" >> environment.yml
-        sed 's/^/  - /' all_requirements.txt >> environment.yml
+
+        # remove lines that start with #
+        sed '/^#/d' all_requirements.txt > all_requirements.txt
+
+        # remove blank lines
+        sed '/^[[:space:]]*$/d' all_requirements.txt > all_requirements.txt
+
+        # prefix each pip requirement with "  - "
+        sed 's/^/  - /' all_requirements.txt > all_requirements.txt
+
+        cat all_requirements.txt >> environment.yml
 
         echo "Will update environment using this environment.yml:"
         cat environment.yml
