@@ -76,6 +76,8 @@ jobs:
         os: [windows-latest, macos-13, ubuntu-latest]
         include:
           - os: ubuntu-latest
+            platform-specific-dependencies: cxx-compiler
+          - os: ubuntu-latest
             python-version: 3.9
             platform-specific-dependencies: libxcrypt
           - os: ubuntu-latest
