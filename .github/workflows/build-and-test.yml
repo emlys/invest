@@ -19,8 +19,7 @@ concurrency:
 env:
   # build: dependency of make install
   # nomkl: make sure numpy w/out mkl
-  # setuptools_scm: needed for versioning to work
-  CONDA_DEFAULT_DEPENDENCIES: nomkl setuptools_scm 'libsqlite<3.49.1' 'sqlite<3.49.1' # https://github.com/natcap/invest/issues/1797
+  CONDA_DEFAULT_DEPENDENCIES: nomkl 'libsqlite<3.49.1' 'sqlite<3.49.1' # https://github.com/natcap/invest/issues/1797
   LATEST_SUPPORTED_PYTHON_VERSION: "3.13"
 
 jobs:
@@ -79,10 +78,10 @@ jobs:
             platform-specific-dependencies: cxx-compiler
           - os: ubuntu-latest
             python-version: 3.9
-            platform-specific-dependencies: libxcrypt
+            platform-specific-dependencies: libxcrypt cxx-compiler
           - os: ubuntu-latest
             python-version: "3.10"
-            platform-specific-dependencies: libxcrypt
+            platform-specific-dependencies: libxcrypt cxx-compiler
     steps:
       - uses: actions/checkout@v4
         with:

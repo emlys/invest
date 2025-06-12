@@ -6,9 +6,6 @@
 # Note that there may be some OS-specific requirements, so be sure to run
 # `make check` to verify you have all the required packages.
 #
-# Any lines with "# pip-only" at the end will be processed by
-# scripts/convert-requirements-to-conda-yml.py as though it can only be found
-# on pip.
 # Sometimes conda-forge does not install the latest available version,
 # pip-only can be a workaround for that.
 
@@ -19,3 +16,4 @@ requests
 coverage
 rst2html5
 build
+setuptools_scm
