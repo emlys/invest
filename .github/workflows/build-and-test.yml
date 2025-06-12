@@ -100,6 +100,7 @@ jobs:
       - name: Set up python environment
         uses: ./.github/actions/setup_env
         with:
+          requirements-files: requirements-dev.txt
           conda-requirements: |
             gdal
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
@@ -128,8 +129,6 @@ jobs:
 
       - name: Build wheel
         run: |
-          pip install build
-
           # uninstall InVEST if it was already in the restored cache
           python -m pip uninstall -y natcap.invest
           NATCAP_INVEST_GDAL_LIB_PATH="$CONDA_PREFIX/Library" python -m build --wheel
@@ -144,7 +143,6 @@ jobs:
       - name: Audit and repair wheel for manylinux
         if: matrix.os == 'ubuntu-latest'
         run: |
-          pip install auditwheel
           WHEEL=$(find dist -name "natcap[._-]invest*.whl")
           auditwheel show $WHEEL
           auditwheel repair $WHEEL --plat manylinux_2_39_x86_64 -w dist
@@ -152,8 +150,7 @@ jobs:
 
       - name: Install wheel and run model tests
         run: |
-          WHEEL=$(find dist -name "natcap[._-]invest*.whl")
-          pip install '$WHEEL[test]'
+          pip install $(find dist -name "natcap[._-]invest*.whl")
           make test
 
       - name: Upload wheel artifact
@@ -206,12 +203,11 @@ jobs:
 
       - uses: ./.github/actions/setup_env
         with:
-          requirements-files: requirements.txt
+          requirements-files: requirements-dev.txt
           conda-requirements: |
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ matrix.python-version }}
             ${{ matrix.platform-specific-dependencies }}
-            twine
 
       - name: Build source distribution
         run: |
@@ -283,11 +279,10 @@ jobs:
 
       - uses: ./.github/actions/setup_env
         with:
-          requirements-files: requirements.txt
+          requirements-files: requirements-dev.txt
           conda-requirements: |
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
-            pytest
 
       - name: Make install
         run: NATCAP_INVEST_GDAL_LIB_PATH="$CONDA_PREFIX/Library" make install
@@ -317,7 +312,7 @@ jobs:
       - name: Set up python environment
         uses: ./.github/actions/setup_env
         with:
-          requirements-files: requirements.txt requirements-dev.txt
+          requirements-files: requirements-dev.txt
           conda-requirements: |
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
@@ -375,11 +370,7 @@ jobs:
       - name: Set up conda environment
         uses: ./.github/actions/setup_env
         with:
-          requirements-files: |
-            requirements.txt
-            requirements-dev.txt
-            requirements-docs.txt
-            constraints_tests.txt
+          requirements-files: requirements-dev.txt
           conda-requirements: |
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
@@ -539,9 +530,9 @@ jobs:
         with:
           python-version: ${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
 
-      - name: Install dependencies
-        # dependencies of setup.py, needed to get the version string
-        run: pip install babel cython numpy setuptools setuptools_scm wheel
+      # - name: Install dependencies
+      #   # dependencies of setup.py, needed to get the version string
+      #   run: pip install babel cython numpy setuptools setuptools_scm wheel
 
       - run: make sampledata sampledata_single
 
