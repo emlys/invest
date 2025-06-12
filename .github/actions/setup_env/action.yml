@@ -53,6 +53,7 @@ runs:
         REQUIREMENTS_FILES=$(echo -n "${{ inputs.requirements-files }}" | tr "\n" " ")
         cat $REQUIREMENTS_FILES extra_requirements.txt > all_requirements.txt
 
+        # add pip requirements to environment.yml
         echo "- pip:" >> environment.yml
 
         # remove lines that start with #
@@ -67,19 +68,6 @@ runs:
 
         echo "Will update environment using this environment.yml:"
         cat environment.yml
-
-    # - name: Combine all requirements into environment YML
-    #   shell: bash
-    #   run: |
-    #     # make sure each file is separated by a space
-    #     REQUIREMENTS_FILES=$(echo "${{ inputs.requirements-files }}" | xargs | tr "\n" "-r ")
-    #     # ${{ inputs.python }} ./scripts/convert-requirements-to-conda-yml.py \
-    #     #   extra_requirements.txt $REQUIREMENTS_FILES \
-    #     # > environment.yml
-
-    #     pip install -r extra_requirements.txt -r $REQUIREMENTS_FILES
-    #     # echo "Will update environment using this environment.yml:"
-    #     # cat environment.yml
 
     - name: Setup conda environment
       uses: mamba-org/setup-micromamba@v2
@@ -96,11 +84,3 @@ runs:
     - name: List conda environment
       shell: bash -l {0}
       run: micromamba list
-
-    - name: Install pip requirements
-      shell: bash -l {0}
-      run: |
-        echo \"${{ inputs.requirements-files }}\"
-        REQUIREMENTS_FILES=$(echo -n "${{ inputs.requirements-files }}" | tr "\n" " " | sed "s/ / -r /g")
-        echo $REQUIREMENTS_FILES
-        python -m pip install -r extra_requirements.txt -r $REQUIREMENTS_FILES

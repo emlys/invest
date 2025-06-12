@@ -129,7 +129,6 @@ jobs:
 
       - name: Build wheel
         run: |
-          python -m pip install build
           # uninstall InVEST if it was already in the restored cache
           python -m pip uninstall -y natcap.invest
           NATCAP_INVEST_GDAL_LIB_PATH="$CONDA_PREFIX/Library" python -m build --wheel
@@ -207,10 +206,11 @@ jobs:
       - uses: ./.github/actions/setup_env
         with:
           requirements-files: requirements.txt
-          requirements: |
+          conda-requirements: |
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ matrix.python-version }}
-            twine ${{ matrix.platform-specific-dependencies }}
+            ${{ matrix.platform-specific-dependencies }}
+            twine
 
       - name: Build source distribution
         run: |
@@ -283,7 +283,7 @@ jobs:
       - uses: ./.github/actions/setup_env
         with:
           requirements-files: requirements.txt
-          requirements: |
+          conda-requirements: |
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
             pytest
@@ -317,7 +317,7 @@ jobs:
         uses: ./.github/actions/setup_env
         with:
           requirements-files: requirements.txt requirements-dev.txt
-          requirements: |
+          conda-requirements: |
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
 
@@ -379,7 +379,7 @@ jobs:
             requirements-dev.txt
             requirements-docs.txt
             constraints_tests.txt
-          requirements: |
+          conda-requirements: |
             ${{ env.CONDA_DEFAULT_DEPENDENCIES }}
             python=${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
             pandoc
