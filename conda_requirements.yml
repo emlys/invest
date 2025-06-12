@@ -1,0 +1,44 @@
+channels:
+- conda-forge
+- defaults
+dependencies:
+- Babel
+- chardet>=3.0.4
+- coverage
+- cxx-compiler
+- Flask
+- flask_cors
+- GDAL!=3.6.*,!=3.7.*
+- GDAL>=3.4.2
+- geometamaker
+- libsqlite<3.49.1
+- libxcrypt
+- nomkl
+- numpy>=1.11.0,!=1.16.0
+- pandas>=1.2.1
+- pint
+- pip
+- psutil>=5.6.6
+- pygeoprocessing>=2.4.6
+- PyInstaller>=6.9.0
+- Pyro5
+- pytest
+- pytest-subtests!=0.14.0  # https://github.com/pytest-dev/pytest-subtests/issues/173
+- python-build
+- python=3.9
+- requests
+- rst2html5
+- Rtree>=0.8.2,!=0.9.1
+- scipy>=1.9.0,!=1.12.*
+- setuptools>=8.0,!=60.7.0
+- setuptools_scm
+- setuptools_scm>=6.4.0
+- shapely>=2.0.0
+- sqlite<3.49.1
+- taskgraph>=0.11.0
+- virtualenv>=12.0.1
+- wheel>=0.27.0
+- xlwt
+- pip:
+  - build  # pip-only
+  - pypiwin32; sys_platform == 'win32'  # pip-only

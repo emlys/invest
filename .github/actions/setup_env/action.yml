@@ -84,7 +84,7 @@ runs:
     - name: Setup conda environment
       uses: mamba-org/setup-micromamba@v2
       with:
-        environment-file: environment.yml
+        environment-file: conda_requirements.yml
         environment-name: env
         condarc: |
               channels:
