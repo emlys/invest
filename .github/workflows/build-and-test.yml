@@ -294,7 +294,7 @@ jobs:
 
       - name: Build and install natcap.invest
         run: |
-          python -m build --wheel
+          NATCAP_INVEST_GDAL_LIB_PATH="$CONDA_PREFIX/Library" python -m build --wheel
           WHEEL=$(find dist -name "natcap[._-]invest*.whl")
           pip install $WHEEL
 
@@ -395,7 +395,7 @@ jobs:
 
       - name: Build and install natcap.invest
         run: |
-          python -m build --wheel
+          NATCAP_INVEST_GDAL_LIB_PATH="$CONDA_PREFIX/Library" python -m build --wheel
           WHEEL=$(find dist -name "natcap[._-]invest*.whl")
           pip install $WHEEL
 
