@@ -12,6 +12,9 @@ build
 # required to build widely compatible linux wheels
 auditwheel; sys_platform=='linux'
 
+# required to get package version
+setuptools_scm
+
 # required to build binaries
 PyInstaller>=6.9.0
 
