@@ -292,8 +292,11 @@ jobs:
       - name: Install dev requirements
         run: pip install -r requirements-dev.txt
 
-      - name: Make install
-        run: NATCAP_INVEST_GDAL_LIB_PATH="$CONDA_PREFIX/Library" make install
+      - name: Build and install natcap.invest
+        run: |
+          python -m build --wheel
+          WHEEL=$(find dist -name "natcap[._-]invest*.whl")
+          pip install $WHEEL
 
       - name: Validate sample data
         run: make validate_sampledata
@@ -390,8 +393,11 @@ jobs:
       - name: Install dev requirements
         run: pip install -r requirements-dev.txt
 
-      - name: Make install
-        run: NATCAP_INVEST_GDAL_LIB_PATH="$CONDA_PREFIX/Library" make install
+      - name: Build and install natcap.invest
+        run: |
+          python -m build --wheel
+          WHEEL=$(find dist -name "natcap[._-]invest*.whl")
+          pip install $WHEEL
 
         # Not caching chocolatey packages because the cache may not be reliable
         # https://github.com/chocolatey/choco/issues/2134
@@ -543,10 +549,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.LATEST_SUPPORTED_PYTHON_VERSION }}
-
-      # - name: Install dependencies
-      #   # dependencies of setup.py, needed to get the version string
-      #   run: pip install babel cython numpy setuptools setuptools_scm wheel
 
       - run: make sampledata sampledata_single
 
