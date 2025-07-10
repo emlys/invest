@@ -1,0 +1,16 @@
+{
+    "args": {
+        "biophysical_table_path": "biophysical_table_gura.csv", 
+        "depth_to_root_rest_layer_path": "depth_to_root_restricting_layer_gura.tif", 
+        "eto_path": "reference_ET_gura.tif", 
+        "lulc_path": "land_use_gura.tif", 
+        "pawc_path": "plant_available_water_fraction_gura.tif", 
+        "precipitation_path": "precipitation_gura.tif", 
+        "results_suffix": "gura", 
+        "seasonality_constant": "5", 
+        "sub_watersheds_path": "subwatersheds_gura.shp", 
+        "watersheds_path": "watershed_gura.shp"
+    }, 
+    "invest_version": "3.7.0", 
+    "model_name": "natcap.invest.annual_water_yield"
+}
