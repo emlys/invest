@@ -1687,7 +1687,7 @@ class ModelSpec(BaseModel):
 
         def replace(value):
             if isinstance(value, str):
-                if value.startswith('files.'):
+                if value.startswith('paths.'):
                     value = file_registry[value[6:]]
                 elif value.startswith('args.'):
                     value = args[value[5:]]
@@ -1734,13 +1734,6 @@ class ModelSpec(BaseModel):
                     replace(t) for t in task.dependent_task_list]
 
             dependent_task_list = [task_lookup[key] for key in dependent_task_list]
-
-            print(task.func)
-            print(kwarg_keys)
-            print('\n')
-                # target_path_list=target_path_list,
-                # dependent_task_list=dependent_task_list,
-                # task_name=task.task_name))
 
             taskgraph_task = task_graph.add_task(
                 func=task.func,

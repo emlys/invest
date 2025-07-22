@@ -26,8 +26,14 @@ from . import sdr_core
 
 LOGGER = logging.getLogger(__name__)
 
-def preprocess(args, f_reg):
+# Target nodata is for general rasters that are positive, and _IC_NODATA are
+# for rasters that are any range
+_TARGET_NODATA = -1.0
+_BYTE_NODATA = 255
+_IC_NODATA = float(numpy.finfo('float32').min)
 
+
+def preprocess(args, f_reg):
     biophysical_df = MODEL_SPEC.get_input(
         'biophysical_table_path').get_validated_dataframe(
         args['biophysical_table_path'])
@@ -1229,9 +1235,9 @@ MODEL_SPEC = spec.ModelSpec(
             kwarg_keys=dict(
                 op=_create_mutual_mask_op,
                 rasters='vals.aligned_list',
-                target_path='files.mask_path',
+                target_path='paths.mask_path',
                 target_nodata=0),
-            target_path_list=['files.mask_path'],
+            target_path_list=['paths.mask_path'],
             dependent_task_list=['align_task'],
             task_name='create mask'
         ),
@@ -1240,9 +1246,9 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.raster_map,
             kwarg_keys=dict(
                 op=_mask_single_raster_op,
-                rasters=['files.aligned_dem_path', 'files.mask_path'],
-                target_path='files.masked_dem_path'),
-            target_path_list=['files.masked_dem_path'],
+                rasters=['paths.aligned_dem_path', 'paths.mask_path'],
+                target_path='paths.masked_dem_path'),
+            target_path_list=['paths.masked_dem_path'],
             dependent_task_list=['mutual_mask_task', 'align_task'],
             task_name=f'mask dem'
         ),
@@ -1251,9 +1257,9 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.raster_map,
             kwarg_keys=dict(
                 op=_mask_single_raster_op,
-                rasters=['files.aligned_lulc_path', 'files.mask_path'],
-                target_path='files.masked_lulc_path'),
-            target_path_list=['files.masked_lulc_path'],
+                rasters=['paths.aligned_lulc_path', 'paths.mask_path'],
+                target_path='paths.masked_lulc_path'),
+            target_path_list=['paths.masked_lulc_path'],
             dependent_task_list=['mutual_mask_task', 'align_task'],
             task_name=f'mask lulc'
         ),
@@ -1262,9 +1268,9 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.raster_map,
             kwarg_keys=dict(
                 op=_mask_single_raster_op,
-                rasters=['files.aligned_erosivity_path', 'files.mask_path'],
-                target_path='files.masked_erosivity_path'),
-            target_path_list=['files.masked_erosivity_path'],
+                rasters=['paths.aligned_erosivity_path', 'paths.mask_path'],
+                target_path='paths.masked_erosivity_path'),
+            target_path_list=['paths.masked_erosivity_path'],
             dependent_task_list=['mutual_mask_task', 'align_task'],
             task_name=f'mask erosivity'
         ),
@@ -1273,9 +1279,9 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.raster_map,
             kwarg_keys=dict(
                 op=_mask_single_raster_op,
-                rasters=['files.aligned_erodibility_path', 'files.mask_path'],
-                target_path='files.masked_erodibility_path'),
-            target_path_list=['files.masked_erodibility_path'],
+                rasters=['paths.aligned_erodibility_path', 'paths.mask_path'],
+                target_path='paths.masked_erodibility_path'),
+            target_path_list=['paths.masked_erodibility_path'],
             dependent_task_list=['mutual_mask_task', 'align_task'],
             task_name=f'mask erodibility'
         ),
@@ -1285,9 +1291,9 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.raster_map,
             kwarg_keys=dict(
                 op=_mask_single_raster_op,
-                rasters=['files.aligned_drainage_path', 'files.mask_path'],
-                target_path='files.masked_drainage_path'),
-            target_path_list=['files.masked_drainage_path'],
+                rasters=['paths.aligned_drainage_path', 'paths.mask_path'],
+                target_path='paths.masked_drainage_path'),
+            target_path_list=['paths.masked_drainage_path'],
             dependent_task_list=['mutual_mask_task', 'align_task'],
             task_name=f'mask drainage'
         ),
@@ -1295,9 +1301,9 @@ MODEL_SPEC = spec.ModelSpec(
             key='pit_fill_task',
             func=pygeoprocessing.routing.fill_pits,
             kwarg_keys=dict(
-                dem_raster_path_band=('files.masked_dem_path', 1),
-                target_filled_dem_raster_path='files.pit_filled_dem_path'),
-            target_path_list=['files.pit_filled_dem_path'],
+                dem_raster_path_band=('paths.masked_dem_path', 1),
+                target_filled_dem_raster_path='paths.pit_filled_dem_path'),
+            target_path_list=['paths.pit_filled_dem_path'],
             dependent_task_list=['mask_dem'],
             task_name='fill pits'
         ),
@@ -1305,10 +1311,10 @@ MODEL_SPEC = spec.ModelSpec(
             key='slope_task',
             func=pygeoprocessing.calculate_slope,
             kwarg_keys=dict(
-                base_elevation_raster_path_band=('files.pit_filled_dem_path', 1),
-                target_slope_path='files.slope_path'),
+                base_elevation_raster_path_band=('paths.pit_filled_dem_path', 1),
+                target_slope_path='paths.slope_path'),
             dependent_task_list=['pit_fill_task'],
-            target_path_list=['files.slope_path'],
+            target_path_list=['paths.slope_path'],
             task_name='calculate slope'
         ),
         spec.Task(
@@ -1316,9 +1322,9 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.raster_map,
             kwarg_keys=dict(
                 op=threshold_slope_op,
-                rasters=['files.slope_path'],
-                target_path='files.thresholded_slope_path'),
-            target_path_list=['files.thresholded_slope_path'],
+                rasters=['paths.slope_path'],
+                target_path='paths.thresholded_slope_path'),
+            target_path_list=['paths.thresholded_slope_path'],
             dependent_task_list=['slope_task'],
             task_name='threshold slope'
         ),
@@ -1327,9 +1333,9 @@ MODEL_SPEC = spec.ModelSpec(
             run_if="args['flow_dir_algorithm'] == 'MFD'",
             func=pygeoprocessing.routing.flow_dir_mfd,
             kwarg_keys=dict(
-                dem_raster_path_band=('files.pit_filled_dem_path', 1),
-                target_flow_dir_path='files.flow_direction_path'),
-            target_path_list=['files.flow_direction_path'],
+                dem_raster_path_band=('paths.pit_filled_dem_path', 1),
+                target_flow_dir_path='paths.flow_direction_path'),
+            target_path_list=['paths.flow_direction_path'],
             dependent_task_list=['pit_fill_task'],
             task_name='flow direction calculation'
         ),
@@ -1338,9 +1344,9 @@ MODEL_SPEC = spec.ModelSpec(
             run_if="args['flow_dir_algorithm'] == 'MFD'",
             func=pygeoprocessing.routing.flow_accumulation_mfd,
             kwarg_keys=dict(
-                flow_dir_mfd_raster_path_band=('files.flow_direction_path', 1),
-                target_flow_accum_raster_path='files.flow_accumulation_path'),
-            target_path_list=['files.flow_accumulation_path'],
+                flow_dir_mfd_raster_path_band=('paths.flow_direction_path', 1),
+                target_flow_accum_raster_path='paths.flow_accumulation_path'),
+            target_path_list=['paths.flow_accumulation_path'],
             dependent_task_list=['vals.flow_dir_task'],
             task_name='flow accumulation calculation'
         ),
@@ -1349,12 +1355,12 @@ MODEL_SPEC = spec.ModelSpec(
             run_if="args['flow_dir_algorithm'] == 'MFD'",
             func=pygeoprocessing.routing.extract_streams_mfd,
             kwarg_keys=dict(
-                flow_accum_raster_path_band=('files.flow_accumulation_path', 1),
-                flow_dir_mfd_path_band=('files.flow_direction_path', 1),
+                flow_accum_raster_path_band=('paths.flow_accumulation_path', 1),
+                flow_dir_mfd_path_band=('paths.flow_direction_path', 1),
                 flow_threshold='vals.threshold_flow_accumulation',
-                target_stream_raster_path='files.stream_path',
+                target_stream_raster_path='paths.stream_path',
                 trace_threshold_proportion=0.7),
-            target_path_list=['files.stream_path'],
+            target_path_list=['paths.stream_path'],
             dependent_task_list=['vals.flow_accumulation_task'],
             task_name='extract streams'
         ),
@@ -1363,9 +1369,9 @@ MODEL_SPEC = spec.ModelSpec(
             run_if="args['flow_dir_algorithm'] == 'D8'",
             func=pygeoprocessing.routing.flow_dir_d8,
             kwarg_keys=dict(
-                dem_raster_path_band=('files.pit_filled_dem_path', 1),
-                target_flow_dir_path='files.flow_direction_path'),
-            target_path_list=['files.flow_direction_path'],
+                dem_raster_path_band=('paths.pit_filled_dem_path', 1),
+                target_flow_dir_path='paths.flow_direction_path'),
+            target_path_list=['paths.flow_direction_path'],
             dependent_task_list=['pit_fill_task'],
             task_name='flow direction calculation'
         ),
@@ -1374,9 +1380,9 @@ MODEL_SPEC = spec.ModelSpec(
             run_if="args['flow_dir_algorithm'] == 'D8'",
             func=pygeoprocessing.routing.flow_accumulation_d8,
             kwarg_keys=dict(
-                flow_dir_raster_path_band=('files.flow_direction_path', 1),
-                target_flow_accum_raster_path='files.flow_accumulation_path'),
-            target_path_list=['files.flow_accumulation_path'],
+                flow_dir_raster_path_band=('paths.flow_direction_path', 1),
+                target_flow_accum_raster_path='paths.flow_accumulation_path'),
+            target_path_list=['paths.flow_accumulation_path'],
             dependent_task_list=['vals.flow_dir_task'],
             task_name='flow accumulation calculation'
         ),
@@ -1385,10 +1391,10 @@ MODEL_SPEC = spec.ModelSpec(
             run_if="args['flow_dir_algorithm'] == 'D8'",
             func=pygeoprocessing.routing.extract_streams_d8,
             kwarg_keys=dict(
-                flow_accum_raster_path_band=('files.flow_accumulation_path', 1),
+                flow_accum_raster_path_band=('paths.flow_accumulation_path', 1),
                 flow_threshold='args.threshold_flow_accumulation',
-                target_stream_raster_path='files.stream_path'),
-            target_path_list=['files.stream_path'],
+                target_stream_raster_path='paths.stream_path'),
+            target_path_list=['paths.stream_path'],
             dependent_task_list=['vals.flow_accumulation_task'],
             task_name='extract streams'
         ),
@@ -1396,11 +1402,11 @@ MODEL_SPEC = spec.ModelSpec(
             key='ls_factor_task',
             func=_calculate_ls_factor,
             kwarg_keys=dict(
-                flow_accumulation_path='files.flow_accumulation_path',
-                slope_path='files.slope_path',
+                flow_accumulation_path='paths.flow_accumulation_path',
+                slope_path='paths.slope_path',
                 l_max='vals.l_max',
-                target_ls_factor_path='files.ls_path'),
-            target_path_list=['files.ls_path'],
+                target_ls_factor_path='paths.ls_path'),
+            target_path_list=['paths.ls_path'],
             dependent_task_list=['vals.flow_accumulation_task', 'slope_task'],
             task_name='ls factor calculation'
         ),
@@ -1410,10 +1416,10 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.raster_map,
             kwarg_keys=dict(
                 op=add_drainage_op,
-                rasters=['files.stream_path', 'files.masked_drainage_path'],
-                target_path='files.stream_and_drainage_path',
+                rasters=['paths.stream_path', 'paths.masked_drainage_path'],
+                target_path='paths.stream_and_drainage_path',
                 target_dtype=numpy.uint8),
-            target_path_list=['files.stream_and_drainage_path'],
+            target_path_list=['paths.stream_and_drainage_path'],
             dependent_task_list=['vals.stream_task', 'mask_drainage'],
             task_name='add drainage'
         ),
@@ -1422,10 +1428,10 @@ MODEL_SPEC = spec.ModelSpec(
             func=_calculate_w,
             kwarg_keys=dict(
                 lulc_to_c='vals.lulc_to_c',
-                lulc_path='files.masked_lulc_path',
-                w_factor_path='files.w_path',
-                out_thresholded_w_factor_path='files.thresholded_w_path'),
-            target_path_list=['files.w_path', 'files.thresholded_w_path'],
+                lulc_path='paths.masked_lulc_path',
+                w_factor_path='paths.w_path',
+                out_thresholded_w_factor_path='paths.thresholded_w_path'),
+            target_path_list=['paths.w_path', 'paths.thresholded_w_path'],
             dependent_task_list=['mask_lulc'],
             task_name='calculate W'
         ),
@@ -1434,9 +1440,9 @@ MODEL_SPEC = spec.ModelSpec(
             func=_calculate_cp,
             kwarg_keys=dict(
                 lulc_to_cp='vals.lulc_to_cp',
-                lulc_path='files.masked_lulc_path',
-                cp_factor_path='files.cp_factor_path'),
-            target_path_list=['files.cp_factor_path'],
+                lulc_path='paths.masked_lulc_path',
+                cp_factor_path='paths.cp_factor_path'),
+            target_path_list=['paths.cp_factor_path'],
             dependent_task_list=['mask_lulc'],
             task_name='calculate CP'
         ),
@@ -1444,12 +1450,12 @@ MODEL_SPEC = spec.ModelSpec(
             key='rkls_task',
             func=_calculate_rkls,
             kwarg_keys=dict(
-                ls_factor_path='files.ls_path',
-                erosivity_path='files.masked_erosivity_path',
-                erodibility_path='files.masked_erodibility_path',
+                ls_factor_path='paths.ls_path',
+                erosivity_path='paths.masked_erosivity_path',
+                erodibility_path='paths.masked_erodibility_path',
                 stream_path='vals.drainage_raster_path',
-                rkls_path='files.rkls_path'),
-            target_path_list=['files.rkls_path'],
+                rkls_path='paths.rkls_path'),
+            target_path_list=['paths.rkls_path'],
             dependent_task_list=[
                 'mask_erosivity', 'mask_erodibility',
                 'vals.drainage_task', 'ls_factor_task'],
@@ -1460,9 +1466,9 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.raster_map,
             kwarg_keys=dict(
                 op=usle_op,
-                rasters=['files.rkls_path', 'files.cp_factor_path'],
-                target_path='files.usle_path'),
-            target_path_list=['files.usle_path'],
+                rasters=['paths.rkls_path', 'paths.cp_factor_path'],
+                target_path='paths.usle_path'),
+            target_path_list=['paths.usle_path'],
             dependent_task_list=['rkls_task', 'cp_task'],
             task_name='calculate USLE'
         ),
@@ -1470,13 +1476,13 @@ MODEL_SPEC = spec.ModelSpec(
             key='w_bar_task',
             func=_calculate_bar_factor,
             kwarg_keys=dict(
-                flow_direction_path='files.flow_direction_path',
-                factor_path='files.thresholded_w_path',
-                flow_accumulation_path='files.flow_accumulation_path',
-                accumulation_path='files.w_accumulation_path',
-                out_bar_path='files.w_bar_path',
+                flow_direction_path='paths.flow_direction_path',
+                factor_path='paths.thresholded_w_path',
+                flow_accumulation_path='paths.flow_accumulation_path',
+                accumulation_path='paths.w_accumulation_path',
+                out_bar_path='paths.w_bar_path',
                 flow_dir_algorithm='args.flow_dir_algorithm'),
-            target_path_list=['files.w_accumulation_path', 'files.w_bar_path'],
+            target_path_list=['paths.w_accumulation_path', 'paths.w_bar_path'],
             dependent_task_list=[
                 'threshold_w_task', 'vals.flow_accumulation_task', 'vals.flow_dir_task'],
             task_name=f'calculate w_bar'
@@ -1485,13 +1491,13 @@ MODEL_SPEC = spec.ModelSpec(
             key='s_bar_task',
             func=_calculate_bar_factor,
             kwarg_keys=dict(
-                flow_direction_path='files.flow_direction_path',
-                factor_path='files.thresholded_slope_path',
-                flow_accumulation_path='files.flow_accumulation_path',
-                accumulation_path='files.s_accumulation_path',
-                out_bar_path='files.s_bar_path',
+                flow_direction_path='paths.flow_direction_path',
+                factor_path='paths.thresholded_slope_path',
+                flow_accumulation_path='paths.flow_accumulation_path',
+                accumulation_path='paths.s_accumulation_path',
+                out_bar_path='paths.s_bar_path',
                 flow_dir_algorithm='args.flow_dir_algorithm'),
-            target_path_list=['files.s_accumulation_path', 'files.s_bar_path'],
+            target_path_list=['paths.s_accumulation_path', 'paths.s_bar_path'],
             dependent_task_list=[
                 'threshold_slope_task', 'vals.flow_accumulation_task', 'vals.flow_dir_task'],
             task_name=f'calculate s_bar'
@@ -1500,11 +1506,11 @@ MODEL_SPEC = spec.ModelSpec(
             key='d_up_task',
             func=_calculate_d_up,
             kwarg_keys=dict(
-                w_bar_path='files.w_bar_path',
-                s_bar_path='files.s_bar_path',
-                flow_accumulation_path='files.flow_accumulation_path',
-                out_d_up_path='files.d_up_path'),
-            target_path_list=['files.d_up_path'],
+                w_bar_path='paths.w_bar_path',
+                s_bar_path='paths.s_bar_path',
+                flow_accumulation_path='paths.flow_accumulation_path',
+                out_d_up_path='paths.d_up_path'),
+            target_path_list=['paths.d_up_path'],
             dependent_task_list=['s_bar_task', 'w_bar_task', 'vals.flow_accumulation_task'],
             task_name='calculate Dup'
         ),
@@ -1513,10 +1519,10 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.raster_map,
             kwarg_keys=dict(
                 op=inverse_ws_op,
-                rasters=['files.thresholded_w_path',
-                         'files.thresholded_slope_path'],
-                target_path='files.ws_inverse_path'),
-            target_path_list=['files.ws_inverse_path'],
+                rasters=['paths.thresholded_w_path',
+                         'paths.thresholded_slope_path'],
+                target_path='paths.ws_inverse_path'),
+            target_path_list=['paths.ws_inverse_path'],
             dependent_task_list=['threshold_slope_task', 'threshold_w_task'],
             task_name='calculate inverse ws factor'
         ),
@@ -1526,11 +1532,11 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.routing.distance_to_channel_d8,
             run_if="args['flow_dir_algorithm'] == 'D8'",
             kwarg_keys=dict(
-                flow_dir_d8_raster_path_band=('files.flow_direction_path', 1),
+                flow_dir_d8_raster_path_band=('paths.flow_direction_path', 1),
                 channel_raster_path_band=('vals.drainage_raster_path', 1),
-                target_distance_to_channel_raster_path='files.d_dn_path',
-                weight_raster_path_band=('files.ws_inverse_path', 1)),
-            target_path_list=['files.d_dn_path'],
+                target_distance_to_channel_raster_path='paths.d_dn_path',
+                weight_raster_path_band=('paths.ws_inverse_path', 1)),
+            target_path_list=['paths.d_dn_path'],
             dependent_task_list=[
                 'vals.flow_dir_task', 'vals.drainage_task',
                 'inverse_ws_factor_task'],
@@ -1541,11 +1547,11 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.routing.distance_to_channel_mfd,
             run_if="args['flow_dir_algorithm'] == 'MFD'",
             kwarg_keys=dict(
-                flow_dir_mfd_raster_path_band=('files.flow_direction_path', 1),
+                flow_dir_mfd_raster_path_band=('paths.flow_direction_path', 1),
                 channel_raster_path_band=('vals.drainage_raster_path', 1),
-                target_distance_to_channel_raster_path='files.d_dn_path',
-                weight_raster_path_band=('files.ws_inverse_path', 1)),
-            target_path_list=['files.d_dn_path'],
+                target_distance_to_channel_raster_path='paths.d_dn_path',
+                weight_raster_path_band=('paths.ws_inverse_path', 1)),
+            target_path_list=['paths.d_dn_path'],
             dependent_task_list=[
                 'vals.flow_dir_task', 'vals.drainage_task',
                 'inverse_ws_factor_task'],
@@ -1556,10 +1562,10 @@ MODEL_SPEC = spec.ModelSpec(
             key='ic_task',
             func=_calculate_ic,
             kwarg_keys=dict(
-                d_up_path='files.d_up_path',
-                d_dn_path='files.d_dn_path',
-                out_ic_factor_path='files.ic_path'),
-            target_path_list=['files.ic_path'],
+                d_up_path='paths.d_up_path',
+                d_dn_path='paths.d_dn_path',
+                out_ic_factor_path='paths.ic_path'),
+            target_path_list=['paths.ic_path'],
             dependent_task_list=['d_up_task', 'vals.d_dn_task'],
             task_name='calculate ic'
         ),
@@ -1570,10 +1576,10 @@ MODEL_SPEC = spec.ModelSpec(
                 k_factor='vals.k_param',
                 ic_0='vals.ic_0_param',
                 sdr_max='vals.sdr_max',
-                ic_path='files.ic_path',
+                ic_path='paths.ic_path',
                 stream_path='vals.drainage_raster_path',
-                out_sdr_path='files.sdr_path'),
-            target_path_list=['files.sdr_path'],
+                out_sdr_path='paths.sdr_path'),
+            target_path_list=['paths.sdr_path'],
             dependent_task_list=['ic_task'],
             task_name='calculate sdr'
         ),
@@ -1582,9 +1588,9 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.raster_map,
             kwarg_keys=dict(
                 op=numpy.multiply,  # export = USLE * SDR
-                rasters=['files.usle_path', 'files.sdr_path'],
-                target_path='files.sed_export_path'),
-            target_path_list=['files.sed_export_path'],
+                rasters=['paths.usle_path', 'paths.sdr_path'],
+                target_path='paths.sed_export_path'),
+            target_path_list=['paths.sed_export_path'],
             dependent_task_list=['usle_task', 'sdr_task'],
             task_name='calculate sed export'
         ),
@@ -1592,11 +1598,11 @@ MODEL_SPEC = spec.ModelSpec(
             key='e_prime_task',
             func=_calculate_e_prime,
             kwarg_keys=dict(
-                usle_path='files.usle_path',
-                sdr_path='files.sdr_path',
+                usle_path='paths.usle_path',
+                sdr_path='paths.sdr_path',
                 stream_path='vals.drainage_raster_path',
-                target_e_prime='files.e_prime_path'),
-            target_path_list=['files.e_prime_path'],
+                target_e_prime='paths.e_prime_path'),
+            target_path_list=['paths.e_prime_path'],
             dependent_task_list=['usle_task', 'sdr_task'],
             task_name='calculate export prime'
         ),
@@ -1604,14 +1610,14 @@ MODEL_SPEC = spec.ModelSpec(
             key='sed_deposition_task',
             func=sdr_core.calculate_sediment_deposition,
             kwarg_keys=dict(
-                flow_direction_path='files.flow_direction_path',
-                e_prime_path='files.e_prime_path',
-                f_path='files.f_path',
-                sdr_path='files.sdr_path',
-                target_sediment_deposition_path='files.sed_deposition_path',
+                flow_direction_path='paths.flow_direction_path',
+                e_prime_path='paths.e_prime_path',
+                f_path='paths.f_path',
+                sdr_path='paths.sdr_path',
+                target_sediment_deposition_path='paths.sed_deposition_path',
                 algorithm='args.flow_dir_algorithm'),
             dependent_task_list=['e_prime_task', 'sdr_task', 'vals.flow_dir_task'],
-            target_path_list=['files.sed_deposition_path', 'files.f_path'],
+            target_path_list=['paths.sed_deposition_path', 'paths.f_path'],
             task_name='sediment deposition'
         ),
         spec.Task(
@@ -1619,10 +1625,10 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.raster_map,
             kwarg_keys=dict(
                 op=numpy.subtract,  # avoided erosion = rkls - usle
-                rasters=['files.rkls_path', 'files.usle_path'],
-                target_path='files.avoided_erosion_path'),
+                rasters=['paths.rkls_path', 'paths.usle_path'],
+                target_path='paths.avoided_erosion_path'),
             dependent_task_list=['rkls_task', 'usle_task'],
-            target_path_list=['files.avoided_erosion_path'],
+            target_path_list=['paths.avoided_erosion_path'],
             task_name='calculate avoided erosion'
         ),
         spec.Task(
@@ -1630,23 +1636,23 @@ MODEL_SPEC = spec.ModelSpec(
             func=pygeoprocessing.raster_map,
             kwarg_keys=dict(
                 op=_avoided_export_op,
-                rasters=['files.avoided_erosion_path',
-                         'files.sdr_path',
-                         'files.sed_deposition_path'],
-                target_path='files.avoided_export_path'),
+                rasters=['paths.avoided_erosion_path',
+                         'paths.sdr_path',
+                         'paths.sed_deposition_path'],
+                target_path='paths.avoided_export_path'),
             dependent_task_list=['avoided_erosion_task', 'sdr_task',
                                  'sed_deposition_task'],
-            target_path_list=['files.avoided_export_path'],
+            target_path_list=['paths.avoided_export_path'],
             task_name='calculate total retention'
         ),
         spec.Task(
             key='what_drains_to_stream_task',
             func=_calculate_what_drains_to_stream,
             kwarg_keys=dict(
-                flow_dir_path='files.flow_direction_path',
-                dist_to_channel_path='files.d_dn_path',
-                target_mask_path='files.drainage_mask'),
-            target_path_list=['files.drainage_mask'],
+                flow_dir_path='paths.flow_direction_path',
+                dist_to_channel_path='paths.d_dn_path',
+                target_mask_path='paths.drainage_mask'),
+            target_path_list=['paths.drainage_mask'],
             dependent_task_list=['vals.flow_dir_task', 'vals.d_dn_task'],
             task_name='write mask of what drains to stream'
         ),
@@ -1655,13 +1661,13 @@ MODEL_SPEC = spec.ModelSpec(
             func=_generate_report,
             kwarg_keys=dict(
                 watersheds_path='args.watersheds_path',
-                usle_path='files.usle_path',
-                sed_export_path='files.sed_export_path',
-                sed_deposition_path='files.sed_deposition_path',
-                avoided_export_path='files.avoided_export_path',
-                avoided_erosion_path='files.avoided_erosion_path',
-                watershed_results_sdr_path='files.watershed_results_sdr_path'),
-            target_path_list=['files.watershed_results_sdr_path'],
+                usle_path='paths.usle_path',
+                sed_export_path='paths.sed_export_path',
+                sed_deposition_path='paths.sed_deposition_path',
+                avoided_export_path='paths.avoided_export_path',
+                avoided_erosion_path='paths.avoided_erosion_path',
+                watershed_results_sdr_path='paths.watershed_results_sdr_path'),
+            target_path_list=['paths.watershed_results_sdr_path'],
             dependent_task_list=[
                 'usle_task', 'sed_export_task', 'avoided_export_task',
                 'sed_deposition_task', 'avoided_erosion_task'],
@@ -1715,15 +1721,6 @@ MODEL_SPEC = spec.ModelSpec(
         'drainage_mask': 'what_drains_to_stream.tif',
     }
 )
-
-# Target nodata is for general rasters that are positive, and _IC_NODATA are
-# for rasters that are any range
-_TARGET_NODATA = -1.0
-_BYTE_NODATA = 255
-_IC_NODATA = float(numpy.finfo('float32').min)
-
-
-
 
 def execute(args):
     """Sediment Delivery Ratio.
