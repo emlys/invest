@@ -19,7 +19,6 @@ from osgeo import ogr
 
 from .. import gettext
 from .. import spec
-from .. import urban_nature_access
 from .. import utils
 from .. import validation
 from ..unit_registry import u
@@ -27,621 +26,11 @@ from . import sdr_core
 
 LOGGER = logging.getLogger(__name__)
 
-MODEL_SPEC = spec.ModelSpec(
-    model_id="sdr",
-    model_title=gettext("Sediment Delivery Ratio"),
-    userguide="sdr.html",
-    validate_spatial_overlap=True,
-    different_projections_ok=False,
-    aliases=(),
-    input_field_order=[
-        ["workspace_dir", "results_suffix"],
-        ["dem_path", "erosivity_path", "erodibility_path"],
-        ["lulc_path", "biophysical_table_path"],
-        ["watersheds_path", "drainage_path"],
-        ["flow_dir_algorithm", "threshold_flow_accumulation", "k_param",
-         "sdr_max", "ic_0_param", "l_max"]
-    ],
-    inputs=[
-        spec.WORKSPACE,
-        spec.SUFFIX,
-        spec.N_WORKERS,
-        spec.PROJECTED_DEM,
-        spec.SingleBandRasterInput(
-            id="erosivity_path",
-            name=gettext("erosivity"),
-            about=gettext(
-                "Map of rainfall erosivity, reflecting the intensity and duration of"
-                " rainfall in the area of interest."
-            ),
-            data_type=float,
-            units=u.megajoule * u.millimeter / (u.hectare * u.hour * u.year),
-            projected=True
-        ),
-        spec.SingleBandRasterInput(
-            id="erodibility_path",
-            name=gettext("soil erodibility"),
-            about=gettext(
-                "Map of soil erodibility, the susceptibility of soil particles to"
-                " detachment and transport by rainfall and runoff."
-            ),
-            data_type=float,
-            units=u.metric_ton * u.hectare * u.hour/ (u.hectare * u.megajoule * u.millimeter),
-            projected=True
-        ),
-        spec.SingleBandRasterInput(
-            id="lulc_path",
-            name=gettext("land use/land cover"),
-            about=gettext(
-                "Map of land use/land cover codes. Each land use/land cover type must be"
-                " assigned a unique integer code. All values in this raster must have"
-                " corresponding entries in the Biophysical Table."
-            ),
-            data_type=int,
-            units=None,
-            projected=True
-        ),
-        spec.VectorInput(
-            id="watersheds_path",
-            name=gettext("Watersheds"),
-            about=gettext(
-                "Map of the boundaries of the watershed(s) over which to aggregate"
-                " results. Each watershed should contribute to a point of interest where"
-                " water quality will be analyzed."
-            ),
-            geometry_types={"POLYGON", "MULTIPOLYGON"},
-            fields=[],
-            projected=True
-        ),
-        spec.CSVInput(
-            id="biophysical_table_path",
-            name=gettext("biophysical table"),
-            about=gettext(
-                "A table mapping each LULC code to biophysical properties of that LULC"
-                " class. All values in the LULC raster must have corresponding entries in"
-                " this table."
-            ),
-            columns=[
-                spec.LULC_TABLE_COLUMN,
-                spec.RatioInput(
-                    id="usle_c",
-                    about=gettext("Cover-management factor for the USLE"),
-                    units=None
-                ),
-                spec.RatioInput(
-                    id="usle_p",
-                    about=gettext("Support practice factor for the USLE"),
-                    units=None
-                )
-            ],
-            index_col="lucode"
-        ),
-        spec.THRESHOLD_FLOW_ACCUMULATION,
-        spec.NumberInput(
-            id="k_param",
-            name=gettext("Borselli k parameter"),
-            about=gettext("Borselli k parameter."),
-            units=u.none
-        ),
-        spec.RatioInput(
-            id="sdr_max",
-            name=gettext("maximum SDR value"),
-            about=gettext("The maximum SDR value that a pixel can have."),
-            units=None
-        ),
-        spec.NumberInput(
-            id="ic_0_param",
-            name=gettext("Borselli IC0 parameter"),
-            about=gettext("Borselli IC0 parameter."),
-            units=u.none
-        ),
-        spec.NumberInput(
-            id="l_max",
-            name=gettext("maximum l value"),
-            about=gettext(
-                "The maximum allowed value of the slope length parameter (L) in the LS"
-                " factor."
-            ),
-            units=u.none,
-            expression="value > 0"
-        ),
-        spec.SingleBandRasterInput(
-            id="drainage_path",
-            name=gettext("drainages"),
-            about=gettext(
-                "Map of locations of artificial drainages that drain to the watershed."
-                " Pixels with 1 are drainages and are treated like streams. Pixels with 0"
-                " are not drainages."
-            ),
-            required=False,
-            data_type=int,
-            units=None,
-            projected=None
-        ),
-        spec.FLOW_DIR_ALGORITHM
-    ],
-    outputs=[
-        spec.SingleBandRasterOutput(
-            id="avoided_erosion.tif",
-            about=gettext(
-                "The contribution of vegetation to keeping soil from eroding from each"
-                " pixel. (Eq. (82))"
-            ),
-            data_type=float,
-            units=u.metric_ton / u.hectare
-        ),
-        spec.SingleBandRasterOutput(
-            id="avoided_export.tif",
-            about=gettext(
-                "The contribution of vegetation to keeping erosion from entering a"
-                " stream. This combines local/on-pixel sediment retention with trapping"
-                " of erosion from upslope of the pixel. (Eq. (83))"
-            ),
-            data_type=float,
-            units=u.metric_ton / u.hectare
-        ),
-        spec.SingleBandRasterOutput(
-            id="rkls.tif",
-            about=gettext(
-                "Total potential soil loss per pixel in the original land cover from the"
-                " RKLS equation. Equivalent to the soil loss for bare soil. (Eq. (68),"
-                " without applying the C or P factors)."
-            ),
-            data_type=float,
-            units=u.metric_ton / u.hectare
-        ),
-        spec.SingleBandRasterOutput(
-            id="sed_deposition.tif",
-            about=gettext(
-                "The total amount of sediment deposited on the pixel from upslope sources"
-                " as a result of trapping. (Eq. (80))"
-            ),
-            data_type=float,
-            units=u.metric_ton / u.hectare
-        ),
-        spec.SingleBandRasterOutput(
-            id="sed_export.tif",
-            about=gettext(
-                "The total amount of sediment exported from each pixel that reaches the"
-                " stream. (Eq. (76))"
-            ),
-            data_type=float,
-            units=u.metric_ton / u.hectare
-        ),
-        spec.STREAM.model_copy(update=dict(id="stream.tif")),
-        spec.SingleBandRasterOutput(
-            id="stream_and_drainage.tif",
-            about=gettext(
-                "This raster is the union of that layer with the calculated stream"
-                " layer(Eq. (85)). Values of 1 represent streams, values of 0 are"
-                " non-stream pixels."
-            ),
-            created_if="drainage_path",
-            data_type=int,
-            units=None
-        ),
-        spec.SingleBandRasterOutput(
-            id="usle.tif",
-            about=gettext(
-                "Total potential soil loss per hectare in the original land cover"
-                " calculated from the USLE equation. (Eq. (68))"
-            ),
-            data_type=float,
-            units=u.metric_ton / u.hectare
-        ),
-        spec.VectorOutput(
-            id="watershed_results_sdr.shp",
-            about=gettext("Table containing biophysical values for each watershed"),
-            geometry_types={"POLYGON", "MULTIPOLYGON"},
-            fields=[
-                spec.NumberOutput(
-                    id="sed_export",
-                    about=gettext(
-                        "Total amount of sediment exported to the stream per watershed."
-                        " (Eq. (77) with sum calculated over the watershed area)"
-                    ),
-                    units=u.metric_ton
-                ),
-                spec.NumberOutput(
-                    id="usle_tot",
-                    about=gettext(
-                        "Total amount of potential soil loss in each watershed calculated"
-                        " by the USLE equation. (Sum of USLE from (68) over the watershed"
-                        " area)"
-                    ),
-                    units=u.metric_ton
-                ),
-                spec.NumberOutput(
-                    id="avoid_exp",
-                    about=gettext("The sum of avoided export in the watershed."),
-                    units=u.metric_ton
-                ),
-                spec.NumberOutput(
-                    id="avoid_eros",
-                    about=gettext("The sum of avoided local erosion in the watershed"),
-                    units=u.metric_ton
-                ),
-                spec.NumberOutput(
-                    id="sed_dep",
-                    about=gettext(
-                        "Total amount of sediment deposited on the landscape in each"
-                        " watershed, which does not enter the stream."
-                    ),
-                    units=u.metric_ton
-                )
-            ]
-        ),
-        spec.DirectoryOutput(
-            id="intermediate_outputs",
-            about=None,
-            contents=[
-                spec.SingleBandRasterOutput(
-                    id="cp.tif",
-                    about=gettext(
-                        "CP factor derived by mapping usle_c and usle_p from the"
-                        " biophysical table to the LULC raster."
-                    ),
-                    data_type=float,
-                    units=None
-                ),
-                spec.SingleBandRasterOutput(
-                    id="d_dn.tif",
-                    about=gettext(
-                        "Downslope factor of the index of connectivity (Eq. (74))"
-                    ),
-                    data_type=float,
-                    units=u.none
-                ),
-                spec.SingleBandRasterOutput(
-                    id="d_up.tif",
-                    about=gettext(
-                        "Upslope factor of the index of connectivity (Eq. (73))"
-                    ),
-                    data_type=float,
-                    units=u.none
-                ),
-                spec.SingleBandRasterOutput(
-                    id="e_prime.tif",
-                    about=gettext(
-                        "Sediment downslope deposition, the amount of sediment from a"
-                        " given pixel that does not reach a stream (Eq. (78))"
-                    ),
-                    data_type=float,
-                    units=u.metric_ton / u.hectare / u.year
-                ),
-                spec.SingleBandRasterOutput(
-                    id="f.tif",
-                    about=gettext(
-                        "Map of sediment flux for sediment that does not reach the stream"
-                        " (Eq. (81))"
-                    ),
-                    data_type=float,
-                    units=u.metric_ton / u.hectare / u.year
-                ),
-                spec.FLOW_ACCUMULATION.model_copy(update=dict(id="flow_accumulation.tif")),
-                spec.FLOW_DIRECTION.model_copy(update=dict(id="flow_direction.tif")),
-                spec.SingleBandRasterOutput(
-                    id="ic.tif",
-                    about=gettext("Index of connectivity (Eq. (70))"),
-                    data_type=float,
-                    units=u.none
-                ),
-                spec.SingleBandRasterOutput(
-                    id="ls.tif",
-                    about=gettext("LS factor for USLE (Eq. (69))"),
-                    data_type=float,
-                    units=u.none
-                ),
-                spec.FILLED_DEM.model_copy(update=dict(id="pit_filled_dem.tif")),
-                spec.SingleBandRasterOutput(
-                    id="s_accumulation.tif",
-                    about=gettext(
-                        "Flow accumulation weighted by the thresholded slope. Used in"
-                        " calculating s_bar."
-                    ),
-                    data_type=float,
-                    units=u.none
-                ),
-                spec.SingleBandRasterOutput(
-                    id="s_bar.tif",
-                    about=gettext(
-                        "Mean thresholded slope gradient of the upslope contributing area"
-                        " (in eq. (73))"
-                    ),
-                    data_type=float,
-                    units=u.none
-                ),
-                spec.SingleBandRasterOutput(
-                    id="sdr_factor.tif",
-                    about=gettext("Sediment delivery ratio (Eq. (75))"),
-                    data_type=float,
-                    units=None
-                ),
-                spec.SLOPE,
-                spec.SingleBandRasterOutput(
-                    id="slope_threshold.tif",
-                    about=gettext(
-                        "Percent slope, thresholded to be no less than 0.005 and no"
-                        " greater than 1 (eq. (71)). 1 is equivalent to a 45 degree"
-                        " slope."
-                    ),
-                    data_type=float,
-                    units=None
-                ),
-                spec.SingleBandRasterOutput(
-                    id="w_accumulation.tif",
-                    about=gettext(
-                        "Flow accumulation weighted by the thresholded cover-management"
-                        " factor. Used in calculating w_bar."
-                    ),
-                    data_type=float,
-                    units=u.none
-                ),
-                spec.SingleBandRasterOutput(
-                    id="w_bar.tif",
-                    about=gettext(
-                        "Mean thresholded cover-management factor for upslope"
-                        " contributing area (in eq. (73))"
-                    ),
-                    data_type=float,
-                    units=None
-                ),
-                spec.SingleBandRasterOutput(
-                    id="w.tif",
-                    about=gettext(
-                        "Cover-management factor derived by mapping usle_c from the"
-                        " biophysical table to the LULC raster."
-                    ),
-                    data_type=float,
-                    units=None
-                ),
-                spec.SingleBandRasterOutput(
-                    id="w_threshold.tif",
-                    about=gettext(
-                        "Cover-management factor thresholded to be no less than 0.001"
-                        " (eq. (72))"
-                    ),
-                    data_type=float,
-                    units=None
-                ),
-                spec.SingleBandRasterOutput(
-                    id="weighted_avg_aspect.tif",
-                    about=gettext(
-                        "Average aspect weighted by flow direction (in eq. (69))"
-                    ),
-                    data_type=float,
-                    units=u.none
-                ),
-                spec.SingleBandRasterOutput(
-                    id="what_drains_to_stream.tif",
-                    about=gettext(
-                        "Map of which pixels drain to a stream. A value of 1 means that"
-                        " at least some of the runoff from that pixel drains to a stream"
-                        " in stream.tif. A value of 0 means that it does not drain at all"
-                        " to any stream in stream.tif."
-                    ),
-                    data_type=int,
-                    units=None
-                ),
-                spec.SingleBandRasterOutput(
-                    id="ws_inverse.tif",
-                    about=gettext(
-                        "Inverse of the thresholded cover-management factor times the"
-                        " thresholded slope (in eq. (74))"
-                    ),
-                    data_type=float,
-                    units=None
-                ),
-                spec.SingleBandRasterOutput(
-                    id="aligned_dem.tif",
-                    about=gettext(
-                        "Copy of the input DEM, clipped to the extent of the other raster"
-                        " inputs."
-                    ),
-                    data_type=float,
-                    units=u.meter
-                ),
-                spec.SingleBandRasterOutput(
-                    id="aligned_drainage.tif",
-                    about=gettext(
-                        "Copy of the input drainage map, clipped to the extent of the"
-                        " other raster inputs and aligned to the DEM."
-                    ),
-                    data_type=int,
-                    units=None
-                ),
-                spec.SingleBandRasterOutput(
-                    id="aligned_erodibility.tif",
-                    about=gettext(
-                        "Copy of the input erodibility map, clipped to the extent of the"
-                        " other raster inputs and aligned to the DEM."
-                    ),
-                    data_type=float,
-                    units=u.metric_ton * u.hectare * u.hour / (u.hectare * u.megajoule * u.millimeter)
-                ),
-                spec.SingleBandRasterOutput(
-                    id="aligned_erosivity.tif",
-                    about=gettext(
-                        "Copy of the input erosivity map, clipped to the extent of the"
-                        " other raster inputs and aligned to the DEM."
-                    ),
-                    data_type=float,
-                    units=u.megajoule * u.millimeter / (u.hectare * u.hour * u.year)
-                ),
-                spec.SingleBandRasterOutput(
-                    id="aligned_lulc.tif",
-                    about=gettext(
-                        "Copy of the input Land Use Land Cover map, clipped to the extent"
-                        " of the other raster inputs and aligned to the DEM."
-                    ),
-                    data_type=int,
-                    units=None
-                ),
-                spec.SingleBandRasterOutput(
-                    id="mask.tif",
-                    about=gettext(
-                        "A raster aligned to the DEM and clipped to the extent of the"
-                        " other raster inputs. Pixel values indicate where a nodata value"
-                        " exists in the stack of aligned rasters (pixel value of 0), or"
-                        " if all values in the stack of rasters at this pixel location"
-                        " are valid."
-                    ),
-                    data_type=int,
-                    units=None
-                ),
-                spec.SingleBandRasterOutput(
-                    id="masked_dem.tif",
-                    about=gettext(
-                        "A copy of the aligned DEM, masked using the mask raster."
-                    ),
-                    data_type=float,
-                    units=u.meter
-                ),
-                spec.SingleBandRasterOutput(
-                    id="masked_drainage.tif",
-                    about=gettext(
-                        "A copy of the aligned drainage map, masked using the mask"
-                        " raster."
-                    ),
-                    data_type=int,
-                    units=None
-                ),
-                spec.SingleBandRasterOutput(
-                    id="masked_erodibility.tif",
-                    about=gettext(
-                        "A copy of the aligned erodibility map, masked using the mask"
-                        " raster."
-                    ),
-                    data_type=float,
-                    units=u.metric_ton * u.hectare * u.hour / (u.hectare * u.megajoule * u.millimeter)
-                ),
-                spec.SingleBandRasterOutput(
-                    id="masked_erosivity.tif",
-                    about=gettext(
-                        "A copy of the aligned erosivity map, masked using the mask"
-                        " raster."
-                    ),
-                    data_type=float,
-                    units=u.megajoule * u.millimeter / (u.hectare * u.hour * u.year)
-                ),
-                spec.SingleBandRasterOutput(
-                    id="masked_lulc.tif",
-                    about=gettext(
-                        "A copy of the aligned Land Use Land Cover map, masked using the"
-                        " mask raster."
-                    ),
-                    data_type=int,
-                    units=None
-                )
-            ]
-        ),
-        spec.TASKGRAPH_DIR
-    ]
-)
+def preprocess(args, f_reg):
 
-_OUTPUT_BASE_FILES = {
-    'rkls_path': 'rkls.tif',
-    'sed_export_path': 'sed_export.tif',
-    'sed_deposition_path': 'sed_deposition.tif',
-    'stream_and_drainage_path': 'stream_and_drainage.tif',
-    'stream_path': 'stream.tif',
-    'usle_path': 'usle.tif',
-    'watershed_results_sdr_path': 'watershed_results_sdr.shp',
-    'avoided_export_path': 'avoided_export.tif',
-    'avoided_erosion_path': 'avoided_erosion.tif',
-}
-
-INTERMEDIATE_DIR_NAME = 'intermediate_outputs'
-
-_INTERMEDIATE_BASE_FILES = {
-    'aligned_dem_path': 'aligned_dem.tif',
-    'aligned_drainage_path': 'aligned_drainage.tif',
-    'aligned_erodibility_path': 'aligned_erodibility.tif',
-    'aligned_erosivity_path': 'aligned_erosivity.tif',
-    'aligned_lulc_path': 'aligned_lulc.tif',
-    'mask_path': 'mask.tif',
-    'masked_dem_path': 'masked_dem.tif',
-    'masked_drainage_path': 'masked_drainage.tif',
-    'masked_erodibility_path': 'masked_erodibility.tif',
-    'masked_erosivity_path': 'masked_erosivity.tif',
-    'masked_lulc_path': 'masked_lulc.tif',
-    'cp_factor_path': 'cp.tif',
-    'd_dn_path': 'd_dn.tif',
-    'd_up_path': 'd_up.tif',
-    'f_path': 'f.tif',
-    'flow_accumulation_path': 'flow_accumulation.tif',
-    'flow_direction_path': 'flow_direction.tif',
-    'ic_path': 'ic.tif',
-    'ls_path': 'ls.tif',
-    'pit_filled_dem_path': 'pit_filled_dem.tif',
-    's_accumulation_path': 's_accumulation.tif',
-    's_bar_path': 's_bar.tif',
-    'sdr_path': 'sdr_factor.tif',
-    'slope_path': 'slope.tif',
-    'thresholded_slope_path': 'slope_threshold.tif',
-    'thresholded_w_path': 'w_threshold.tif',
-    'w_accumulation_path': 'w_accumulation.tif',
-    'w_bar_path': 'w_bar.tif',
-    'w_path': 'w.tif',
-    'ws_inverse_path': 'ws_inverse.tif',
-    'e_prime_path': 'e_prime.tif',
-    'drainage_mask': 'what_drains_to_stream.tif',
-}
-
-
-# Target nodata is for general rasters that are positive, and _IC_NODATA are
-# for rasters that are any range
-_TARGET_NODATA = -1.0
-_BYTE_NODATA = 255
-_IC_NODATA = float(numpy.finfo('float32').min)
-
-
-def execute(args):
-    """Sediment Delivery Ratio.
-
-    This function calculates the sediment export and retention of a landscape
-    using the sediment delivery ratio model described in the InVEST user's
-    guide.
-
-    Args:
-        args['workspace_dir'] (string): output directory for intermediate,
-            temporary, and final files
-        args['results_suffix'] (string): (optional) string to append to any
-            output file names
-        args['dem_path'] (string): path to a digital elevation raster
-        args['erosivity_path'] (string): path to rainfall erosivity index
-            raster
-        args['erodibility_path'] (string): a path to soil erodibility raster
-        args['lulc_path'] (string): path to land use/land cover raster
-        args['watersheds_path'] (string): path to vector of the watersheds
-        args['biophysical_table_path'] (string): path to CSV file with
-            biophysical information of each land use classes.  contain the
-            fields 'usle_c' and 'usle_p'
-        args['threshold_flow_accumulation'] (number): number of upslope pixels
-            on the dem to threshold to a stream.
-        args['k_param'] (number): k calibration parameter
-        args['sdr_max'] (number): max value the SDR
-        args['ic_0_param'] (number): ic_0 calibration parameter
-        args['drainage_path'] (string): (optional) path to drainage raster that
-            is used to add additional drainage areas to the internally
-            calculated stream layer
-        args['l_max'] (number): the maximum allowed value of the slope length
-            parameter (L) in the LS factor. If the calculated value of L
-            exceeds 'l_max' it will be clamped to this value.
-        args['n_workers'] (int): if present, indicates how many worker
-            processes should be used in parallel processing. -1 indicates
-            single process mode, 0 is single process but non-blocking mode,
-            and >= 1 is number of processes.
-
-    Returns:
-        None.
-
-    """
-    file_suffix = utils.make_suffix_string(args, 'results_suffix')
     biophysical_df = MODEL_SPEC.get_input(
         'biophysical_table_path').get_validated_dataframe(
         args['biophysical_table_path'])
-
     # Test to see if c or p values are outside of 0..1
     for key in ['usle_c', 'usle_p']:
         for lulc_code, row in biophysical_df.iterrows():
@@ -652,414 +41,63 @@ def execute(args):
                     f'column "{key}", lucode row "{lulc_code}", '
                     f'and has value "{row[key]}"')
 
-    intermediate_output_dir = os.path.join(
-        args['workspace_dir'], INTERMEDIATE_DIR_NAME)
-    output_dir = os.path.join(args['workspace_dir'])
-    utils.make_directories([output_dir, intermediate_output_dir])
-
-    f_reg = utils.build_file_registry(
-        [(_OUTPUT_BASE_FILES, output_dir),
-         (_INTERMEDIATE_BASE_FILES, intermediate_output_dir)], file_suffix)
-
-    try:
-        n_workers = int(args['n_workers'])
-    except (KeyError, ValueError, TypeError):
-        # KeyError when n_workers is not present in args
-        # ValueError when n_workers is an empty string.
-        # TypeError when n_workers is None.
-        n_workers = -1  # Synchronous mode.
-    task_graph = taskgraph.TaskGraph(
-        os.path.join(output_dir, 'taskgraph_cache'),
-        n_workers, reporting_interval=5.0)
-
-    base_list = []
-    aligned_list = []
-    masked_list = []
     input_raster_key_list = ['dem', 'lulc', 'erosivity', 'erodibility']
-    for file_key in input_raster_key_list:
-        base_list.append(args[f"{file_key}_path"])
-        aligned_list.append(f_reg[f"aligned_{file_key}_path"])
-        masked_list.append(f_reg[f"masked_{file_key}_path"])
+    base_list = [args[f"{file_key}_path"] for file_key in input_raster_key_list]
+    aligned_list = [f_reg[f"aligned_{file_key}_path"] for file_key in input_raster_key_list]
+
     # all continuous rasters can use bilinear, but lulc should be mode
     interpolation_list = ['bilinear', 'mode', 'bilinear', 'bilinear']
 
-    drainage_present = False
+    if args['flow_dir_algorithm'] == 'MFD':
+        d_dn_func = pygeoprocessing.routing.distance_to_channel_mfd
+        flow_dir_task = 'mfd_flow_dir_task'
+        flow_accumulation_task = 'mfd_flow_accumulation_task'
+        stream_task = 'mfd_stream_task'
+        d_dn_task = 'mfd_d_dn_task'
+    else:
+        d_dn_func = pygeoprocessing.routing.distance_to_channel_d8
+        flow_dir_task = 'd8_flow_dir_task'
+        flow_accumulation_task = 'd8_flow_accumulation_task'
+        stream_task = 'd8_stream_task'
+        d_dn_task = 'd8_d_dn_task'
+
     if 'drainage_path' in args and args['drainage_path'] != '':
-        drainage_present = True
         input_raster_key_list.append('drainage')
         base_list.append(args['drainage_path'])
         aligned_list.append(f_reg['aligned_drainage_path'])
-        masked_list.append(f_reg['masked_drainage_path'])
         interpolation_list.append('near')
+        drainage_raster_path = f_reg['stream_and_drainage_path']
+        drainage_task = 'drainage_task'
+    else:
+        drainage_raster_path = f_reg['stream_path']
+        drainage_task = stream_task
 
     dem_raster_info = pygeoprocessing.get_raster_info(args['dem_path'])
     min_pixel_size = numpy.min(numpy.abs(dem_raster_info['pixel_size']))
-    target_pixel_size = (min_pixel_size, -min_pixel_size)
 
-    target_sr_wkt = dem_raster_info['projection_wkt']
-    vector_mask_options = {
-        'mask_vector_path': args['watersheds_path'],
-    }
-    align_task = task_graph.add_task(
-        func=pygeoprocessing.align_and_resize_raster_stack,
-        args=(
-            base_list, aligned_list, interpolation_list,
-            target_pixel_size, 'intersection'),
-        kwargs={
-            'target_projection_wkt': target_sr_wkt,
-            'base_vector_path_list': (args['watersheds_path'],),
-            'raster_align_index': 0,
-            'vector_mask_options': vector_mask_options,
-        },
-        target_path_list=aligned_list,
-        task_name='align input rasters')
+    return dict(
+        biophysical_df=biophysical_df,
+        input_raster_key_list=input_raster_key_list,
+        base_list=base_list,
+        aligned_list=aligned_list,
+        interpolation_list=interpolation_list,
+        drainage_raster_path=drainage_raster_path,
+        drainage_task=drainage_task,
+        target_pixel_size=(min_pixel_size, -min_pixel_size),
+        target_sr_wkt=dem_raster_info['projection_wkt'],
+        lulc_to_c=biophysical_df['usle_c'].to_dict(),
+        lulc_to_cp=(biophysical_df['usle_c'] * biophysical_df['usle_p']).to_dict(),
+        d_dn_func=d_dn_func,
+        flow_dir_task=flow_dir_task,
+        flow_accumulation_task=flow_accumulation_task,
+        stream_task=stream_task,
+        d_dn_task=d_dn_task,
+        threshold_flow_accumulation=float(args['threshold_flow_accumulation']),
+        l_max=float(args['l_max']),
+        k_param=float(args['k_param']),
+        ic_0_param=float(args['ic_0_param']),
+        sdr_max=float(args['sdr_max']))
 
-    mutual_mask_task = task_graph.add_task(
-        func=pygeoprocessing.raster_map,
-        kwargs={
-            'op': _create_mutual_mask_op,
-            'rasters': aligned_list,
-            'target_path': f_reg['mask_path'],
-            'target_nodata': 0,
-        },
-        target_path_list=[f_reg['mask_path']],
-        dependent_task_list=[align_task],
-        task_name='create mask')
-
-    mask_tasks = {}  # use a dict so we can put these in a loop
-    for key, aligned_path, masked_path in zip(input_raster_key_list,
-                                              aligned_list, masked_list):
-        mask_tasks[f"masked_{key}"] = task_graph.add_task(
-            func=pygeoprocessing.raster_map,
-            kwargs={
-                'op': _mask_single_raster_op,
-                'rasters': [aligned_path, f_reg['mask_path']],
-                'target_path': masked_path,
-            },
-            target_path_list=[masked_path],
-            dependent_task_list=[mutual_mask_task, align_task],
-            task_name=f'mask {key}')
-
-    pit_fill_task = task_graph.add_task(
-        func=pygeoprocessing.routing.fill_pits,
-        args=(
-            (f_reg['masked_dem_path'], 1),
-            f_reg['pit_filled_dem_path']),
-        target_path_list=[f_reg['pit_filled_dem_path']],
-        dependent_task_list=[mask_tasks['masked_dem']],
-        task_name='fill pits')
-
-    slope_task = task_graph.add_task(
-        func=pygeoprocessing.calculate_slope,
-        args=(
-            (f_reg['pit_filled_dem_path'], 1),
-            f_reg['slope_path']),
-        dependent_task_list=[pit_fill_task],
-        target_path_list=[f_reg['slope_path']],
-        task_name='calculate slope')
-
-    threshold_slope_task = task_graph.add_task(
-        func=pygeoprocessing.raster_map,
-        kwargs=dict(
-            op=threshold_slope_op,
-            rasters=[f_reg['slope_path']],
-            target_path=f_reg['thresholded_slope_path']),
-        target_path_list=[f_reg['thresholded_slope_path']],
-        dependent_task_list=[slope_task],
-        task_name='threshold slope')
-
-    if args['flow_dir_algorithm'] == 'MFD':
-        flow_dir_task = task_graph.add_task(
-            func=pygeoprocessing.routing.flow_dir_mfd,
-            args=(
-                (f_reg['pit_filled_dem_path'], 1),
-                f_reg['flow_direction_path']),
-            target_path_list=[f_reg['flow_direction_path']],
-            dependent_task_list=[pit_fill_task],
-            task_name='flow direction calculation')
-
-        flow_accumulation_task = task_graph.add_task(
-            func=pygeoprocessing.routing.flow_accumulation_mfd,
-            args=(
-                (f_reg['flow_direction_path'], 1),
-                f_reg['flow_accumulation_path']),
-            target_path_list=[f_reg['flow_accumulation_path']],
-            dependent_task_list=[flow_dir_task],
-            task_name='flow accumulation calculation')
-
-        stream_task = task_graph.add_task(
-            func=pygeoprocessing.routing.extract_streams_mfd,
-            args=(
-                (f_reg['flow_accumulation_path'], 1),
-                (f_reg['flow_direction_path'], 1),
-                float(args['threshold_flow_accumulation']),
-                f_reg['stream_path']),
-            kwargs={'trace_threshold_proportion': 0.7},
-            target_path_list=[f_reg['stream_path']],
-            dependent_task_list=[flow_accumulation_task],
-            task_name='extract streams')
-
-        d_dn_func = pygeoprocessing.routing.distance_to_channel_mfd
-    else:
-
-        flow_dir_task = task_graph.add_task(
-            func=pygeoprocessing.routing.flow_dir_d8,
-            args=(
-                (f_reg['pit_filled_dem_path'], 1),
-                f_reg['flow_direction_path']),
-            target_path_list=[f_reg['flow_direction_path']],
-            dependent_task_list=[pit_fill_task],
-            task_name='flow direction calculation')
-
-        flow_accumulation_task = task_graph.add_task(
-            func=pygeoprocessing.routing.flow_accumulation_d8,
-            args=(
-                (f_reg['flow_direction_path'], 1),
-                f_reg['flow_accumulation_path']),
-            target_path_list=[f_reg['flow_accumulation_path']],
-            dependent_task_list=[flow_dir_task],
-            task_name='flow accumulation calculation')
-
-        stream_task = task_graph.add_task(
-            func=pygeoprocessing.routing.extract_streams_d8,
-            kwargs=dict(
-                flow_accum_raster_path_band=(f_reg['flow_accumulation_path'], 1),
-                flow_threshold=float(args['threshold_flow_accumulation']),
-                target_stream_raster_path=f_reg['stream_path']),
-            target_path_list=[f_reg['stream_path']],
-            dependent_task_list=[flow_accumulation_task],
-            task_name='extract streams')
-        d_dn_func = pygeoprocessing.routing.distance_to_channel_d8
-
-    ls_factor_task = task_graph.add_task(
-        func=_calculate_ls_factor,
-        args=(
-            f_reg['flow_accumulation_path'],
-            f_reg['slope_path'],
-            float(args['l_max']),
-            f_reg['ls_path']),
-        target_path_list=[f_reg['ls_path']],
-        dependent_task_list=[
-            flow_accumulation_task, slope_task],
-        task_name='ls factor calculation')
-
-    if drainage_present:
-        drainage_task = task_graph.add_task(
-            func=pygeoprocessing.raster_map,
-            kwargs=dict(
-                op=add_drainage_op,
-                rasters=[f_reg['stream_path'], f_reg['masked_drainage_path']],
-                target_path=f_reg['stream_and_drainage_path'],
-                target_dtype=numpy.uint8),
-            target_path_list=[f_reg['stream_and_drainage_path']],
-            dependent_task_list=[stream_task, mask_tasks['masked_drainage']],
-            task_name='add drainage')
-        drainage_raster_path_task = (
-            f_reg['stream_and_drainage_path'], drainage_task)
-    else:
-        drainage_raster_path_task = (
-            f_reg['stream_path'], stream_task)
-
-    lulc_to_c = biophysical_df['usle_c'].to_dict()
-    threshold_w_task = task_graph.add_task(
-        func=_calculate_w,
-        args=(
-            lulc_to_c, f_reg['masked_lulc_path'], f_reg['w_path'],
-            f_reg['thresholded_w_path']),
-        target_path_list=[f_reg['w_path'], f_reg['thresholded_w_path']],
-        dependent_task_list=[mask_tasks['masked_lulc']],
-        task_name='calculate W')
-
-    lulc_to_cp = (biophysical_df['usle_c'] * biophysical_df['usle_p']).to_dict()
-    cp_task = task_graph.add_task(
-        func=_calculate_cp,
-        args=(
-            lulc_to_cp, f_reg['masked_lulc_path'],
-            f_reg['cp_factor_path']),
-        target_path_list=[f_reg['cp_factor_path']],
-        dependent_task_list=[mask_tasks['masked_lulc']],
-        task_name='calculate CP')
-
-    rkls_task = task_graph.add_task(
-        func=_calculate_rkls,
-        args=(
-            f_reg['ls_path'],
-            f_reg['masked_erosivity_path'],
-            f_reg['masked_erodibility_path'],
-            drainage_raster_path_task[0],
-            f_reg['rkls_path']),
-        target_path_list=[f_reg['rkls_path']],
-        dependent_task_list=[
-            mask_tasks['masked_erosivity'], mask_tasks['masked_erodibility'],
-            drainage_raster_path_task[1], ls_factor_task],
-        task_name='calculate RKLS')
-
-    usle_task = task_graph.add_task(
-        func=pygeoprocessing.raster_map,
-        kwargs=dict(
-            op=usle_op,
-            rasters=[f_reg['rkls_path'], f_reg['cp_factor_path']],
-            target_path=f_reg['usle_path']),
-        target_path_list=[f_reg['usle_path']],
-        dependent_task_list=[rkls_task, cp_task],
-        task_name='calculate USLE')
-
-    bar_task_map = {}
-    for factor_path, factor_task, accumulation_path, out_bar_path, bar_id in [
-            (f_reg['thresholded_w_path'], threshold_w_task,
-             f_reg['w_accumulation_path'],
-             f_reg['w_bar_path'],
-             'w_bar'),
-            (f_reg['thresholded_slope_path'], threshold_slope_task,
-             f_reg['s_accumulation_path'],
-             f_reg['s_bar_path'],
-             's_bar')]:
-        bar_task = task_graph.add_task(
-            func=_calculate_bar_factor,
-            kwargs=dict(
-                flow_direction_path=f_reg['flow_direction_path'],
-                factor_path=factor_path,
-                flow_accumulation_path=f_reg['flow_accumulation_path'],
-                accumulation_path=accumulation_path,
-                out_bar_path=out_bar_path,
-                flow_dir_algorithm=args['flow_dir_algorithm']),
-            target_path_list=[accumulation_path, out_bar_path],
-            dependent_task_list=[
-                factor_task, flow_accumulation_task, flow_dir_task],
-            task_name=f'calculate {bar_id}')
-        bar_task_map[bar_id] = bar_task
-
-    d_up_task = task_graph.add_task(
-        func=_calculate_d_up,
-        args=(
-            f_reg['w_bar_path'], f_reg['s_bar_path'],
-            f_reg['flow_accumulation_path'], f_reg['d_up_path']),
-        target_path_list=[f_reg['d_up_path']],
-        dependent_task_list=[
-            bar_task_map['s_bar'], bar_task_map['w_bar'],
-            flow_accumulation_task],
-        task_name='calculate Dup')
-
-    inverse_ws_factor_task = task_graph.add_task(
-        func=pygeoprocessing.raster_map,
-        kwargs=dict(
-            op=inverse_ws_op,
-            rasters=[f_reg['thresholded_w_path'],
-                     f_reg['thresholded_slope_path']],
-            target_path=f_reg['ws_inverse_path']),
-        target_path_list=[f_reg['ws_inverse_path']],
-        dependent_task_list=[threshold_slope_task, threshold_w_task],
-        task_name='calculate inverse ws factor')
-
-    d_dn_task = task_graph.add_task(
-        func=d_dn_func,
-        args=(
-            (f_reg['flow_direction_path'], 1),
-            (drainage_raster_path_task[0], 1),
-            f_reg['d_dn_path']),
-        kwargs={'weight_raster_path_band': (f_reg['ws_inverse_path'], 1)},
-        target_path_list=[f_reg['d_dn_path']],
-        dependent_task_list=[
-            flow_dir_task, drainage_raster_path_task[1],
-            inverse_ws_factor_task],
-        task_name='calculating d_dn')
-
-    ic_task = task_graph.add_task(
-        func=_calculate_ic,
-        args=(
-            f_reg['d_up_path'], f_reg['d_dn_path'], f_reg['ic_path']),
-        target_path_list=[f_reg['ic_path']],
-        dependent_task_list=[d_up_task, d_dn_task],
-        task_name='calculate ic')
-
-    sdr_task = task_graph.add_task(
-        func=_calculate_sdr,
-        args=(
-            float(args['k_param']), float(args['ic_0_param']),
-            float(args['sdr_max']), f_reg['ic_path'],
-            drainage_raster_path_task[0], f_reg['sdr_path']),
-        target_path_list=[f_reg['sdr_path']],
-        dependent_task_list=[ic_task],
-        task_name='calculate sdr')
-
-    sed_export_task = task_graph.add_task(
-        func=pygeoprocessing.raster_map,
-        kwargs=dict(
-            op=numpy.multiply,  # export = USLE * SDR
-            rasters=[f_reg['usle_path'], f_reg['sdr_path']],
-            target_path=f_reg['sed_export_path']),
-        target_path_list=[f_reg['sed_export_path']],
-        dependent_task_list=[usle_task, sdr_task],
-        task_name='calculate sed export')
-
-    e_prime_task = task_graph.add_task(
-        func=_calculate_e_prime,
-        args=(
-            f_reg['usle_path'], f_reg['sdr_path'],
-            drainage_raster_path_task[0], f_reg['e_prime_path']),
-        target_path_list=[f_reg['e_prime_path']],
-        dependent_task_list=[usle_task, sdr_task],
-        task_name='calculate export prime')
-
-    sed_deposition_task = task_graph.add_task(
-        func=sdr_core.calculate_sediment_deposition,
-        kwargs=dict(
-            flow_direction_path=f_reg['flow_direction_path'],
-            e_prime_path=f_reg['e_prime_path'],
-            f_path=f_reg['f_path'],
-            sdr_path=f_reg['sdr_path'],
-            target_sediment_deposition_path=f_reg['sed_deposition_path'],
-            algorithm=args['flow_dir_algorithm']),
-        dependent_task_list=[e_prime_task, sdr_task, flow_dir_task],
-        target_path_list=[f_reg['sed_deposition_path'], f_reg['f_path']],
-        task_name='sediment deposition')
-
-    avoided_erosion_task = task_graph.add_task(
-        func=pygeoprocessing.raster_map,
-        kwargs=dict(
-            op=numpy.subtract,  # avoided erosion = rkls - usle
-            rasters=[f_reg['rkls_path'], f_reg['usle_path']],
-            target_path=f_reg['avoided_erosion_path']),
-        dependent_task_list=[rkls_task, usle_task],
-        target_path_list=[f_reg['avoided_erosion_path']],
-        task_name='calculate avoided erosion')
-
-    avoided_export_task = task_graph.add_task(
-        func=pygeoprocessing.raster_map,
-        kwargs=dict(
-            op=_avoided_export_op,
-            rasters=[f_reg['avoided_erosion_path'],
-                     f_reg['sdr_path'],
-                     f_reg['sed_deposition_path']],
-            target_path=f_reg['avoided_export_path']),
-        dependent_task_list=[avoided_erosion_task, sdr_task,
-                             sed_deposition_task],
-        target_path_list=[f_reg['avoided_export_path']],
-        task_name='calculate total retention')
-
-    _ = task_graph.add_task(
-        func=_calculate_what_drains_to_stream,
-        args=(f_reg['flow_direction_path'], f_reg['d_dn_path'],
-              f_reg['drainage_mask']),
-        target_path_list=[f_reg['drainage_mask']],
-        dependent_task_list=[flow_dir_task, d_dn_task],
-        task_name='write mask of what drains to stream')
-
-    _ = task_graph.add_task(
-        func=_generate_report,
-        args=(
-            args['watersheds_path'], f_reg['usle_path'],
-            f_reg['sed_export_path'], f_reg['sed_deposition_path'],
-            f_reg['avoided_export_path'], f_reg['avoided_erosion_path'],
-            f_reg['watershed_results_sdr_path']),
-        target_path_list=[f_reg['watershed_results_sdr_path']],
-        dependent_task_list=[
-            usle_task, sed_export_task, avoided_export_task,
-            sed_deposition_task, avoided_erosion_task],
-        task_name='generate report')
-
-    task_graph.close()
-    task_graph.join()
 
 
 # raster_map op for building a mask where all pixels in the stack are valid.
@@ -1613,7 +651,7 @@ def _generate_report(
     # It's worth it to check if the geometries don't significantly overlap.
     # On large rasters, this can save a TON of time rasterizing even a
     # relatively simple vector.
-    geometries_might_overlap = urban_nature_access._geometries_overlap(
+    geometries_might_overlap = utils.geometries_overlap(
         watershed_results_sdr_path)
     fields_and_rasters = [
         ('usle_tot', usle_path), ('sed_export', sed_export_path),
@@ -1654,6 +692,1081 @@ def _generate_report(
         target_layer.SetFeature(feature)
     target_vector = None
     target_layer = None
+
+
+MODEL_SPEC = spec.ModelSpec(
+    model_id="sdr",
+    model_title=gettext("Sediment Delivery Ratio"),
+    userguide="sdr.html",
+    validate_spatial_overlap=True,
+    different_projections_ok=False,
+    aliases=(),
+    input_field_order=[
+        ["workspace_dir", "results_suffix"],
+        ["dem_path", "erosivity_path", "erodibility_path"],
+        ["lulc_path", "biophysical_table_path"],
+        ["watersheds_path", "drainage_path"],
+        ["flow_dir_algorithm", "threshold_flow_accumulation", "k_param",
+         "sdr_max", "ic_0_param", "l_max"]
+    ],
+    inputs=[
+        spec.WORKSPACE,
+        spec.SUFFIX,
+        spec.N_WORKERS,
+        spec.PROJECTED_DEM,
+        spec.SingleBandRasterInput(
+            id="erosivity_path",
+            name=gettext("erosivity"),
+            about=gettext(
+                "Map of rainfall erosivity, reflecting the intensity and duration of"
+                " rainfall in the area of interest."
+            ),
+            data_type=float,
+            units=u.megajoule * u.millimeter / (u.hectare * u.hour * u.year),
+            projected=True
+        ),
+        spec.SingleBandRasterInput(
+            id="erodibility_path",
+            name=gettext("soil erodibility"),
+            about=gettext(
+                "Map of soil erodibility, the susceptibility of soil particles to"
+                " detachment and transport by rainfall and runoff."
+            ),
+            data_type=float,
+            units=u.metric_ton * u.hectare * u.hour/ (u.hectare * u.megajoule * u.millimeter),
+            projected=True
+        ),
+        spec.SingleBandRasterInput(
+            id="lulc_path",
+            name=gettext("land use/land cover"),
+            about=gettext(
+                "Map of land use/land cover codes. Each land use/land cover type must be"
+                " assigned a unique integer code. All values in this raster must have"
+                " corresponding entries in the Biophysical Table."
+            ),
+            data_type=int,
+            units=None,
+            projected=True
+        ),
+        spec.VectorInput(
+            id="watersheds_path",
+            name=gettext("Watersheds"),
+            about=gettext(
+                "Map of the boundaries of the watershed(s) over which to aggregate"
+                " results. Each watershed should contribute to a point of interest where"
+                " water quality will be analyzed."
+            ),
+            geometry_types={"POLYGON", "MULTIPOLYGON"},
+            fields=[],
+            projected=True
+        ),
+        spec.CSVInput(
+            id="biophysical_table_path",
+            name=gettext("biophysical table"),
+            about=gettext(
+                "A table mapping each LULC code to biophysical properties of that LULC"
+                " class. All values in the LULC raster must have corresponding entries in"
+                " this table."
+            ),
+            columns=[
+                spec.LULC_TABLE_COLUMN,
+                spec.RatioInput(
+                    id="usle_c",
+                    about=gettext("Cover-management factor for the USLE"),
+                    units=None
+                ),
+                spec.RatioInput(
+                    id="usle_p",
+                    about=gettext("Support practice factor for the USLE"),
+                    units=None
+                )
+            ],
+            index_col="lucode"
+        ),
+        spec.THRESHOLD_FLOW_ACCUMULATION,
+        spec.NumberInput(
+            id="k_param",
+            name=gettext("Borselli k parameter"),
+            about=gettext("Borselli k parameter."),
+            units=u.none
+        ),
+        spec.RatioInput(
+            id="sdr_max",
+            name=gettext("maximum SDR value"),
+            about=gettext("The maximum SDR value that a pixel can have."),
+            units=None
+        ),
+        spec.NumberInput(
+            id="ic_0_param",
+            name=gettext("Borselli IC0 parameter"),
+            about=gettext("Borselli IC0 parameter."),
+            units=u.none
+        ),
+        spec.NumberInput(
+            id="l_max",
+            name=gettext("maximum l value"),
+            about=gettext(
+                "The maximum allowed value of the slope length parameter (L) in the LS"
+                " factor."
+            ),
+            units=u.none,
+            expression="value > 0"
+        ),
+        spec.SingleBandRasterInput(
+            id="drainage_path",
+            name=gettext("drainages"),
+            about=gettext(
+                "Map of locations of artificial drainages that drain to the watershed."
+                " Pixels with 1 are drainages and are treated like streams. Pixels with 0"
+                " are not drainages."
+            ),
+            required=False,
+            data_type=int,
+            units=None,
+            projected=None
+        ),
+        spec.FLOW_DIR_ALGORITHM
+    ],
+    outputs=[
+        spec.SingleBandRasterOutput(
+            id="avoided_erosion.tif",
+            about=gettext(
+                "The contribution of vegetation to keeping soil from eroding from each"
+                " pixel. (Eq. (82))"
+            ),
+            data_type=float,
+            units=u.metric_ton / u.hectare
+        ),
+        spec.SingleBandRasterOutput(
+            id="avoided_export.tif",
+            about=gettext(
+                "The contribution of vegetation to keeping erosion from entering a"
+                " stream. This combines local/on-pixel sediment retention with trapping"
+                " of erosion from upslope of the pixel. (Eq. (83))"
+            ),
+            data_type=float,
+            units=u.metric_ton / u.hectare
+        ),
+        spec.SingleBandRasterOutput(
+            id="rkls.tif",
+            about=gettext(
+                "Total potential soil loss per pixel in the original land cover from the"
+                " RKLS equation. Equivalent to the soil loss for bare soil. (Eq. (68),"
+                " without applying the C or P factors)."
+            ),
+            data_type=float,
+            units=u.metric_ton / u.hectare
+        ),
+        spec.SingleBandRasterOutput(
+            id="sed_deposition.tif",
+            about=gettext(
+                "The total amount of sediment deposited on the pixel from upslope sources"
+                " as a result of trapping. (Eq. (80))"
+            ),
+            data_type=float,
+            units=u.metric_ton / u.hectare
+        ),
+        spec.SingleBandRasterOutput(
+            id="sed_export.tif",
+            about=gettext(
+                "The total amount of sediment exported from each pixel that reaches the"
+                " stream. (Eq. (76))"
+            ),
+            data_type=float,
+            units=u.metric_ton / u.hectare
+        ),
+        spec.STREAM.model_copy(update=dict(id="stream.tif")),
+        spec.SingleBandRasterOutput(
+            id="stream_and_drainage.tif",
+            about=gettext(
+                "This raster is the union of that layer with the calculated stream"
+                " layer(Eq. (85)). Values of 1 represent streams, values of 0 are"
+                " non-stream pixels."
+            ),
+            created_if="drainage_path",
+            data_type=int,
+            units=None
+        ),
+        spec.SingleBandRasterOutput(
+            id="usle.tif",
+            about=gettext(
+                "Total potential soil loss per hectare in the original land cover"
+                " calculated from the USLE equation. (Eq. (68))"
+            ),
+            data_type=float,
+            units=u.metric_ton / u.hectare
+        ),
+        spec.VectorOutput(
+            id="watershed_results_sdr.shp",
+            about=gettext("Table containing biophysical values for each watershed"),
+            geometry_types={"POLYGON", "MULTIPOLYGON"},
+            fields=[
+                spec.NumberOutput(
+                    id="sed_export",
+                    about=gettext(
+                        "Total amount of sediment exported to the stream per watershed."
+                        " (Eq. (77) with sum calculated over the watershed area)"
+                    ),
+                    units=u.metric_ton
+                ),
+                spec.NumberOutput(
+                    id="usle_tot",
+                    about=gettext(
+                        "Total amount of potential soil loss in each watershed calculated"
+                        " by the USLE equation. (Sum of USLE from (68) over the watershed"
+                        " area)"
+                    ),
+                    units=u.metric_ton
+                ),
+                spec.NumberOutput(
+                    id="avoid_exp",
+                    about=gettext("The sum of avoided export in the watershed."),
+                    units=u.metric_ton
+                ),
+                spec.NumberOutput(
+                    id="avoid_eros",
+                    about=gettext("The sum of avoided local erosion in the watershed"),
+                    units=u.metric_ton
+                ),
+                spec.NumberOutput(
+                    id="sed_dep",
+                    about=gettext(
+                        "Total amount of sediment deposited on the landscape in each"
+                        " watershed, which does not enter the stream."
+                    ),
+                    units=u.metric_ton
+                )
+            ]
+        ),
+        spec.DirectoryOutput(
+            id="intermediate_outputs",
+            about=None,
+            contents=[
+                spec.SingleBandRasterOutput(
+                    id="cp.tif",
+                    about=gettext(
+                        "CP factor derived by mapping usle_c and usle_p from the"
+                        " biophysical table to the LULC raster."
+                    ),
+                    data_type=float,
+                    units=None
+                ),
+                spec.SingleBandRasterOutput(
+                    id="d_dn.tif",
+                    about=gettext(
+                        "Downslope factor of the index of connectivity (Eq. (74))"
+                    ),
+                    data_type=float,
+                    units=u.none
+                ),
+                spec.SingleBandRasterOutput(
+                    id="d_up.tif",
+                    about=gettext(
+                        "Upslope factor of the index of connectivity (Eq. (73))"
+                    ),
+                    data_type=float,
+                    units=u.none
+                ),
+                spec.SingleBandRasterOutput(
+                    id="e_prime.tif",
+                    about=gettext(
+                        "Sediment downslope deposition, the amount of sediment from a"
+                        " given pixel that does not reach a stream (Eq. (78))"
+                    ),
+                    data_type=float,
+                    units=u.metric_ton / u.hectare / u.year
+                ),
+                spec.SingleBandRasterOutput(
+                    id="f.tif",
+                    about=gettext(
+                        "Map of sediment flux for sediment that does not reach the stream"
+                        " (Eq. (81))"
+                    ),
+                    data_type=float,
+                    units=u.metric_ton / u.hectare / u.year
+                ),
+                spec.FLOW_ACCUMULATION.model_copy(update=dict(id="flow_accumulation.tif")),
+                spec.FLOW_DIRECTION.model_copy(update=dict(id="flow_direction.tif")),
+                spec.SingleBandRasterOutput(
+                    id="ic.tif",
+                    about=gettext("Index of connectivity (Eq. (70))"),
+                    data_type=float,
+                    units=u.none
+                ),
+                spec.SingleBandRasterOutput(
+                    id="ls.tif",
+                    about=gettext("LS factor for USLE (Eq. (69))"),
+                    data_type=float,
+                    units=u.none
+                ),
+                spec.FILLED_DEM.model_copy(update=dict(id="pit_filled_dem.tif")),
+                spec.SingleBandRasterOutput(
+                    id="s_accumulation.tif",
+                    about=gettext(
+                        "Flow accumulation weighted by the thresholded slope. Used in"
+                        " calculating s_bar."
+                    ),
+                    data_type=float,
+                    units=u.none
+                ),
+                spec.SingleBandRasterOutput(
+                    id="s_bar.tif",
+                    about=gettext(
+                        "Mean thresholded slope gradient of the upslope contributing area"
+                        " (in eq. (73))"
+                    ),
+                    data_type=float,
+                    units=u.none
+                ),
+                spec.SingleBandRasterOutput(
+                    id="sdr_factor.tif",
+                    about=gettext("Sediment delivery ratio (Eq. (75))"),
+                    data_type=float,
+                    units=None
+                ),
+                spec.SLOPE,
+                spec.SingleBandRasterOutput(
+                    id="slope_threshold.tif",
+                    about=gettext(
+                        "Percent slope, thresholded to be no less than 0.005 and no"
+                        " greater than 1 (eq. (71)). 1 is equivalent to a 45 degree"
+                        " slope."
+                    ),
+                    data_type=float,
+                    units=None
+                ),
+                spec.SingleBandRasterOutput(
+                    id="w_accumulation.tif",
+                    about=gettext(
+                        "Flow accumulation weighted by the thresholded cover-management"
+                        " factor. Used in calculating w_bar."
+                    ),
+                    data_type=float,
+                    units=u.none
+                ),
+                spec.SingleBandRasterOutput(
+                    id="w_bar.tif",
+                    about=gettext(
+                        "Mean thresholded cover-management factor for upslope"
+                        " contributing area (in eq. (73))"
+                    ),
+                    data_type=float,
+                    units=None
+                ),
+                spec.SingleBandRasterOutput(
+                    id="w.tif",
+                    about=gettext(
+                        "Cover-management factor derived by mapping usle_c from the"
+                        " biophysical table to the LULC raster."
+                    ),
+                    data_type=float,
+                    units=None
+                ),
+                spec.SingleBandRasterOutput(
+                    id="w_threshold.tif",
+                    about=gettext(
+                        "Cover-management factor thresholded to be no less than 0.001"
+                        " (eq. (72))"
+                    ),
+                    data_type=float,
+                    units=None
+                ),
+                spec.SingleBandRasterOutput(
+                    id="weighted_avg_aspect.tif",
+                    about=gettext(
+                        "Average aspect weighted by flow direction (in eq. (69))"
+                    ),
+                    data_type=float,
+                    units=u.none
+                ),
+                spec.SingleBandRasterOutput(
+                    id="what_drains_to_stream.tif",
+                    about=gettext(
+                        "Map of which pixels drain to a stream. A value of 1 means that"
+                        " at least some of the runoff from that pixel drains to a stream"
+                        " in stream.tif. A value of 0 means that it does not drain at all"
+                        " to any stream in stream.tif."
+                    ),
+                    data_type=int,
+                    units=None
+                ),
+                spec.SingleBandRasterOutput(
+                    id="ws_inverse.tif",
+                    about=gettext(
+                        "Inverse of the thresholded cover-management factor times the"
+                        " thresholded slope (in eq. (74))"
+                    ),
+                    data_type=float,
+                    units=None
+                ),
+                spec.SingleBandRasterOutput(
+                    id="aligned_dem.tif",
+                    about=gettext(
+                        "Copy of the input DEM, clipped to the extent of the other raster"
+                        " inputs."
+                    ),
+                    data_type=float,
+                    units=u.meter
+                ),
+                spec.SingleBandRasterOutput(
+                    id="aligned_drainage.tif",
+                    about=gettext(
+                        "Copy of the input drainage map, clipped to the extent of the"
+                        " other raster inputs and aligned to the DEM."
+                    ),
+                    data_type=int,
+                    units=None
+                ),
+                spec.SingleBandRasterOutput(
+                    id="aligned_erodibility.tif",
+                    about=gettext(
+                        "Copy of the input erodibility map, clipped to the extent of the"
+                        " other raster inputs and aligned to the DEM."
+                    ),
+                    data_type=float,
+                    units=u.metric_ton * u.hectare * u.hour / (u.hectare * u.megajoule * u.millimeter)
+                ),
+                spec.SingleBandRasterOutput(
+                    id="aligned_erosivity.tif",
+                    about=gettext(
+                        "Copy of the input erosivity map, clipped to the extent of the"
+                        " other raster inputs and aligned to the DEM."
+                    ),
+                    data_type=float,
+                    units=u.megajoule * u.millimeter / (u.hectare * u.hour * u.year)
+                ),
+                spec.SingleBandRasterOutput(
+                    id="aligned_lulc.tif",
+                    about=gettext(
+                        "Copy of the input Land Use Land Cover map, clipped to the extent"
+                        " of the other raster inputs and aligned to the DEM."
+                    ),
+                    data_type=int,
+                    units=None
+                ),
+                spec.SingleBandRasterOutput(
+                    id="mask.tif",
+                    about=gettext(
+                        "A raster aligned to the DEM and clipped to the extent of the"
+                        " other raster inputs. Pixel values indicate where a nodata value"
+                        " exists in the stack of aligned rasters (pixel value of 0), or"
+                        " if all values in the stack of rasters at this pixel location"
+                        " are valid."
+                    ),
+                    data_type=int,
+                    units=None
+                ),
+                spec.SingleBandRasterOutput(
+                    id="masked_dem.tif",
+                    about=gettext(
+                        "A copy of the aligned DEM, masked using the mask raster."
+                    ),
+                    data_type=float,
+                    units=u.meter
+                ),
+                spec.SingleBandRasterOutput(
+                    id="masked_drainage.tif",
+                    about=gettext(
+                        "A copy of the aligned drainage map, masked using the mask"
+                        " raster."
+                    ),
+                    data_type=int,
+                    units=None
+                ),
+                spec.SingleBandRasterOutput(
+                    id="masked_erodibility.tif",
+                    about=gettext(
+                        "A copy of the aligned erodibility map, masked using the mask"
+                        " raster."
+                    ),
+                    data_type=float,
+                    units=u.metric_ton * u.hectare * u.hour / (u.hectare * u.megajoule * u.millimeter)
+                ),
+                spec.SingleBandRasterOutput(
+                    id="masked_erosivity.tif",
+                    about=gettext(
+                        "A copy of the aligned erosivity map, masked using the mask"
+                        " raster."
+                    ),
+                    data_type=float,
+                    units=u.megajoule * u.millimeter / (u.hectare * u.hour * u.year)
+                ),
+                spec.SingleBandRasterOutput(
+                    id="masked_lulc.tif",
+                    about=gettext(
+                        "A copy of the aligned Land Use Land Cover map, masked using the"
+                        " mask raster."
+                    ),
+                    data_type=int,
+                    units=None
+                )
+            ]
+        ),
+        spec.TASKGRAPH_DIR
+    ],
+    preprocessing_function=preprocess,
+    tasks=[
+        spec.Task(
+            key='align_task',
+            func=pygeoprocessing.align_and_resize_raster_stack,
+            kwarg_keys=dict(
+                base_raster_path_list='vals.base_list',
+                target_raster_path_list='vals.aligned_list',
+                resample_method_list='vals.interpolation_list',
+                target_pixel_size='vals.target_pixel_size',
+                bounding_box_mode='intersection',
+                target_projection_wkt='vals.target_sr_wkt',
+                base_vector_path_list=('args.watersheds_path',),
+                raster_align_index=0,
+                vector_mask_options=dict(mask_vector_path='args.watersheds_path')
+            ),
+            target_path_list='vals.aligned_list',
+            task_name='align input rasters'
+        ),
+        spec.Task(
+            key='mutual_mask_task',
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=_create_mutual_mask_op,
+                rasters='vals.aligned_list',
+                target_path='files.mask_path',
+                target_nodata=0),
+            target_path_list=['files.mask_path'],
+            dependent_task_list=['align_task'],
+            task_name='create mask'
+        ),
+        spec.Task(
+            key='mask_dem',
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=_mask_single_raster_op,
+                rasters=['files.aligned_dem_path', 'files.mask_path'],
+                target_path='files.masked_dem_path'),
+            target_path_list=['files.masked_dem_path'],
+            dependent_task_list=['mutual_mask_task', 'align_task'],
+            task_name=f'mask dem'
+        ),
+        spec.Task(
+            key='mask_lulc',
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=_mask_single_raster_op,
+                rasters=['files.aligned_lulc_path', 'files.mask_path'],
+                target_path='files.masked_lulc_path'),
+            target_path_list=['files.masked_lulc_path'],
+            dependent_task_list=['mutual_mask_task', 'align_task'],
+            task_name=f'mask lulc'
+        ),
+        spec.Task(
+            key='mask_erosivity',
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=_mask_single_raster_op,
+                rasters=['files.aligned_erosivity_path', 'files.mask_path'],
+                target_path='files.masked_erosivity_path'),
+            target_path_list=['files.masked_erosivity_path'],
+            dependent_task_list=['mutual_mask_task', 'align_task'],
+            task_name=f'mask erosivity'
+        ),
+        spec.Task(
+            key='mask_erodibility',
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=_mask_single_raster_op,
+                rasters=['files.aligned_erodibility_path', 'files.mask_path'],
+                target_path='files.masked_erodibility_path'),
+            target_path_list=['files.masked_erodibility_path'],
+            dependent_task_list=['mutual_mask_task', 'align_task'],
+            task_name=f'mask erodibility'
+        ),
+        spec.Task(
+            key=f"mask_drainage",
+            run_if="'drainage_path' in args and args['drainage_path'] != ''",
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=_mask_single_raster_op,
+                rasters=['files.aligned_drainage_path', 'files.mask_path'],
+                target_path='files.masked_drainage_path'),
+            target_path_list=['files.masked_drainage_path'],
+            dependent_task_list=['mutual_mask_task', 'align_task'],
+            task_name=f'mask drainage'
+        ),
+        spec.Task(
+            key='pit_fill_task',
+            func=pygeoprocessing.routing.fill_pits,
+            kwarg_keys=dict(
+                dem_raster_path_band=('files.masked_dem_path', 1),
+                target_filled_dem_raster_path='files.pit_filled_dem_path'),
+            target_path_list=['files.pit_filled_dem_path'],
+            dependent_task_list=['mask_dem'],
+            task_name='fill pits'
+        ),
+        spec.Task(
+            key='slope_task',
+            func=pygeoprocessing.calculate_slope,
+            kwarg_keys=dict(
+                base_elevation_raster_path_band=('files.pit_filled_dem_path', 1),
+                target_slope_path='files.slope_path'),
+            dependent_task_list=['pit_fill_task'],
+            target_path_list=['files.slope_path'],
+            task_name='calculate slope'
+        ),
+        spec.Task(
+            key='threshold_slope_task',
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=threshold_slope_op,
+                rasters=['files.slope_path'],
+                target_path='files.thresholded_slope_path'),
+            target_path_list=['files.thresholded_slope_path'],
+            dependent_task_list=['slope_task'],
+            task_name='threshold slope'
+        ),
+        spec.Task(
+            key='mfd_flow_dir_task',
+            run_if="args['flow_dir_algorithm'] == 'MFD'",
+            func=pygeoprocessing.routing.flow_dir_mfd,
+            kwarg_keys=dict(
+                dem_raster_path_band=('files.pit_filled_dem_path', 1),
+                target_flow_dir_path='files.flow_direction_path'),
+            target_path_list=['files.flow_direction_path'],
+            dependent_task_list=['pit_fill_task'],
+            task_name='flow direction calculation'
+        ),
+        spec.Task(
+            key='mfd_flow_accumulation_task',
+            run_if="args['flow_dir_algorithm'] == 'MFD'",
+            func=pygeoprocessing.routing.flow_accumulation_mfd,
+            kwarg_keys=dict(
+                flow_dir_mfd_raster_path_band=('files.flow_direction_path', 1),
+                target_flow_accum_raster_path='files.flow_accumulation_path'),
+            target_path_list=['files.flow_accumulation_path'],
+            dependent_task_list=['vals.flow_dir_task'],
+            task_name='flow accumulation calculation'
+        ),
+        spec.Task(
+            key='mfd_stream_task',
+            run_if="args['flow_dir_algorithm'] == 'MFD'",
+            func=pygeoprocessing.routing.extract_streams_mfd,
+            kwarg_keys=dict(
+                flow_accum_raster_path_band=('files.flow_accumulation_path', 1),
+                flow_dir_mfd_path_band=('files.flow_direction_path', 1),
+                flow_threshold='vals.threshold_flow_accumulation',
+                target_stream_raster_path='files.stream_path',
+                trace_threshold_proportion=0.7),
+            target_path_list=['files.stream_path'],
+            dependent_task_list=['vals.flow_accumulation_task'],
+            task_name='extract streams'
+        ),
+        spec.Task(
+            key='d8_flow_dir_task',
+            run_if="args['flow_dir_algorithm'] == 'D8'",
+            func=pygeoprocessing.routing.flow_dir_d8,
+            kwarg_keys=dict(
+                dem_raster_path_band=('files.pit_filled_dem_path', 1),
+                target_flow_dir_path='files.flow_direction_path'),
+            target_path_list=['files.flow_direction_path'],
+            dependent_task_list=['pit_fill_task'],
+            task_name='flow direction calculation'
+        ),
+        spec.Task(
+            key='d8_flow_accumulation_task',
+            run_if="args['flow_dir_algorithm'] == 'D8'",
+            func=pygeoprocessing.routing.flow_accumulation_d8,
+            kwarg_keys=dict(
+                flow_dir_raster_path_band=('files.flow_direction_path', 1),
+                target_flow_accum_raster_path='files.flow_accumulation_path'),
+            target_path_list=['files.flow_accumulation_path'],
+            dependent_task_list=['vals.flow_dir_task'],
+            task_name='flow accumulation calculation'
+        ),
+        spec.Task(
+            key='d8_stream_task',
+            run_if="args['flow_dir_algorithm'] == 'D8'",
+            func=pygeoprocessing.routing.extract_streams_d8,
+            kwarg_keys=dict(
+                flow_accum_raster_path_band=('files.flow_accumulation_path', 1),
+                flow_threshold='args.threshold_flow_accumulation',
+                target_stream_raster_path='files.stream_path'),
+            target_path_list=['files.stream_path'],
+            dependent_task_list=['vals.flow_accumulation_task'],
+            task_name='extract streams'
+        ),
+        spec.Task(
+            key='ls_factor_task',
+            func=_calculate_ls_factor,
+            kwarg_keys=dict(
+                flow_accumulation_path='files.flow_accumulation_path',
+                slope_path='files.slope_path',
+                l_max='vals.l_max',
+                target_ls_factor_path='files.ls_path'),
+            target_path_list=['files.ls_path'],
+            dependent_task_list=['vals.flow_accumulation_task', 'slope_task'],
+            task_name='ls factor calculation'
+        ),
+        spec.Task(
+            key='drainage_task',
+            run_if="'drainage_path' in args and args['drainage_path'] != ''",
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=add_drainage_op,
+                rasters=['files.stream_path', 'files.masked_drainage_path'],
+                target_path='files.stream_and_drainage_path',
+                target_dtype=numpy.uint8),
+            target_path_list=['files.stream_and_drainage_path'],
+            dependent_task_list=['vals.stream_task', 'mask_drainage'],
+            task_name='add drainage'
+        ),
+        spec.Task(
+            key='threshold_w_task',
+            func=_calculate_w,
+            kwarg_keys=dict(
+                lulc_to_c='vals.lulc_to_c',
+                lulc_path='files.masked_lulc_path',
+                w_factor_path='files.w_path',
+                out_thresholded_w_factor_path='files.thresholded_w_path'),
+            target_path_list=['files.w_path', 'files.thresholded_w_path'],
+            dependent_task_list=['mask_lulc'],
+            task_name='calculate W'
+        ),
+        spec.Task(
+            key='cp_task',
+            func=_calculate_cp,
+            kwarg_keys=dict(
+                lulc_to_cp='vals.lulc_to_cp',
+                lulc_path='files.masked_lulc_path',
+                cp_factor_path='files.cp_factor_path'),
+            target_path_list=['files.cp_factor_path'],
+            dependent_task_list=['mask_lulc'],
+            task_name='calculate CP'
+        ),
+        spec.Task(
+            key='rkls_task',
+            func=_calculate_rkls,
+            kwarg_keys=dict(
+                ls_factor_path='files.ls_path',
+                erosivity_path='files.masked_erosivity_path',
+                erodibility_path='files.masked_erodibility_path',
+                stream_path='vals.drainage_raster_path',
+                rkls_path='files.rkls_path'),
+            target_path_list=['files.rkls_path'],
+            dependent_task_list=[
+                'mask_erosivity', 'mask_erodibility',
+                'vals.drainage_task', 'ls_factor_task'],
+            task_name='calculate RKLS'
+        ),
+        spec.Task(
+            key='usle_task',
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=usle_op,
+                rasters=['files.rkls_path', 'files.cp_factor_path'],
+                target_path='files.usle_path'),
+            target_path_list=['files.usle_path'],
+            dependent_task_list=['rkls_task', 'cp_task'],
+            task_name='calculate USLE'
+        ),
+        spec.Task(
+            key='w_bar_task',
+            func=_calculate_bar_factor,
+            kwarg_keys=dict(
+                flow_direction_path='files.flow_direction_path',
+                factor_path='files.thresholded_w_path',
+                flow_accumulation_path='files.flow_accumulation_path',
+                accumulation_path='files.w_accumulation_path',
+                out_bar_path='files.w_bar_path',
+                flow_dir_algorithm='args.flow_dir_algorithm'),
+            target_path_list=['files.w_accumulation_path', 'files.w_bar_path'],
+            dependent_task_list=[
+                'threshold_w_task', 'vals.flow_accumulation_task', 'vals.flow_dir_task'],
+            task_name=f'calculate w_bar'
+        ),
+        spec.Task(
+            key='s_bar_task',
+            func=_calculate_bar_factor,
+            kwarg_keys=dict(
+                flow_direction_path='files.flow_direction_path',
+                factor_path='files.thresholded_slope_path',
+                flow_accumulation_path='files.flow_accumulation_path',
+                accumulation_path='files.s_accumulation_path',
+                out_bar_path='files.s_bar_path',
+                flow_dir_algorithm='args.flow_dir_algorithm'),
+            target_path_list=['files.s_accumulation_path', 'files.s_bar_path'],
+            dependent_task_list=[
+                'threshold_slope_task', 'vals.flow_accumulation_task', 'vals.flow_dir_task'],
+            task_name=f'calculate s_bar'
+        ),
+        spec.Task(
+            key='d_up_task',
+            func=_calculate_d_up,
+            kwarg_keys=dict(
+                w_bar_path='files.w_bar_path',
+                s_bar_path='files.s_bar_path',
+                flow_accumulation_path='files.flow_accumulation_path',
+                out_d_up_path='files.d_up_path'),
+            target_path_list=['files.d_up_path'],
+            dependent_task_list=['s_bar_task', 'w_bar_task', 'vals.flow_accumulation_task'],
+            task_name='calculate Dup'
+        ),
+        spec.Task(
+            key='inverse_ws_factor_task',
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=inverse_ws_op,
+                rasters=['files.thresholded_w_path',
+                         'files.thresholded_slope_path'],
+                target_path='files.ws_inverse_path'),
+            target_path_list=['files.ws_inverse_path'],
+            dependent_task_list=['threshold_slope_task', 'threshold_w_task'],
+            task_name='calculate inverse ws factor'
+        ),
+
+        spec.Task(
+            key='d8_d_dn_task',
+            func=pygeoprocessing.routing.distance_to_channel_d8,
+            run_if="args['flow_dir_algorithm'] == 'D8'",
+            kwarg_keys=dict(
+                flow_dir_d8_raster_path_band=('files.flow_direction_path', 1),
+                channel_raster_path_band=('vals.drainage_raster_path', 1),
+                target_distance_to_channel_raster_path='files.d_dn_path',
+                weight_raster_path_band=('files.ws_inverse_path', 1)),
+            target_path_list=['files.d_dn_path'],
+            dependent_task_list=[
+                'vals.flow_dir_task', 'vals.drainage_task',
+                'inverse_ws_factor_task'],
+            task_name='calculating d_dn'
+        ),
+        spec.Task(
+            key='mfd_d_dn_task',
+            func=pygeoprocessing.routing.distance_to_channel_mfd,
+            run_if="args['flow_dir_algorithm'] == 'MFD'",
+            kwarg_keys=dict(
+                flow_dir_mfd_raster_path_band=('files.flow_direction_path', 1),
+                channel_raster_path_band=('vals.drainage_raster_path', 1),
+                target_distance_to_channel_raster_path='files.d_dn_path',
+                weight_raster_path_band=('files.ws_inverse_path', 1)),
+            target_path_list=['files.d_dn_path'],
+            dependent_task_list=[
+                'vals.flow_dir_task', 'vals.drainage_task',
+                'inverse_ws_factor_task'],
+            task_name='calculating d_dn'
+        ),
+
+        spec.Task(
+            key='ic_task',
+            func=_calculate_ic,
+            kwarg_keys=dict(
+                d_up_path='files.d_up_path',
+                d_dn_path='files.d_dn_path',
+                out_ic_factor_path='files.ic_path'),
+            target_path_list=['files.ic_path'],
+            dependent_task_list=['d_up_task', 'vals.d_dn_task'],
+            task_name='calculate ic'
+        ),
+        spec.Task(
+            key='sdr_task',
+            func=_calculate_sdr,
+            kwarg_keys=dict(
+                k_factor='vals.k_param',
+                ic_0='vals.ic_0_param',
+                sdr_max='vals.sdr_max',
+                ic_path='files.ic_path',
+                stream_path='vals.drainage_raster_path',
+                out_sdr_path='files.sdr_path'),
+            target_path_list=['files.sdr_path'],
+            dependent_task_list=['ic_task'],
+            task_name='calculate sdr'
+        ),
+        spec.Task(
+            key='sed_export_task',
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=numpy.multiply,  # export = USLE * SDR
+                rasters=['files.usle_path', 'files.sdr_path'],
+                target_path='files.sed_export_path'),
+            target_path_list=['files.sed_export_path'],
+            dependent_task_list=['usle_task', 'sdr_task'],
+            task_name='calculate sed export'
+        ),
+        spec.Task(
+            key='e_prime_task',
+            func=_calculate_e_prime,
+            kwarg_keys=dict(
+                usle_path='files.usle_path',
+                sdr_path='files.sdr_path',
+                stream_path='vals.drainage_raster_path',
+                target_e_prime='files.e_prime_path'),
+            target_path_list=['files.e_prime_path'],
+            dependent_task_list=['usle_task', 'sdr_task'],
+            task_name='calculate export prime'
+        ),
+        spec.Task(
+            key='sed_deposition_task',
+            func=sdr_core.calculate_sediment_deposition,
+            kwarg_keys=dict(
+                flow_direction_path='files.flow_direction_path',
+                e_prime_path='files.e_prime_path',
+                f_path='files.f_path',
+                sdr_path='files.sdr_path',
+                target_sediment_deposition_path='files.sed_deposition_path',
+                algorithm='args.flow_dir_algorithm'),
+            dependent_task_list=['e_prime_task', 'sdr_task', 'vals.flow_dir_task'],
+            target_path_list=['files.sed_deposition_path', 'files.f_path'],
+            task_name='sediment deposition'
+        ),
+        spec.Task(
+            key='avoided_erosion_task',
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=numpy.subtract,  # avoided erosion = rkls - usle
+                rasters=['files.rkls_path', 'files.usle_path'],
+                target_path='files.avoided_erosion_path'),
+            dependent_task_list=['rkls_task', 'usle_task'],
+            target_path_list=['files.avoided_erosion_path'],
+            task_name='calculate avoided erosion'
+        ),
+        spec.Task(
+            key='avoided_export_task',
+            func=pygeoprocessing.raster_map,
+            kwarg_keys=dict(
+                op=_avoided_export_op,
+                rasters=['files.avoided_erosion_path',
+                         'files.sdr_path',
+                         'files.sed_deposition_path'],
+                target_path='files.avoided_export_path'),
+            dependent_task_list=['avoided_erosion_task', 'sdr_task',
+                                 'sed_deposition_task'],
+            target_path_list=['files.avoided_export_path'],
+            task_name='calculate total retention'
+        ),
+        spec.Task(
+            key='what_drains_to_stream_task',
+            func=_calculate_what_drains_to_stream,
+            kwarg_keys=dict(
+                flow_dir_path='files.flow_direction_path',
+                dist_to_channel_path='files.d_dn_path',
+                target_mask_path='files.drainage_mask'),
+            target_path_list=['files.drainage_mask'],
+            dependent_task_list=['vals.flow_dir_task', 'vals.d_dn_task'],
+            task_name='write mask of what drains to stream'
+        ),
+        spec.Task(
+            key='generate_report_task',
+            func=_generate_report,
+            kwarg_keys=dict(
+                watersheds_path='args.watersheds_path',
+                usle_path='files.usle_path',
+                sed_export_path='files.sed_export_path',
+                sed_deposition_path='files.sed_deposition_path',
+                avoided_export_path='files.avoided_export_path',
+                avoided_erosion_path='files.avoided_erosion_path',
+                watershed_results_sdr_path='files.watershed_results_sdr_path'),
+            target_path_list=['files.watershed_results_sdr_path'],
+            dependent_task_list=[
+                'usle_task', 'sed_export_task', 'avoided_export_task',
+                'sed_deposition_task', 'avoided_erosion_task'],
+            task_name='generate report'
+        )
+    ],
+    intermediate_dir_name='intermediate_outputs',
+    output_base_files={
+        'rkls_path': 'rkls.tif',
+        'sed_export_path': 'sed_export.tif',
+        'sed_deposition_path': 'sed_deposition.tif',
+        'stream_and_drainage_path': 'stream_and_drainage.tif',
+        'stream_path': 'stream.tif',
+        'usle_path': 'usle.tif',
+        'watershed_results_sdr_path': 'watershed_results_sdr.shp',
+        'avoided_export_path': 'avoided_export.tif',
+        'avoided_erosion_path': 'avoided_erosion.tif',
+    },
+    intermediate_base_files={
+        'aligned_dem_path': 'aligned_dem.tif',
+        'aligned_drainage_path': 'aligned_drainage.tif',
+        'aligned_erodibility_path': 'aligned_erodibility.tif',
+        'aligned_erosivity_path': 'aligned_erosivity.tif',
+        'aligned_lulc_path': 'aligned_lulc.tif',
+        'mask_path': 'mask.tif',
+        'masked_dem_path': 'masked_dem.tif',
+        'masked_drainage_path': 'masked_drainage.tif',
+        'masked_erodibility_path': 'masked_erodibility.tif',
+        'masked_erosivity_path': 'masked_erosivity.tif',
+        'masked_lulc_path': 'masked_lulc.tif',
+        'cp_factor_path': 'cp.tif',
+        'd_dn_path': 'd_dn.tif',
+        'd_up_path': 'd_up.tif',
+        'f_path': 'f.tif',
+        'flow_accumulation_path': 'flow_accumulation.tif',
+        'flow_direction_path': 'flow_direction.tif',
+        'ic_path': 'ic.tif',
+        'ls_path': 'ls.tif',
+        'pit_filled_dem_path': 'pit_filled_dem.tif',
+        's_accumulation_path': 's_accumulation.tif',
+        's_bar_path': 's_bar.tif',
+        'sdr_path': 'sdr_factor.tif',
+        'slope_path': 'slope.tif',
+        'thresholded_slope_path': 'slope_threshold.tif',
+        'thresholded_w_path': 'w_threshold.tif',
+        'w_accumulation_path': 'w_accumulation.tif',
+        'w_bar_path': 'w_bar.tif',
+        'w_path': 'w.tif',
+        'ws_inverse_path': 'ws_inverse.tif',
+        'e_prime_path': 'e_prime.tif',
+        'drainage_mask': 'what_drains_to_stream.tif',
+    }
+)
+
+# Target nodata is for general rasters that are positive, and _IC_NODATA are
+# for rasters that are any range
+_TARGET_NODATA = -1.0
+_BYTE_NODATA = 255
+_IC_NODATA = float(numpy.finfo('float32').min)
+
+
+
+
+def execute(args):
+    """Sediment Delivery Ratio.
+
+    This function calculates the sediment export and retention of a landscape
+    using the sediment delivery ratio model described in the InVEST user's
+    guide.
+
+    Args:
+        args['workspace_dir'] (string): output directory for intermediate,
+            temporary, and final files
+        args['results_suffix'] (string): (optional) string to append to any
+            output file names
+        args['dem_path'] (string): path to a digital elevation raster
+        args['erosivity_path'] (string): path to rainfall erosivity index
+            raster
+        args['erodibility_path'] (string): a path to soil erodibility raster
+        args['lulc_path'] (string): path to land use/land cover raster
+        args['watersheds_path'] (string): path to vector of the watersheds
+        args['biophysical_table_path'] (string): path to CSV file with
+            biophysical information of each land use classes.  contain the
+            fields 'usle_c' and 'usle_p'
+        args['threshold_flow_accumulation'] (number): number of upslope pixels
+            on the dem to threshold to a stream.
+        args['k_param'] (number): k calibration parameter
+        args['sdr_max'] (number): max value the SDR
+        args['ic_0_param'] (number): ic_0 calibration parameter
+        args['drainage_path'] (string): (optional) path to drainage raster that
+            is used to add additional drainage areas to the internally
+            calculated stream layer
+        args['l_max'] (number): the maximum allowed value of the slope length
+            parameter (L) in the LS factor. If the calculated value of L
+            exceeds 'l_max' it will be clamped to this value.
+        args['n_workers'] (int): if present, indicates how many worker
+            processes should be used in parallel processing. -1 indicates
+            single process mode, 0 is single process but non-blocking mode,
+            and >= 1 is number of processes.
+
+    Returns:
+        None.
+
+    """
+    MODEL_SPEC.execute(args)
 
 
 @validation.invest_validator

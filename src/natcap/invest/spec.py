@@ -20,6 +20,7 @@ import pint
 import pygeoprocessing
 from pydantic import AfterValidator, BaseModel, ConfigDict, \
     field_validator, model_validator, ValidationError
+import taskgraph
 
 from natcap.invest import utils
 from natcap.invest.validation import get_message, _evaluate_expression
@@ -1484,6 +1485,30 @@ class OptionStringOutput(Output):
     """A list of the values that this input may take"""
 
 
+class Task(BaseModel):
+
+    key: str
+    """Unique identifier for the task within the model."""
+
+    func: typing.Callable
+    """Function that the task executes."""
+
+    kwarg_keys: dict
+    """Dictionary mapping kwarg keys to values."""
+
+    target_path_list: typing.Union[str, list[str]] = []
+    """List of target paths produced by this task."""
+
+    dependent_task_list: typing.Union[str, list[str]] = []
+    """List of task keys for tasks that must be completed before starting this task."""
+
+    task_name: str
+    """User-facing task name."""
+
+    run_if: typing.Union[bool, str] = True
+    """bool or condition on which to run this task"""
+
+
 class ModelSpec(BaseModel):
     """Specification of an invest model describing metadata, inputs, and outputs."""
 
@@ -1550,6 +1575,22 @@ class ModelSpec(BaseModel):
     aliases: set = set()
     """Optional. A set of alternative names by which the model can be called
     from the invest command line interface, in addition to the ``model_id``."""
+
+    tasks: list[Task]
+    """A list of the tasks that make up the model workflow."""
+
+    preprocessing_function: typing.Callable
+    """function that produces preprocessed values needed for the model."""
+
+    intermediate_dir_name: str = ''
+    """Name of the directory to create within the workspace for intermediate outputs."""
+
+    output_base_files: dict[str, str] = {}
+    """dict mapping output file keys to paths"""
+
+    intermediate_base_files: dict[str, str] = {}
+    """dict mapping intermediate output file keys to paths"""
+
 
     @model_validator(mode='after')
     def check_inputs_in_field_order(self):
@@ -1621,6 +1662,96 @@ class ModelSpec(BaseModel):
         spec_dict['args'] = {_input.id: _input for _input in self.inputs}
         spec_dict['outputs'] = {_output.id: _output for _output in self.outputs}
         return json.dumps(spec_dict, default=fallback_serializer, ensure_ascii=False)
+
+    def execute(self, args):
+        file_suffix = utils.make_suffix_string(args, 'results_suffix')
+        intermediate_output_dir = os.path.join(
+            args['workspace_dir'], self.intermediate_dir_name)
+        utils.make_directories([args['workspace_dir'], intermediate_output_dir])
+
+        file_registry = utils.build_file_registry(
+            [(self.output_base_files, args['workspace_dir']),
+             (self.intermediate_base_files, intermediate_output_dir)], file_suffix)
+        vals = self.preprocessing_function(args, file_registry)
+
+        try:
+            n_workers = int(args['n_workers'])
+        except (KeyError, ValueError, TypeError):
+            # KeyError when n_workers is not present in args
+            # ValueError when n_workers is an empty string.
+            # TypeError when n_workers is None.
+            n_workers = -1  # Synchronous mode.
+        task_graph = taskgraph.TaskGraph(
+            os.path.join(args['workspace_dir'], 'taskgraph_cache'),
+            n_workers, reporting_interval=5.0)
+
+        def replace(value):
+            if isinstance(value, str):
+                if value.startswith('files.'):
+                    value = file_registry[value[6:]]
+                elif value.startswith('args.'):
+                    value = args[value[5:]]
+                elif value.startswith('vals.'):
+                    value = vals[value[5:]]
+            return value
+
+        task_lookup = {}
+        for task in self.tasks:
+
+            if isinstance(task.run_if, str):
+                run_if = _evaluate_expression(task.run_if, {'args': args})
+            else:
+                run_if = task.run_if
+
+            if not run_if:
+                continue
+
+            kwarg_keys = {}
+            for k, v in task.kwarg_keys.items():
+                if isinstance(v, str):
+                    kwarg_keys[k] = replace(v)
+                elif isinstance(v, list):
+                    kwarg_keys[k] = [replace(v_i) for v_i in v]
+                elif isinstance(v, tuple):
+                    kwarg_keys[k] = tuple(replace(v_i) for v_i in v)
+                elif isinstance(v, set):
+                    kwarg_keys[k] = {replace(v_i) for v_i in v}
+                elif isinstance(v, dict):
+                    kwarg_keys[k] = {k_i: replace(v_i) for k_i, v_i in v.items()}
+                else:
+                    kwarg_keys[k] = v
+
+            if isinstance(task.target_path_list, str):
+                target_path_list = replace(task.target_path_list)
+            else:
+                target_path_list = [
+                    replace(path) for path in task.target_path_list]
+
+            if isinstance(task.dependent_task_list, str):
+                dependent_task_list = replace(task.dependent_task_list)
+            else:
+                dependent_task_list = [
+                    replace(t) for t in task.dependent_task_list]
+
+            dependent_task_list = [task_lookup[key] for key in dependent_task_list]
+
+            print(task.func)
+            print(kwarg_keys)
+            print('\n')
+                # target_path_list=target_path_list,
+                # dependent_task_list=dependent_task_list,
+                # task_name=task.task_name))
+
+            taskgraph_task = task_graph.add_task(
+                func=task.func,
+                kwargs=kwarg_keys,
+                target_path_list=target_path_list,
+                dependent_task_list=dependent_task_list,
+                task_name=task.task_name)
+            task_lookup[task.key] = taskgraph_task
+
+        task_graph.close()
+        task_graph.join()
 
 
 # Specs for common arg types ##################################################
@@ -2165,3 +2296,4 @@ def generate_metadata_for_outputs(model_module, args_dict):
                         LOGGER.debug(error)
 
     _walk_spec(model_module.MODEL_SPEC.outputs, args_dict['workspace_dir'])
+
