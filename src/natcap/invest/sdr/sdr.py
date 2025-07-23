@@ -73,10 +73,8 @@ def preprocess(args, f_reg):
         aligned_list.append(f_reg['aligned_drainage_path'])
         interpolation_list.append('near')
         drainage_raster_path = f_reg['stream_and_drainage_path']
-        drainage_task = 'drainage_task'
     else:
         drainage_raster_path = f_reg['stream_path']
-        drainage_task = stream_task
 
     dem_raster_info = pygeoprocessing.get_raster_info(args['dem_path'])
     min_pixel_size = numpy.min(numpy.abs(dem_raster_info['pixel_size']))
@@ -88,7 +86,6 @@ def preprocess(args, f_reg):
         aligned_list=aligned_list,
         interpolation_list=interpolation_list,
         drainage_raster_path=drainage_raster_path,
-        drainage_task=drainage_task,
         target_pixel_size=(min_pixel_size, -min_pixel_size),
         target_sr_wkt=dem_raster_info['projection_wkt'],
         lulc_to_c=biophysical_df['usle_c'].to_dict(),
@@ -1347,7 +1344,7 @@ MODEL_SPEC = spec.ModelSpec(
                 flow_dir_mfd_raster_path_band=('paths.flow_direction_path', 1),
                 target_flow_accum_raster_path='paths.flow_accumulation_path'),
             target_path_list=['paths.flow_accumulation_path'],
-            dependent_task_list=['vals.flow_dir_task'],
+            dependent_task_list=['mfd_flow_dir_task'],
             task_name='flow accumulation calculation'
         ),
         spec.Task(
@@ -1361,7 +1358,7 @@ MODEL_SPEC = spec.ModelSpec(
                 target_stream_raster_path='paths.stream_path',
                 trace_threshold_proportion=0.7),
             target_path_list=['paths.stream_path'],
-            dependent_task_list=['vals.flow_accumulation_task'],
+            dependent_task_list=['mfd_flow_accumulation_task'],
             task_name='extract streams'
         ),
         spec.Task(
@@ -1383,7 +1380,7 @@ MODEL_SPEC = spec.ModelSpec(
                 flow_dir_raster_path_band=('paths.flow_direction_path', 1),
                 target_flow_accum_raster_path='paths.flow_accumulation_path'),
             target_path_list=['paths.flow_accumulation_path'],
-            dependent_task_list=['vals.flow_dir_task'],
+            dependent_task_list=['d8_flow_dir_task'],
             task_name='flow accumulation calculation'
         ),
         spec.Task(
@@ -1395,7 +1392,7 @@ MODEL_SPEC = spec.ModelSpec(
                 flow_threshold='args.threshold_flow_accumulation',
                 target_stream_raster_path='paths.stream_path'),
             target_path_list=['paths.stream_path'],
-            dependent_task_list=['vals.flow_accumulation_task'],
+            dependent_task_list=['d8_flow_accumulation_task'],
             task_name='extract streams'
         ),
         spec.Task(
@@ -1407,7 +1404,9 @@ MODEL_SPEC = spec.ModelSpec(
                 l_max='vals.l_max',
                 target_ls_factor_path='paths.ls_path'),
             target_path_list=['paths.ls_path'],
-            dependent_task_list=['vals.flow_accumulation_task', 'slope_task'],
+            dependent_task_list=[
+                'mfd_flow_accumulation_task', 'd8_flow_accumulation_task',
+                'slope_task'],
             task_name='ls factor calculation'
         ),
         spec.Task(
@@ -1420,7 +1419,8 @@ MODEL_SPEC = spec.ModelSpec(
                 target_path='paths.stream_and_drainage_path',
                 target_dtype=numpy.uint8),
             target_path_list=['paths.stream_and_drainage_path'],
-            dependent_task_list=['vals.stream_task', 'mask_drainage'],
+            dependent_task_list=[
+                'mfd_stream_task', 'd8_stream_task', 'mask_drainage'],
             task_name='add drainage'
         ),
         spec.Task(
@@ -1457,8 +1457,8 @@ MODEL_SPEC = spec.ModelSpec(
                 rkls_path='paths.rkls_path'),
             target_path_list=['paths.rkls_path'],
             dependent_task_list=[
-                'mask_erosivity', 'mask_erodibility',
-                'vals.drainage_task', 'ls_factor_task'],
+                'mask_erosivity', 'mask_erodibility', 'ls_factor_task',
+                'drainage_task', 'mfd_stream_task', 'd8_stream_task'],
             task_name='calculate RKLS'
         ),
         spec.Task(
@@ -1484,7 +1484,9 @@ MODEL_SPEC = spec.ModelSpec(
                 flow_dir_algorithm='args.flow_dir_algorithm'),
             target_path_list=['paths.w_accumulation_path', 'paths.w_bar_path'],
             dependent_task_list=[
-                'threshold_w_task', 'vals.flow_accumulation_task', 'vals.flow_dir_task'],
+                'threshold_w_task', 'mfd_flow_accumulation_task',
+                'd8_flow_accumulation_task', 'mfd_flow_dir_task',
+                'd8_flow_dir_task'],
             task_name=f'calculate w_bar'
         ),
         spec.Task(
@@ -1499,7 +1501,8 @@ MODEL_SPEC = spec.ModelSpec(
                 flow_dir_algorithm='args.flow_dir_algorithm'),
             target_path_list=['paths.s_accumulation_path', 'paths.s_bar_path'],
             dependent_task_list=[
-                'threshold_slope_task', 'vals.flow_accumulation_task', 'vals.flow_dir_task'],
+                'threshold_slope_task', 'd8_flow_accumulation_task', 'd8_flow_dir_task',
+                'mfd_flow_accumulation_task', 'mfd_flow_dir_task'],
             task_name=f'calculate s_bar'
         ),
         spec.Task(
@@ -1511,7 +1514,9 @@ MODEL_SPEC = spec.ModelSpec(
                 flow_accumulation_path='paths.flow_accumulation_path',
                 out_d_up_path='paths.d_up_path'),
             target_path_list=['paths.d_up_path'],
-            dependent_task_list=['s_bar_task', 'w_bar_task', 'vals.flow_accumulation_task'],
+            dependent_task_list=[
+                's_bar_task', 'w_bar_task',
+                'd8_flow_accumulation_task', 'mfd_flow_accumulation_task'],
             task_name='calculate Dup'
         ),
         spec.Task(
@@ -1538,8 +1543,8 @@ MODEL_SPEC = spec.ModelSpec(
                 weight_raster_path_band=('paths.ws_inverse_path', 1)),
             target_path_list=['paths.d_dn_path'],
             dependent_task_list=[
-                'vals.flow_dir_task', 'vals.drainage_task',
-                'inverse_ws_factor_task'],
+                'd8_flow_dir_task', 'mfd_flow_dir_task', 'drainage_task',
+                'mfd_stream_task', 'd8_stream_task', 'inverse_ws_factor_task'],
             task_name='calculating d_dn'
         ),
         spec.Task(
@@ -1553,8 +1558,8 @@ MODEL_SPEC = spec.ModelSpec(
                 weight_raster_path_band=('paths.ws_inverse_path', 1)),
             target_path_list=['paths.d_dn_path'],
             dependent_task_list=[
-                'vals.flow_dir_task', 'vals.drainage_task',
-                'inverse_ws_factor_task'],
+                'mfd_flow_dir_task', 'd8_flow_dir_task', 'drainage_task',
+                'mfd_stream_task', 'd8_stream_task', 'inverse_ws_factor_task'],
             task_name='calculating d_dn'
         ),
 
@@ -1566,7 +1571,7 @@ MODEL_SPEC = spec.ModelSpec(
                 d_dn_path='paths.d_dn_path',
                 out_ic_factor_path='paths.ic_path'),
             target_path_list=['paths.ic_path'],
-            dependent_task_list=['d_up_task', 'vals.d_dn_task'],
+            dependent_task_list=['d_up_task', 'd8_d_dn_task', 'mfd_d_dn_task'],
             task_name='calculate ic'
         ),
         spec.Task(
@@ -1616,7 +1621,9 @@ MODEL_SPEC = spec.ModelSpec(
                 sdr_path='paths.sdr_path',
                 target_sediment_deposition_path='paths.sed_deposition_path',
                 algorithm='args.flow_dir_algorithm'),
-            dependent_task_list=['e_prime_task', 'sdr_task', 'vals.flow_dir_task'],
+            dependent_task_list=[
+                'e_prime_task', 'sdr_task',
+                'mfd_flow_dir_task', 'd8_flow_dir_task'],
             target_path_list=['paths.sed_deposition_path', 'paths.f_path'],
             task_name='sediment deposition'
         ),
@@ -1653,7 +1660,9 @@ MODEL_SPEC = spec.ModelSpec(
                 dist_to_channel_path='paths.d_dn_path',
                 target_mask_path='paths.drainage_mask'),
             target_path_list=['paths.drainage_mask'],
-            dependent_task_list=['vals.flow_dir_task', 'vals.d_dn_task'],
+            dependent_task_list=[
+                'mfd_flow_dir_task', 'd8_flow_dir_task',
+                'mfd_d_dn_task', 'd8_d_dn_task'],
             task_name='write mask of what drains to stream'
         ),
         spec.Task(
