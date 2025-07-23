@@ -21,6 +21,7 @@ import pygeoprocessing
 from pydantic import AfterValidator, BaseModel, ConfigDict, \
     field_validator, model_validator, ValidationError
 import taskgraph
+import graphviz
 
 from natcap.invest import utils
 from natcap.invest.validation import get_message, _evaluate_expression
@@ -1619,6 +1620,32 @@ class ModelSpec(BaseModel):
         """Get an Input of this model by its key."""
         return {_input.id: _input for _input in self.inputs}[key]
 
+    def get_output(self, key: str) -> Output:
+        """Get an Output of this model by its key."""
+        return {output.id: output for output in self.outputs}[key]
+
+    def get_task(self, key: str) -> Task:
+        for task in self.tasks:
+            if task.key == key:
+                return task
+        else:
+            raise ValueError(f'Task with key {key} does not exist')
+
+    def add_task(self, task: Task) -> None:
+        self.tasks.append(task)
+
+    def remove_task(self, key: str) -> None:
+        for i, task in enumerate(self.tasks):
+            if task.key == key:
+                del self.tasks[i]
+                break
+        else:
+            raise ValueError(f'Task with key {key} does not exist')
+
+    def replace_task(self, task: Task) -> None:
+        self.remove_task(task.key)
+        self.add_task(task)
+
     def to_json(self):
         """Serialize an MODEL_SPEC dict to a JSON string.
 
@@ -1663,6 +1690,144 @@ class ModelSpec(BaseModel):
         spec_dict['outputs'] = {_output.id: _output for _output in self.outputs}
         return json.dumps(spec_dict, default=fallback_serializer, ensure_ascii=False)
 
+    def build_dot_graph(self):
+         # Add tasks to the graph in order such that dependents are added first
+        ordered_task_list = []
+        task_list = self.tasks
+        while len(ordered_task_list) != len(self.tasks):
+            remaining_tasks = []
+            for task in task_list:
+                if all([k in ordered_task_list for k in task.dependent_task_list]):
+                    ordered_task_list.append(task.key)
+                else:
+                    remaining_tasks.append(task)
+            task_list = remaining_tasks
+        print(ordered_task_list)
+
+        colors = ['red', 'green', 'blue', 'yellow', 'violet']
+        color_index = 0
+
+        run_if_colors= dict()
+        dot = graphviz.Digraph(format='svg')
+        for task in self.tasks:
+            # Color nodes black that are always run
+            # Give different colors to each unique run_if conditional
+            if task.run_if is True:
+                node_color = 'black'
+            else:
+                if task.run_if in run_if_colors:
+                    node_color = run_if_colors[task.run_if]
+                else:
+                    node_color = colors[color_index]
+                    run_if_colors[task.run_if] = node_color
+                    color_index += 1
+            tooltip_text = f'{task.key}\n{task.func.__doc__}'
+
+            dot.node(task.key, label=task.task_name, tooltip=tooltip_text, color=node_color)
+
+        for task in self.tasks:
+            for dependent_task_key in task.dependent_task_list:
+                dependent_task = self.get_task(dependent_task_key)
+
+                if dependent_task.run_if is True:
+                    edge_color = 'black'
+                else:
+                    edge_color = run_if_colors[dependent_task.run_if]
+                dot.edge(dependent_task_key, task.key, color=edge_color)
+
+        return dot
+
+
+    def build_dash_app(self):
+        from dash import Dash, html
+        import dash_cytoscape as cyto
+        cyto.load_extra_layouts()
+
+        colors = ['red', 'green', 'blue', 'yellow', 'violet']
+        color_index = 0
+
+        run_if_colors= dict()
+
+        nodes = []
+        for task in self.tasks:
+            # Color nodes black that are always run
+            # Give different colors to each unique run_if conditional
+            if task.run_if is True:
+                node_color = 'black'
+            else:
+                if task.run_if in run_if_colors:
+                    node_color = run_if_colors[task.run_if]
+                else:
+                    node_color = colors[color_index]
+                    run_if_colors[task.run_if] = node_color
+                    color_index += 1
+            nodes.append({
+                'data': {
+                    'id': task.key,
+                    'label': task.task_name,
+                    'color': node_color
+                }
+            })
+
+        edges = []
+        for task in self.tasks:
+            for dependent_task_key in task.dependent_task_list:
+                dependent_task = self.get_task(dependent_task_key)
+
+                if dependent_task.run_if is True:
+                    edge_color = 'black'
+                else:
+                    edge_color = run_if_colors[dependent_task.run_if]
+                edges.append(
+                    {'data': {'source': dependent_task.key, 'target': task.key}}
+                )
+
+        app = Dash()
+        app.layout = html.Div([
+            html.P("Dash Cytoscape:"),
+            cyto.Cytoscape(
+                id='cytoscape',
+                elements=[*nodes, *edges],
+                layout=dict(
+                    name='cose-bilkent',
+                    directed=True,
+                    nodeDimensionsIncludeLabels=True,
+                    rankDir='TB'
+                ),
+                style={'width': '1000px', 'height': '1000px'},
+                stylesheet=[
+                    {
+                        'selector': 'node',
+                        'style': {
+                            'shape': 'round-rectangle',
+                            'content': 'data(label)',
+                            'text-halign':'center',
+                            'text-valign':'center',
+                            'width':'label',
+                            'height':'label',
+                            'padding': '5px',
+                            # 'shape':'square',
+                            'background-opacity': 0,
+                            'border-width': '2px',
+                            'border-color': 'data(color)'
+                        }
+                    },
+                    {
+                        'selector': 'edge',
+                        'style': {
+                            # The default curve style does not work with certain arrows
+                            'curve-style': 'bezier',
+                            'target-arrow-shape': 'triangle',
+                        }
+                    }
+                ]
+            )
+        ])
+
+        return app
+
+
+
     def execute(self, args):
         file_suffix = utils.make_suffix_string(args, 'results_suffix')
         intermediate_output_dir = os.path.join(
@@ -1696,6 +1861,8 @@ class ModelSpec(BaseModel):
             return value
 
         task_lookup = {}
+
+        task_info_list = []
         for task in self.tasks:
 
             if isinstance(task.run_if, str):
@@ -1727,21 +1894,26 @@ class ModelSpec(BaseModel):
                 target_path_list = [
                     replace(path) for path in task.target_path_list]
 
-            if isinstance(task.dependent_task_list, str):
-                dependent_task_list = replace(task.dependent_task_list)
-            else:
-                dependent_task_list = [
-                    replace(t) for t in task.dependent_task_list]
-
-            dependent_task_list = [task_lookup[key] for key in dependent_task_list]
-
-            taskgraph_task = task_graph.add_task(
+            task_info_list.append(dict(
                 func=task.func,
                 kwargs=kwarg_keys,
                 target_path_list=target_path_list,
                 dependent_task_list=dependent_task_list,
-                task_name=task.task_name)
-            task_lookup[task.key] = taskgraph_task
+                task_name=task.key))
+
+        # Add tasks to the graph in order such that dependents are added first
+        n_tasks = len(task_info_list)
+        while len(task_lookup) != n_tasks:
+            remaining_task_infos = []
+            for task_info in task_info_list:
+                if all([k in task_lookup for k in task_info['dependent_task_list']]):
+                    task_info['dependent_task_list'] = [
+                        task_lookup[key] for key in task_info['dependent_task_list']]
+                    taskgraph_task = task_graph.add_task(**task_info)
+                    task_lookup[task_info['task_name']] = taskgraph_task
+                else:
+                    remaining_task_infos.append(task_info)
+            task_info_list = remaining_task_infos
 
         task_graph.close()
         task_graph.join()
