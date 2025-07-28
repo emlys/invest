@@ -83,7 +83,7 @@ class SDRTests(unittest.TestCase):
         args = SDRTests.generate_base_args(self.workspace_dir)
         args['drainage_path'] = os.path.join(
             REGRESSION_DATA, 'sample_drainage.tif')
-        validate_result = sdr.validate(args, limit_to=None)
+        validate_result = sdr.MODEL_SPEC.validate(args, limit_to=None)
         self.assertFalse(
             validate_result,  # List should be empty if validation passes
             "expected no failed validations instead got %s" % str(
@@ -98,7 +98,7 @@ class SDRTests(unittest.TestCase):
         # swap watershed and dem for different types
         args['dem_path'], args['watersheds_path'] = (
             args['watersheds_path'], args['dem_path'])
-        validate_result = sdr.validate(args, limit_to=None)
+        validate_result = sdr.MODEL_SPEC.validate(args, limit_to=None)
         self.assertTrue(
             validate_result,
             "expected failed validations instead didn't get any")
@@ -114,7 +114,7 @@ class SDRTests(unittest.TestCase):
         args = SDRTests.generate_base_args(
             self.workspace_dir)
         args['dem_path'] = ''
-        validate_result = sdr.validate(args, limit_to=None)
+        validate_result = sdr.MODEL_SPEC.validate(args, limit_to=None)
         self.assertTrue(
             validate_result,
             'expected a validation error but didn\'t get one')
@@ -131,9 +131,9 @@ class SDRTests(unittest.TestCase):
         from natcap.invest.sdr import sdr
 
         # use predefined directory so test can clean up files during teardown
-        args = SDRTests.generate_base_args(self.workspace_dir)
+        args = SDRTests.generate_base_args('/Users/emily/Documents/sdr_files')
 
-        sdr.execute(args)
+        sdr.MODEL_SPEC.execute(args)
         expected_watershed_totals = {
             'usle_tot': 2.62457418442,
             'sed_export': 0.09748090804,
@@ -207,7 +207,7 @@ class SDRTests(unittest.TestCase):
         args['threshold_flow_accumulation'] = 100
         # make args explicit that this is a base run of SWY
 
-        sdr.execute(args)
+        sdr.MODEL_SPEC.execute(args)
         expected_results = {
             'usle_tot': 2.520746,
             'sed_export': 0.187428,
@@ -279,7 +279,7 @@ class SDRTests(unittest.TestCase):
             target_raster = None
             args[path_key] = target_path
 
-        sdr.execute(args)
+        sdr.MODEL_SPEC.execute(args)
         expected_results = {
             'sed_export': 0.09748090804,
             'usle_tot': 2.62457418442,
@@ -303,7 +303,7 @@ class SDRTests(unittest.TestCase):
         args = SDRTests.generate_base_args(self.workspace_dir)
         args['dem_path'] = os.path.join(SAMPLE_DATA, 'dem_non_square.tif')
         # make args explicit that this is a base run of SWY
-        sdr.execute(args)
+        sdr.MODEL_SPEC.execute(args)
 
         expected_results = {
             'sed_export': 0.08896198869,
@@ -329,7 +329,7 @@ class SDRTests(unittest.TestCase):
         args = SDRTests.generate_base_args(self.workspace_dir)
         args['drainage_path'] = os.path.join(
             REGRESSION_DATA, 'sample_drainage.tif')
-        sdr.execute(args)
+        sdr.MODEL_SPEC.execute(args)
 
         expected_results = {
             'sed_export': 0.17336219549,
@@ -353,7 +353,7 @@ class SDRTests(unittest.TestCase):
             REGRESSION_DATA, 'biophysical_table_too_large.csv')
 
         with self.assertRaises(ValueError) as context:
-            sdr.execute(args)
+            sdr.MODEL_SPEC.execute(args)
         self.assertIn(
             'A value in the biophysical table is not a number '
             'within range 0..1.', str(context.exception))
@@ -369,7 +369,7 @@ class SDRTests(unittest.TestCase):
             REGRESSION_DATA, 'biophysical_table_invalid_value.csv')
 
         with self.assertRaises(ValueError) as context:
-            sdr.execute(args)
+            sdr.MODEL_SPEC.execute(args)
         self.assertIn(
             'could not be interpreted as RatioInput', str(context.exception))
 
@@ -390,7 +390,7 @@ class SDRTests(unittest.TestCase):
                 f'0,{invalid_value},0.5,0.5\n')
 
         with self.assertRaises(ValueError) as context:
-            sdr.execute(args)
+            sdr.MODEL_SPEC.execute(args)
         self.assertIn(
             'could not be interpreted as IntegerInput', str(context.exception))
 
@@ -413,7 +413,7 @@ class SDRTests(unittest.TestCase):
         args['biophysical_table_path'] = bad_biophysical_path
 
         with self.assertRaises(ValueError) as context:
-            sdr.execute(args)
+            sdr.MODEL_SPEC.execute(args)
         self.assertIn(
             "The missing values found in the LULC raster but not the table"
             " are: [2.]", str(context.exception))

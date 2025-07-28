@@ -24,7 +24,8 @@ import taskgraph
 import graphviz
 
 from natcap.invest import utils
-from natcap.invest.validation import get_message, _evaluate_expression
+from natcap.invest import validation
+from natcap.invest.validation import get_message, _evaluate_expression, invest_validator
 from . import gettext
 from .unit_registry import u
 
@@ -262,8 +263,11 @@ class Output(BaseModel):
     """Allow fields to have arbitrary types (that don't inherit from BaseModel).
     Needed for pint.Unit."""
 
-    id: str
+    key: str = ''
     """Output identifier that should be unique within a model"""
+
+    id: str
+    """Output file name"""
 
     about: typing.Union[str, None] = None
     """User-facing description of the output"""
@@ -272,6 +276,9 @@ class Output(BaseModel):
     """Defaults to True. If the input is only created under a certain condition
     (such as when running the model in a specific mode), provide a string
     expression that evaluates to a boolean to describe this condition."""
+
+    subdirectory: typing.Union[str, None] = None
+    """Subdirectory within the workspace to create this output in, if any."""
 
 
 class FileInput(Input):
@@ -1690,8 +1697,8 @@ class ModelSpec(BaseModel):
         spec_dict['outputs'] = {_output.id: _output for _output in self.outputs}
         return json.dumps(spec_dict, default=fallback_serializer, ensure_ascii=False)
 
-    def build_dot_graph(self):
-         # Add tasks to the graph in order such that dependents are added first
+    def sort_tasks(self):
+        # Add tasks to the graph in order such that dependents are added first
         ordered_task_list = []
         task_list = self.tasks
         while len(ordered_task_list) != len(self.tasks):
@@ -1702,7 +1709,8 @@ class ModelSpec(BaseModel):
                 else:
                     remaining_tasks.append(task)
             task_list = remaining_tasks
-        print(ordered_task_list)
+
+    def build_dot_graph(self):
 
         colors = ['red', 'green', 'blue', 'yellow', 'violet']
         color_index = 0
@@ -1827,16 +1835,28 @@ class ModelSpec(BaseModel):
         return app
 
 
-
-    def execute(self, args):
+    def _do_execute(self, args):
         file_suffix = utils.make_suffix_string(args, 'results_suffix')
         intermediate_output_dir = os.path.join(
             args['workspace_dir'], self.intermediate_dir_name)
         utils.make_directories([args['workspace_dir'], intermediate_output_dir])
 
+        output_directory_contents = {}
+        for output in self.outputs:
+            if output.subdirectory:
+                full_path = os.path.join(args['workspace_dir'], output.subdirectory)
+            else:
+                full_path = args['workspace_dir']
+            if full_path not in output_directory_contents:
+                output_directory_contents[full_path] = {}
+            output_directory_contents[full_path][output.key] = output.id
+
+
         file_registry = utils.build_file_registry(
-            [(self.output_base_files, args['workspace_dir']),
-             (self.intermediate_base_files, intermediate_output_dir)], file_suffix)
+            [(val, key) for key, val in output_directory_contents.items()],
+            file_suffix
+        )
+        print(file_registry)
         vals = self.preprocessing_function(args, file_registry)
 
         try:
@@ -1863,12 +1883,14 @@ class ModelSpec(BaseModel):
         task_lookup = {}
 
         task_info_list = []
+        task_run_if_map = {}
         for task in self.tasks:
 
             if isinstance(task.run_if, str):
                 run_if = _evaluate_expression(task.run_if, {'args': args})
             else:
                 run_if = task.run_if
+            task_run_if_map[task.key] = run_if
 
             if not run_if:
                 continue
@@ -1898,7 +1920,7 @@ class ModelSpec(BaseModel):
                 func=task.func,
                 kwargs=kwarg_keys,
                 target_path_list=target_path_list,
-                dependent_task_list=dependent_task_list,
+                dependent_task_list=task.dependent_task_list,
                 task_name=task.key))
 
         # Add tasks to the graph in order such that dependents are added first
@@ -1906,9 +1928,11 @@ class ModelSpec(BaseModel):
         while len(task_lookup) != n_tasks:
             remaining_task_infos = []
             for task_info in task_info_list:
-                if all([k in task_lookup for k in task_info['dependent_task_list']]):
+
+                dependent_task_list = [k for k in task_info['dependent_task_list'] if task_run_if_map[k]]
+                if all([k in task_lookup for k in dependent_task_list]):
                     task_info['dependent_task_list'] = [
-                        task_lookup[key] for key in task_info['dependent_task_list']]
+                        task_lookup[key] for key in dependent_task_list]
                     taskgraph_task = task_graph.add_task(**task_info)
                     task_lookup[task_info['task_name']] = taskgraph_task
                 else:
@@ -1918,6 +1942,31 @@ class ModelSpec(BaseModel):
         task_graph.close()
         task_graph.join()
 
+
+    def execute(self, args):
+        self._do_execute(args)
+
+
+    # @invest_validator
+    def validate(self, args, limit_to=None):
+        """Validate args to ensure they conform to `execute`'s contract.
+
+        Args:
+            args (dict): dictionary of key(str)/value pairs where keys and
+                values are specified in `execute` docstring.
+            limit_to (str): (optional) if not None indicates that validation
+                should only occur on the args[limit_to] value. The intent that
+                individual key validation could be significantly less expensive
+                than validating the entire `args` dictionary.
+
+        Returns:
+            list of ([invalid key_a, invalid_keyb, ...], 'warning/error message')
+                tuples. Where an entry indicates that the invalid keys caused
+                the error message in the second part of the tuple. This should
+                be an empty list if validation succeeds.
+
+        """
+        return validation.validate(args, self)
 
 # Specs for common arg types ##################################################
 WORKSPACE = DirectoryInput(
@@ -2023,26 +2072,30 @@ FLOW_DIR_ALGORITHM = OptionStringInput(
 
 # Specs for common outputs ####################################################
 TASKGRAPH_DIR = DirectoryOutput(
+    key='taskgraph_cache',
     id="taskgraph_cache",
     about=gettext(
         "Cache that stores data between model runs. This directory contains no"
         " human-readable data and you may ignore it."
     ),
-    contents=[FileOutput(id="taskgraph.db", about=None)]
+    contents=[FileOutput(key='taskgraph_db', id="taskgraph.db", about=None)]
 )
 FILLED_DEM = SingleBandRasterOutput(
+    key='pit_filled_dem',
     id='',
     about=gettext("Map of elevation after any pits are filled"),
     data_type=float,
     units=u.meter
 )
 FLOW_ACCUMULATION = SingleBandRasterOutput(
+    key='flow_accumulation',
     id='',
     about=gettext("Map of flow accumulation"),
     data_type=float,
     units=u.none
 )
 FLOW_DIRECTION = SingleBandRasterOutput(
+    key='flow_direction',
     id='',
     about=gettext(
         "MFD flow direction. Note: the pixel values should not be interpreted"
@@ -2054,6 +2107,7 @@ FLOW_DIRECTION = SingleBandRasterOutput(
     units=None
 )
 SLOPE = SingleBandRasterOutput(
+    key='slope_path',
     id="slope.tif",
     about=gettext(
         "Percent slope, calculated from the pit-filled DEM. 100 is equivalent to"
@@ -2063,6 +2117,7 @@ SLOPE = SingleBandRasterOutput(
     units=None
 )
 STREAM = SingleBandRasterOutput(
+    key='streams',
     id='',
     about=gettext(
         "Stream network, created using flow direction and flow accumulation"
