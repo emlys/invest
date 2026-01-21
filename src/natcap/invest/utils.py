@@ -151,7 +151,7 @@ def _format_time(seconds):
 def prepare_workspace(
         workspace, model_id, logging_level=logging.NOTSET, exclude_threads=None):
     """Prepare the workspace."""
-    print('prepare workspace')
+    print('prepare workspace', workspace)
     if not os.path.exists(workspace):
         os.makedirs(workspace)
 

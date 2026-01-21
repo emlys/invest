@@ -473,12 +473,17 @@ def main(user_args=None):
             # written to stdout if this exception is uncaught.  This is by
             # design.
             print('call execute')
-            model_module.MODEL_SPEC.execute(
-                parsed_datastack.args,
-                create_logfile=True,
-                generate_metadata=True,
-                save_file_registry=True,
-                check_outputs=False)
+            try:
+                model_module.MODEL_SPEC.execute(
+                    parsed_datastack.args,
+                    create_logfile=True,
+                    generate_metadata=True,
+                    save_file_registry=True,
+                    check_outputs=False)
+            finally:
+                print('finally:')
+                print(parsed_datastack.args['workspace_dir'])
+                print(os.listdir(parsed_datastack.args['workspace_dir']))
 
         if args.subcommand == 'serve':
             ui_server.app.run(port=args.port)
