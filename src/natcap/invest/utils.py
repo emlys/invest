@@ -151,6 +151,7 @@ def _format_time(seconds):
 def prepare_workspace(
         workspace, model_id, logging_level=logging.NOTSET, exclude_threads=None):
     """Prepare the workspace."""
+    print('prepare workspace')
     if not os.path.exists(workspace):
         os.makedirs(workspace)
 
@@ -167,6 +168,8 @@ def prepare_workspace(
         # logfile path (within []), and to know the invest process started.
         LOGGER.log(100, f'Writing log messages to [{logfile}]', )
         start_time = time.time()
+
+        print('workspace contents:', os.listdir(workspace))
         try:
             yield
         except Exception:
