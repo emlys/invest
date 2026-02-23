@@ -233,7 +233,7 @@ MODEL_SPEC = spec.ModelSpec(
                 "Rasters showing the economic value of carbon sequestered between the"
                 " baseline and the alternate landscape dates."
             ),
-            created_if="lulc_alt_path",
+            created_if="lulc_alt_path and do_valuation",
             data_type=float,
             units=u.currency / u.hectare
         ),
