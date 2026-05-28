@@ -1008,7 +1008,7 @@ def execute(args):
             args['watersheds_path'], f_reg['usle'],
             f_reg['sed_export'], f_reg['sed_deposition'],
             f_reg['avoided_export'], f_reg['avoided_erosion'],
-            f_reg['watershed_results_sdr']),
+            f_reg['watershed_results_sdr'], args['workspace_dir']),
         target_path_list=[f_reg['watershed_results_sdr']],
         dependent_task_list=[
             usle_task, sed_export_task, avoided_export_task,
