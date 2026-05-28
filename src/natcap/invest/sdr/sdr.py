@@ -1542,7 +1542,7 @@ def _calculate_e_prime(usle_path, sdr_path, stream_path, target_e_prime):
 def _generate_report(
         watersheds_path, usle_path, sed_export_path,
         sed_deposition_path, avoided_export_path, avoided_erosion_path,
-        watershed_results_sdr_path):
+        watershed_results_sdr_path, workspace_dir):
     """Create summary vector with totals for rasters.
 
     Args:
@@ -1557,6 +1557,8 @@ def _generate_report(
         watershed_results_sdr_path (string): The path to where the watersheds
             vector will be created.  This path must end in ``.shp`` as it will
             be written as an ESRI Shapefile.
+        workspace_dir (string): The path to the workspace directory, where
+            temporary outputs from zonal_statistics will be written.
 
     Returns:
         ``None``
@@ -1591,7 +1593,8 @@ def _generate_report(
     zonal_stats_results = pygeoprocessing.zonal_statistics(
         [(raster_path, 1) for (_, raster_path) in fields_and_rasters],
         watershed_results_sdr_path,
-        polygons_might_overlap=geometries_might_overlap)
+        polygons_might_overlap=geometries_might_overlap,
+        working_dir=workspace_dir)
 
     field_summaries = {
         field: stats for ((field, _), stats) in
