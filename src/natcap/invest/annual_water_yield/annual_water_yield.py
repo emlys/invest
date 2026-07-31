@@ -3,10 +3,13 @@ import logging
 import math
 import pickle
 
+import dask
+from dask.distributed import Client
 import numpy
 import pygeoprocessing
 from osgeo import gdal
 from osgeo import ogr
+import xarray as xr
 
 from natcap.invest import gettext
 from natcap.invest import spec
@@ -15,6 +18,8 @@ from natcap.invest import validation
 from natcap.invest.unit_registry import u
 
 LOGGER = logging.getLogger(__name__)
+client = Client()
+print(client)
 
 BASE_OUTPUT_FIELDS = [
     spec.NumberOutput(
@@ -700,6 +705,7 @@ def execute(args):
 
     """
     args, file_registry, graph = MODEL_SPEC.setup(args)
+    dask.config.set(num_workers=args['n_workers'])
 
     # valuation_df is passed to create_vector_output()
     # which computes valuation if valuation_df is not None.
@@ -1134,6 +1140,13 @@ def fractp_op(
             of precipitation.
 
     """
+    Kc = dask.array.from_array(Kc)
+    eto = dask.array.from_array(eto)
+    precip = dask.array.from_array(precip)
+    root = dask.array.from_array(root)
+    soil = dask.array.from_array(soil)
+    pawc = dask.array.from_array(pawc)
+    veg = dask.array.from_array(veg)
     # Kc, root, & veg were created by reclassify_raster, which set nodata
     # to out_nodata. All others are products of align_and_resize_raster_stack
     # and retain their original nodata values.
@@ -1157,45 +1170,36 @@ def fractp_op(
     # Use the original AET equation if the land cover type is vegetation
     # If not vegetation (wetlands, urban, water, etc...) use
     # Alternative equation Kc * Eto
-    phi = (Kc[valid_mask] * eto[valid_mask]) / precip[valid_mask]
-    pet = Kc[valid_mask] * eto[valid_mask]
+    phi = (Kc * eto) / precip
+    pet = Kc * eto
 
     # Calculate plant available water content (mm) using the minimum
     # of soil depth and root depth
-    awc = numpy.where(
-        root[valid_mask] < soil[valid_mask], root[valid_mask],
-        soil[valid_mask]) * pawc[valid_mask]
-    climate_w = (
-        (awc / precip[valid_mask]) * seasonality_constant) + 1.25
+    awc = dask.array.minimum(root, soil) * pawc
+    climate_w = (awc / precip) * seasonality_constant + 1.25
     # Capping to 5 to set to upper limit if exceeded
     climate_w[climate_w > 5] = 5
 
     # Compute evapotranspiration partition of the water balance
     aet_p = (
-        1 + (pet / precip[valid_mask])) - (
-            (1 + (pet / precip[valid_mask]) ** climate_w) ** (
-                1 / climate_w))
+        1 + (pet / precip)) - (
+            (1 + (pet / precip) ** climate_w) ** (1 / climate_w))
 
     # We take the minimum of the following values (phi, aet_p)
     # to determine the evapotranspiration partition of the
     # water balance (see users guide)
-    veg_result = numpy.where(phi < aet_p, phi, aet_p)
+    veg_result = dask.array.minimum(phi, aet_p)
+
     # Take the minimum of precip and Kc * ETo to avoid x / p > 1
-    nonveg_result = Kc[valid_mask] * eto[valid_mask]
-    nonveg_mask = precip[valid_mask] < Kc[valid_mask] * eto[valid_mask]
-    nonveg_result[nonveg_mask] = precip[valid_mask][nonveg_mask]
-    nonveg_result_fract = nonveg_result / precip[valid_mask]
+    nonveg_result = dask.array.minimum(precip, Kc * eto)
+    nonveg_result_fract = nonveg_result / precip
 
     # If veg is 1 use the result for vegetated areas else use result
     # for non veg areas
-    result = numpy.where(
-        veg[valid_mask] == 1,
-        veg_result, nonveg_result_fract)
-
-    fractp = numpy.empty(valid_mask.shape, dtype=numpy.float32)
-    fractp[:] = nodata_dict['out_nodata']
-    fractp[valid_mask] = result
-    return fractp
+    result = dask.array.where(veg == 1, veg_result, nonveg_result_fract)
+    fractp = dask.array.where(valid_mask, result, nodata_dict['out_nodata'])
+    fractp.dask.visualize(filename='/Users/emily/viz_optimized.png')
+    return fractp.compute()
 
 
 def compute_watershed_valuation(watershed_results_vector_path, val_df):

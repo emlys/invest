@@ -449,7 +449,7 @@ class AnnualWaterYieldTests(unittest.TestCase):
         pawc = numpy.array([[.11, .11, .12], [.55, .55, .19]])
         veg = numpy.array([[1, 1, 0], [0, 1, 0]])
         nodata_dict = {'eto': None, 'precip': None, 'depth_root': None,
-                       'pawc': None, 'out_nodata': None}
+                       'pawc': None, 'out_nodata': -1}
         seasonality_constant = 6
 
         actual_fractp = fractp_op(kc, eto, precip, root, soil, pawc, veg,
