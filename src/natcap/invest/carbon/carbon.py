@@ -456,7 +456,7 @@ def execute(args):
             LOGGER.info(
                 f"Mapping carbon from '{lulc_key}' to '{storage_key}' scenario.")
 
-            carbon_map_task = graph.add_task(
+            carbon_map_task = graph.add_dask_task(
                 _generate_carbon_map,
                 args=(args[lulc_key], carbon_pool_by_type,
                       file_registry[storage_key]),
@@ -469,7 +469,7 @@ def execute(args):
         LOGGER.info(
             "Calculate carbon storage for '%s'", output_key)
 
-        sum_rasters_task = graph.add_task(
+        sum_rasters_task = graph.add_dask_task(
             func=pygeoprocessing.raster_map,
             kwargs=dict(
                 op=sum_op,
@@ -487,7 +487,7 @@ def execute(args):
         output_key = 'c_change_bas_alt'
         LOGGER.info("Calculate sequestration scenario '%s'", output_key)
 
-        diff_rasters_task = graph.add_task(
+        diff_rasters_task = graph.add_dask_task(
             func=pygeoprocessing.raster_map,
             kwargs=dict(
                 op=numpy.subtract,  # c_change = scenario C - baseline C
@@ -517,7 +517,7 @@ def execute(args):
             output_key = 'npv_alt'
             LOGGER.info("Calculating NPV for scenario 'alt'")
 
-            calculate_npv_task = graph.add_task(
+            calculate_npv_task = graph.add_dask_task(
                 _calculate_npv,
                 args=(file_registry['c_change_bas_alt'],
                       valuation_constant, file_registry[output_key]),
@@ -548,13 +548,14 @@ def execute(args):
              u.currency)
         )
         summary_dependent_task_list.extend(calculate_npv_tasks)
-    _ = graph.add_task(
+    final_delayed = graph.add_dask_task(
         _generate_summary_results_table,
         args=(rasters_to_summarize, file_registry['summary_csv']),
         target_path_list=[file_registry['summary_csv']],
         dependent_task_list=summary_dependent_task_list,
         task_name='create_summary_csv')
 
+    final_delayed.compute()
     graph.close()
     graph.join()
     return file_registry.registry
