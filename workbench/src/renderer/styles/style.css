@@ -632,16 +632,30 @@ exceed 100% of window.*/
   opacity: 0.2;
 }
 
+.dotted-fieldset {
+  border: none;
+  border-top: 2px dotted #dee2e6;
+  padding-top: 1rem;
+  margin-top: 1.5rem;
+}
+
+/* Overrides Bootstrap's legend styling to render inline with the top border */
+.dotted-legend {
+  float: none;
+  width: auto;
+  padding: 0 0.75rem 0 0; /* Adds spacing between text and the line on the right */
+  margin-bottom: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6c757d;
+}
+
 .arg-group {
   display: flex;
   flex-direction: column;
   gap: 16px;
   margin: 0;
   padding: 1rem 0;
-  border-bottom: 1px dotted;
-  &:last-of-type {
-    border-bottom: none;
-  }
 }
 
 .arg-hide {

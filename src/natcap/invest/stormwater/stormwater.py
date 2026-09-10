@@ -29,7 +29,7 @@ MODEL_SPEC = spec.ModelSpec(
     aliases=(),
     module_name=__name__,
     input_field_order=[
-        ["workspace_dir", "results_suffix"],
+        spec.InputGroup(name='Group A', keys=["workspace_dir", "results_suffix"]),
         ["lulc_path", "soil_group_path", "precipitation_path", "biophysical_table"],
         ["adjust_retention_ratios", "retention_radius", "road_centerlines_path"],
         ["aggregate_areas_path", "replacement_cost"]
