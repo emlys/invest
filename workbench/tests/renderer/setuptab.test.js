@@ -494,7 +494,7 @@ describe('UI spec functionality', () => {
     const inputFieldOrder = [
       { name: '', input_keys: ['arg4'] },
       { name: '', input_keys: ['arg3', 'arg2'] },
-      { name: '', input_keys: ['arg1'] },
+      { name: 'Group A', input_keys: ['arg1'] },
       { name: '', input_keys: ['arg5'] }
     ];
 
@@ -512,7 +512,9 @@ describe('UI spec functionality', () => {
         .toHaveTextContent(RegExp(`${spec.args.arg3.name}`));
       expect(form.childNodes[1].childNodes[0].childNodes[1])
         .toHaveTextContent(RegExp(`${spec.args.arg2.name}`));
-      expect(form.childNodes[2])
+      expect(form.childNodes[2].childNodes[0])
+        .toHaveTextContent('Group A');
+      expect(form.childNodes[2].childNodes[0].childNodes[0])
         .toHaveTextContent(RegExp(`${spec.args.arg1.name}`));
       expect(form.childNodes[3])
         .toHaveTextContent(RegExp(`${spec.args.arg5.name}`));
