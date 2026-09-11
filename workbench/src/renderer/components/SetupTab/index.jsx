@@ -50,7 +50,7 @@ function initializeArgValues(argsSpec, inputFieldOrder, argsDict) {
   const argsDropdownOptions = {};
 
   inputFieldOrder.map(
-    (inputGroup) => inputGroup.input_keys
+    (inputGroup) => inputGroup.input_ids
   ).flat().forEach((argkey) => {
     // When initializing with undefined values, assign defaults so that,
     // a) values are handled well by the html inputs and
@@ -149,7 +149,7 @@ class SetupTab extends React.Component {
     // aren't displayed in the form don't need an enabled/disabled state.
     // all args default to being enabled
     const argsEnabled = inputFieldOrder.map(
-      (inputGroup) => inputGroup.input_keys
+      (inputGroup) => inputGroup.input_ids
     ).flat().reduce((acc, argkey) => {
       acc[argkey] = true;
       return acc;

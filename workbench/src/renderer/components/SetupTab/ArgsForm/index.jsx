@@ -132,7 +132,7 @@ class ArgsForm extends React.Component {
     let k = 0;
     argsOrder.forEach((inputGroup) => {
       const groupItems = [];
-      inputGroup.input_keys.forEach((argkey) => {
+      inputGroup.input_ids.forEach((argkey) => {
         groupItems.push(
           <ArgInput
             argkey={argkey}
@@ -158,13 +158,13 @@ class ArgsForm extends React.Component {
       // applicable. Omit the dotted line above the first group if it has
       // no label.
       let fieldsetClassName = "arg-group-dotted-fieldset";
-      if (k === 0 && !inputGroup.name) {
+      if (k === 0 && !inputGroup.label) {
         fieldsetClassName = "mt-3"
       }
       formItems.push(
         <fieldset className={fieldsetClassName} key={k}>
-          {inputGroup.name &&
-            <legend className="arg-group-dotted-legend">{inputGroup.name}</legend>
+          {inputGroup.label &&
+            <legend className="arg-group-dotted-legend">{inputGroup.label}</legend>
           }
           <Form.Group className="arg-group">
             {groupItems}

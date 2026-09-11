@@ -580,7 +580,7 @@ class ModelSpecTests(unittest.TestCase):
             module_name=__name__,
             input_field_order=[
                 ["workspace_dir"],
-                spec.InputGroup(name="Group A", keys=["baz"])
+                spec.InputGroup(label="Group A", input_ids=["baz"])
             ],
             inputs=[
                 spec.WORKSPACE,
@@ -603,8 +603,8 @@ class ModelSpecTests(unittest.TestCase):
             'reporter': '',
             'about': '',
             'input_field_order': [
-                {'name': '', 'input_keys': ['workspace_dir']},
-                {'name': 'Group A', 'input_keys': ['baz']}
+                {'label': '', 'input_ids': ['workspace_dir']},
+                {'label': 'Group A', 'input_ids': ['baz']}
             ],
             'different_projections_ok': False,
             'validate_spatial_overlap': True,

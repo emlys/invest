@@ -221,11 +221,11 @@ def set_metadata_field_descriptions(field_specs, resource):
 class InputGroup(BaseModel):
     """Represent a group of input fields for display in the workbench."""
 
-    name: str = ''
+    label: str = ''
     """Optional label that will be displayed in the workbench above
        this group of inputs."""
 
-    input_keys: list[str]
+    input_ids: list[str]
     """List of model input ids that belong to this group. Each string must
        match the id of an Input in the model."""
 
@@ -2318,7 +2318,7 @@ class ModelSpec(ImmutableBaseModel):
     that will be visually separated by a horizontal line. This improves UX by
     breaking up long lists and visually grouping related inputs. You can give a
     group a label, which will be displayed in the workbench, by using an
-    InputGroup and setting the ``name`` property. Note that groups and their
+    InputGroup and setting the ``label`` property. Note that groups and their
     labels only affect workbench rendering and have no effect
 
     The InputGroup was added to allow labeling groups. Using plain lists is
@@ -2326,11 +2326,11 @@ class ModelSpec(ImmutableBaseModel):
     groups, all inputs may go in the same sub-list.
 
     It is a convention to begin with a group of ``workspace_dir`` and
-    ``results_suffix``. Each item in each sub-list or InputGroup.keys list must
-    match the key of an ``Input`` in ``inputs``. The key of each
+    ``results_suffix``. Each item in each sub-list or InputGroup.input_ids
+    list must match the key of an ``Input`` in ``inputs``. The key of each
     ``Input`` must be included exactly once, unless it is hidden.
 
-    Example: ``[['workspace_dir', 'results_suffix'], InputGroup(name='Group A', keys=['bar', baz'])``
+    Example: ``[['workspace_dir', 'results_suffix'], InputGroup(label='Group A', input_ids=['bar', baz'])``
     """
 
     inputs: list[Input]
@@ -2387,7 +2387,7 @@ class ModelSpec(ImmutableBaseModel):
         found_keys = set()
         for group in self.input_field_order:
             if isinstance(group, InputGroup):
-                group = group.input_keys
+                group = group.input_ids
             for key in group:
                 if key in found_keys:
                     raise ValueError(
@@ -2462,12 +2462,12 @@ class ModelSpec(ImmutableBaseModel):
         for input_group in self.input_field_order:
             if isinstance(input_group, InputGroup):
                 spec_dict['input_field_order'].append({
-                    'name': input_group.name,
-                    'input_keys': input_group.input_keys})
+                    'label': input_group.label,
+                    'input_ids': input_group.input_ids})
             else:  # is a list of keys
                 spec_dict['input_field_order'].append({
-                    'name': '',
-                    'input_keys': input_group})
+                    'label': '',
+                    'input_ids': input_group})
         return json.dumps(spec_dict, default=fallback_serializer, ensure_ascii=False)
 
     def preprocess_inputs(self, input_values):
