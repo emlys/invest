@@ -219,8 +219,15 @@ def set_metadata_field_descriptions(field_specs, resource):
 
 
 class InputGroup(BaseModel):
+    """Represent a group of input fields for display in the workbench."""
+
     name: str = ''
-    keys: list[str]
+    """Optional label that will be displayed in the workbench above
+       this group of inputs."""
+
+    input_keys: list[str]
+    """List of model input ids that belong to this group. Each string must
+       match the id of an Input in the model."""
 
 
 class ImmutableBaseModel(BaseModel):
@@ -2380,7 +2387,7 @@ class ModelSpec(ImmutableBaseModel):
         found_keys = set()
         for group in self.input_field_order:
             if isinstance(group, InputGroup):
-                group = group.keys
+                group = group.input_keys
             for key in group:
                 if key in found_keys:
                     raise ValueError(
@@ -2456,7 +2463,7 @@ class ModelSpec(ImmutableBaseModel):
             if isinstance(input_group, InputGroup):
                 spec_dict['input_field_order'].append({
                     'name': input_group.name,
-                    'input_keys': input_group.keys})
+                    'input_keys': input_group.input_keys})
             else:  # is a list of keys
                 spec_dict['input_field_order'].append({
                     'name': '',

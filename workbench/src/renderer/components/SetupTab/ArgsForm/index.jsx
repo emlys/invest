@@ -157,14 +157,16 @@ class ArgsForm extends React.Component {
       // Separate each group of input fields with a dotted line and label if
       // applicable. Omit the dotted line above the first group if it has
       // no label.
-      let fieldsetClassName = "dotted-fieldset";
+      let fieldsetClassName = "arg-group-dotted-fieldset";
       if (k === 0 && !inputGroup.name) {
         fieldsetClassName = "mt-3"
       }
       formItems.push(
-        <fieldset className={fieldsetClassName}>
-          {inputGroup.name && <legend className="dotted-legend">{inputGroup.name}</legend>}
-          <Form.Group className="arg-group" key={k}>
+        <fieldset className={fieldsetClassName} key={k}>
+          {inputGroup.name &&
+            <legend className="arg-group-dotted-legend">{inputGroup.name}</legend>
+          }
+          <Form.Group className="arg-group">
             {groupItems}
           </Form.Group>
         </fieldset>

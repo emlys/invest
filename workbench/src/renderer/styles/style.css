@@ -632,18 +632,17 @@ exceed 100% of window.*/
   opacity: 0.2;
 }
 
-.dotted-fieldset {
+.arg-group-dotted-fieldset {
   border: none;
   border-top: 2px dotted #dee2e6;
   padding-top: 1rem;
   margin-top: 1.5rem;
 }
 
-/* Overrides Bootstrap's legend styling to render inline with the top border */
-.dotted-legend {
+.arg-group-dotted-legend {
   float: none;
   width: auto;
-  padding: 0 0.75rem 0 0; /* Adds spacing between text and the line on the right */
+  padding: 0 0.75rem 0 0;
   margin-bottom: 0;
   font-size: 0.9rem;
   font-weight: 600;

@@ -76,7 +76,6 @@ class InvestTab extends React.Component {
     }
     try {
       const { args, ...model_spec } = await getSpec(job.modelID);
-      console.log(model_spec)
       this.setState({
         modelSpec: model_spec,
         argsSpec: args,
