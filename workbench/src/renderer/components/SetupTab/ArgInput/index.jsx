@@ -57,7 +57,8 @@ function InputLabel(props) {
     );
   } else {
     return (
-      <Form.Label column sm="3" htmlFor={inputId}>
+      <InputGroup.Text column className="w-25" sm="3" htmlFor={inputId}>
+        <span>
         <span className="argname">{argname} </span>
         {
          (userFriendlyArgType || optional) &&
@@ -71,7 +72,8 @@ function InputLabel(props) {
         }
         {/* display units at the end of the arg name, if applicable */}
         { (units && units !== 'unitless') ? <span> ({units})</span> : <React.Fragment /> }
-      </Form.Label>
+      </span>
+      </InputGroup.Text>
     );
   }
 }
@@ -232,7 +234,6 @@ export default function ArgInput({
     fileSelector = (
       <Button
         aria-label={`browse for ${argSpec.name}`}
-        className="ms-2"
         id={inputId}
         variant="outline-dark"
         value={argSpec.type} // dialog will limit options accordingly
@@ -356,15 +357,13 @@ export default function ArgInput({
   } else {
     innerContent = (
       <>
-        {inputLabel}
-        <Col>
-          <div className="form-container">
-            {aboutModal}
-            {form}
-          </div>
-          {feedback}
-        </Col>
-    </>);
+        <InputGroup className="form-container">
+          {inputLabel}
+          {aboutModal}
+          {form}
+        </InputGroup>
+        {feedback}
+      </>);
   }
   return (
     <Form.Group
@@ -445,7 +444,7 @@ function AboutModal(props) {
         aria-label={`info about ${arg.name}`}
         className={tightSpacing ? "info-button-tight" : "info-button"}
         onClick={handleAboutOpen}
-        variant="outline-info"
+        variant="outline-dark"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >

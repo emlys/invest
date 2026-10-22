@@ -54,7 +54,7 @@ button {
    complex approach doesn't seem worthwhile. */
 .info-button {
   color: var(--lagunita-light);
-  border-color: var(--lagunita-light);
+  /*border-color: var(--lagunita-light);
   &:hover, &:focus {
     color: ghostwhite;
     background: var(--lagunita-light);
@@ -63,7 +63,7 @@ button {
   &:focus, &:focus-visible {
     box-shadow: 0 0 0 .25rem var(--lagunita-light-opacity-50);
   }
-  margin-right: 0.5rem;
+  margin-right: 0rem;*/
 }
 
 .info-button-tight {
@@ -83,6 +83,14 @@ button {
   color: var(--lagunita-light);
   background: none;
   border-color: var(--lagunita-light);
+}
+
+.input-group-text {
+  text-wrap: wrap;
+  text-align: left;
+  background-color: transparent;
+  color: #212529;
+  border-color: #212529;
 }
 
 /* Bootstrap form control style overrides. */
@@ -858,7 +866,7 @@ input[type=text]::placeholder {
   font-size: 0.9rem;
   font-family: monospace;
   white-space: pre-wrap;
-  padding-left: calc(3.5rem + 2px);
+  /*padding-left: calc(3.5rem + 2px);*/
 }
 
 .invalid-feedback.tight-spacing {
